@@ -39,6 +39,26 @@
   .eyebrow {
     @apply inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-medium uppercase tracking-wider text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400;
   }
+
+  /* Infinite marquee — content must be rendered twice inside the track */
+  .marquee-track {
+    animation: marquee var(--marquee-duration, 40s) linear infinite;
+  }
+  .marquee-track.reverse {
+    animation-direction: reverse;
+  }
+  .marquee-paused:hover .marquee-track {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 /* Thin, premium scrollbar */

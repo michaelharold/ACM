@@ -286,6 +286,19 @@ export const gallery = [
   { id: 'g1', eventId: 'ev1', image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=800&auto=format&fit=crop', caption: 'HackTKM finale' },
   { id: 'g2', eventId: 'ev3', image: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=800&auto=format&fit=crop', caption: 'Design workshop' },
   { id: 'g3', eventId: 'ev4', image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=800&auto=format&fit=crop', caption: 'Open source sprint' },
+  { id: 'g4', eventId: 'ev1', image: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=800&auto=format&fit=crop', caption: 'Midnight debugging' },
+  { id: 'g5', eventId: 'ev2', image: 'https://images.unsplash.com/photo-1515187029135-18ee286d815b?q=80&w=800&auto=format&fit=crop', caption: 'AI bootcamp' },
+  { id: 'g6', eventId: 'ev2', image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=800&auto=format&fit=crop', caption: 'Team huddle' },
+  { id: 'g7', eventId: 'ev3', image: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=800&auto=format&fit=crop', caption: 'Guest lecture' },
+  { id: 'g8', eventId: 'ev4', image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop', caption: 'Mentor circles' },
+]
+
+// ── Updates & announcements (home ticker) ────────────────────
+export const announcements = [
+  { id: 'a1', tag: 'New', text: 'HackTKM 2025 registrations are live — grab your spot' },
+  { id: 'a2', tag: 'Soon', text: 'Execom 2025–26 applications open next month' },
+  { id: 'a3', tag: 'Update', text: 'ACM India Winter School shortlists announced' },
+  { id: 'a4', tag: 'Weekly', text: 'CP circle every Friday, 5 PM · Seminar Hall' },
 ]
 
 // ── Status badge helpers ─────────────────────────────────────
