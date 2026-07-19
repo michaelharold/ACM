@@ -12,9 +12,10 @@ export function EventCard({ event, onOpen }) {
       variants={fadeUp}
       layoutId={`event-${event.id}`}
       onClick={() => onOpen(event)}
-      whileHover={{ y: -4 }}
+      whileHover={{ y: -6 }}
+      whileTap={{ scale: 0.985 }}
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition-colors hover:border-acm-300 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-acm-500/40"
+      className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left shadow-transparent transition-[border-color,box-shadow] duration-300 hover:border-acm-300 hover:shadow-lg hover:shadow-acm-600/5 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-acm-500/40"
     >
       {/* Poster */}
       <div className="relative aspect-[16/10] overflow-hidden bg-neutral-100 dark:bg-neutral-800">
@@ -23,6 +24,11 @@ export function EventCard({ event, onOpen }) {
           alt={event.name}
           loading="lazy"
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        {/* Diagonal sheen sweeping across the poster on hover */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 -left-3/4 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-0 transition-all duration-700 ease-out group-hover:left-[120%] group-hover:opacity-100"
         />
         <div className="absolute left-3 top-3">
           <Badge tone={meta.tone} dot={event.status === 'open'} className="backdrop-blur bg-white/90 dark:bg-neutral-900/90">

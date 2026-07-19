@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+import { motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { cn } from '../../lib/cn'
 
 // Base surface card.
@@ -17,13 +17,19 @@ export function Card({ className, children, ...props }) {
   )
 }
 
-// Premium card with subtle 3D pointer tilt + border-illumination on hover.
-export function TiltCard({ className, children, intensity = 8, ...props }) {
+// Premium card: 3D pointer tilt + cursor-tracking glare and border spotlight.
+export function TiltCard({ className, children, intensity = 8, glare = true, ...props }) {
   const ref = useRef(null)
   const px = useMotionValue(0.5)
   const py = useMotionValue(0.5)
   const rx = useSpring(useTransform(py, [0, 1], [intensity, -intensity]), { stiffness: 200, damping: 25 })
   const ry = useSpring(useTransform(px, [0, 1], [-intensity, intensity]), { stiffness: 200, damping: 25 })
+
+  // Cursor position as % for the glare / spotlight gradients.
+  const gx = useTransform(px, (v) => `${v * 100}%`)
+  const gy = useTransform(py, (v) => `${v * 100}%`)
+  const glareBg = useMotionTemplate`radial-gradient(420px circle at ${gx} ${gy}, rgba(89, 142, 255, 0.14), transparent 65%)`
+  const spotBorder = useMotionTemplate`radial-gradient(240px circle at ${gx} ${gy}, rgba(31, 71, 245, 0.55), transparent 70%)`
 
   function handleMove(e) {
     const rect = ref.current.getBoundingClientRect()
@@ -50,6 +56,22 @@ export function TiltCard({ className, children, intensity = 8, ...props }) {
       )}
       {...props}
     >
+      {glare && (
+        <>
+          {/* Border spotlight — a gradient ring revealed only near the cursor. */}
+          <motion.span
+            aria-hidden
+            style={{ background: spotBorder }}
+            className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 [mask:linear-gradient(#fff_0_0)_content-box,linear-gradient(#fff_0_0)] [mask-composite:exclude] [padding:1.5px]"
+          />
+          {/* Soft interior glare following the cursor. */}
+          <motion.span
+            aria-hidden
+            style={{ background: glareBg }}
+            className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+          />
+        </>
+      )}
       {children}
     </motion.div>
   )

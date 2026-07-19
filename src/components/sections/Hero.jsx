@@ -1,9 +1,14 @@
+import { Suspense, lazy, useRef, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, Sparkles, ArrowDown } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { SocialLinks } from '../SocialLinks'
+import { scrollToId } from '../../lib/smoothScroll'
 import { chapter } from '../../data/mock'
+
+// three.js chunk only loads for the hero, after first paint.
+const HeroScene = lazy(() => import('../three/HeroScene'))
 
 const container = {
   hidden: {},
@@ -14,13 +19,29 @@ const item = {
   show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 260, damping: 28 } },
 }
 
-function scrollTo(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
-}
-
 export function Hero() {
+  const ref = useRef(null)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  // Scroll-linked parallax: copy drifts up and fades, the 3D scene sinks slower.
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
+  const contentY = useTransform(scrollYProgress, [0, 1], [0, -120])
+  const contentOpacity = useTransform(scrollYProgress, [0, 0.75], [1, 0])
+  const sceneY = useTransform(scrollYProgress, [0, 1], [0, 140])
+  const sceneScale = useTransform(scrollYProgress, [0, 1], [1, 1.15])
+
   return (
-    <section className="bg-grid relative flex min-h-[100svh] items-center overflow-hidden">
+    <section ref={ref} className="bg-grid relative flex min-h-[100svh] items-center overflow-hidden">
+      {/* 3D backdrop */}
+      {mounted && (
+        <motion.div style={{ y: sceneY, scale: sceneScale }} className="absolute inset-0">
+          <Suspense fallback={null}>
+            <HeroScene />
+          </Suspense>
+        </motion.div>
+      )}
+
       {/* Ambient glows */}
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-acm-500/15 blur-[120px]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-white dark:to-neutral-950" />
@@ -29,16 +50,21 @@ export function Hero() {
         variants={container}
         initial="hidden"
         animate="show"
+        style={{ y: contentY, opacity: contentOpacity }}
         className="section-shell relative py-28 text-center"
       >
         {/* Big ACM mark */}
         <motion.div variants={item} className="mx-auto mb-8 flex justify-center">
-          <div className="grid h-20 w-20 place-items-center rounded-3xl bg-acm-600 shadow-lg shadow-acm-600/25">
+          <motion.div
+            animate={{ y: [0, -7, 0] }}
+            transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
+            className="grid h-20 w-20 place-items-center rounded-3xl bg-acm-600 shadow-lg shadow-acm-600/25"
+          >
             <svg viewBox="0 0 64 64" className="h-11 w-11" fill="none">
               <path d="M20 44 L32 20 L44 44" stroke="white" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M25 44 A9 9 0 1 0 25 31" stroke="white" strokeWidth="5" strokeLinecap="round" fill="none" opacity="0.55" />
             </svg>
-          </div>
+          </motion.div>
         </motion.div>
 
         <motion.span variants={item} className="eyebrow mx-auto">
@@ -86,7 +112,7 @@ export function Hero() {
           <Button as={Link} to="/events" size="lg" variant="secondary">
             Explore Events
           </Button>
-          <Button size="lg" variant="outline" onClick={() => scrollTo('about')}>
+          <Button size="lg" variant="outline" onClick={() => scrollToId('about')}>
             Learn More
           </Button>
         </motion.div>
@@ -98,11 +124,9 @@ export function Hero() {
 
       {/* Scroll cue */}
       <motion.button
-        onClick={() => scrollTo('about')}
+        onClick={() => scrollToId('about')}
         aria-label="Scroll to about"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.2 }}
+        style={{ opacity: contentOpacity }}
         className="absolute bottom-6 left-1/2 hidden -translate-x-1/2 text-neutral-400 sm:block"
       >
         <motion.span

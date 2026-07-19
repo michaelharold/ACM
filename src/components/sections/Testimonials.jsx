@@ -58,6 +58,14 @@ export function Testimonials() {
                   animate="center"
                   exit="exit"
                   transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.25}
+                  onDragEnd={(_, info) => {
+                    if (info.offset.x < -70) go(index + 1)
+                    else if (info.offset.x > 70) go(index - 1)
+                  }}
+                  className="cursor-grab active:cursor-grabbing"
                 >
                   <blockquote className="text-pretty text-lg font-medium leading-relaxed text-neutral-800 sm:text-xl dark:text-neutral-100">
                     “{active.quote}”
