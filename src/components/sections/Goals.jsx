@@ -1,0 +1,69 @@
+import { useState } from 'react'
+import { motion } from 'framer-motion'
+import { SectionHeading } from '../SectionHeading'
+import { Reveal, Item } from '../ui/Reveal'
+import { iconMap } from '../../lib/icons'
+import { goals } from '../../data/mock'
+import { cn } from '../../lib/cn'
+
+export function Goals() {
+  const [active, setActive] = useState(0)
+
+  return (
+    <section id="goals" className="scroll-mt-24 border-y border-neutral-200 bg-neutral-50/60 py-24 sm:py-28 dark:border-neutral-800 dark:bg-neutral-900/30">
+      <div className="section-shell">
+        <SectionHeading
+          eyebrow="Our Goals"
+          title="What we point every event toward"
+          description="Three pillars keep the chapter honest — a clear picture of where we’re going, how we get there, and what we refuse to compromise on."
+        />
+
+        <Reveal className="mt-14 grid gap-4 md:grid-cols-3" amount={0.15}>
+          {goals.map((g, i) => {
+            const Icon = iconMap[g.icon]
+            const isActive = active === i
+            return (
+              <Item key={g.key}>
+                <button
+                  onMouseEnter={() => setActive(i)}
+                  onFocus={() => setActive(i)}
+                  className={cn(
+                    'group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border p-7 text-left transition-colors duration-300',
+                    isActive
+                      ? 'border-acm-300 bg-white shadow-sm dark:border-acm-500/40 dark:bg-neutral-900'
+                      : 'border-neutral-200 bg-white/60 dark:border-neutral-800 dark:bg-neutral-900/50',
+                  )}
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="goal-accent"
+                      transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+                      className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-acm-600 to-acm-400"
+                    />
+                  )}
+                  <div className="flex items-center justify-between">
+                    <div
+                      className={cn(
+                        'grid h-12 w-12 place-items-center rounded-xl border transition-colors duration-300',
+                        isActive
+                          ? 'border-acm-200 bg-acm-50 text-acm-600 dark:border-acm-500/30 dark:bg-acm-500/10 dark:text-acm-400'
+                          : 'border-neutral-200 bg-neutral-50 text-neutral-400 dark:border-neutral-800 dark:bg-neutral-800/60',
+                      )}
+                    >
+                      {Icon && <Icon className="h-6 w-6" />}
+                    </div>
+                    <span className="text-5xl font-extrabold tracking-tighter text-neutral-100 transition-colors group-hover:text-acm-100 dark:text-neutral-800 dark:group-hover:text-acm-500/20">
+                      0{i + 1}
+                    </span>
+                  </div>
+                  <h3 className="mt-6 text-xl font-bold tracking-tight">{g.key}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">{g.text}</p>
+                </button>
+              </Item>
+            )
+          })}
+        </Reveal>
+      </div>
+    </section>
+  )
+}
