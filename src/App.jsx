@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Navbar } from './components/layout/Navbar'
 import { Footer } from './components/layout/Footer'
 import { ScrollProgress } from './components/ui/ScrollProgress'
-import { Cursor } from './components/ui/Cursor'
 import { SmoothScroll, scrollToTop } from './lib/smoothScroll'
 import Home from './pages/Home'
 import Auth from './pages/Auth'
@@ -27,7 +26,6 @@ export default function App() {
     <div className="flex min-h-screen flex-col">
       <SmoothScroll />
       <ScrollProgress />
-      <Cursor />
       <ScrollToTop />
       <Navbar />
       <main className="flex-1">

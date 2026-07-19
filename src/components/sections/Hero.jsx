@@ -1,4 +1,4 @@
-import { Suspense, lazy, useRef, useState, useEffect } from 'react'
+import { useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, Sparkles, ArrowDown } from 'lucide-react'
@@ -6,9 +6,6 @@ import { Button } from '../ui/Button'
 import { SocialLinks } from '../SocialLinks'
 import { scrollToId } from '../../lib/smoothScroll'
 import { chapter } from '../../data/mock'
-
-// three.js chunk only loads for the hero, after first paint.
-const HeroScene = lazy(() => import('../three/HeroScene'))
 
 const container = {
   hidden: {},
@@ -21,27 +18,14 @@ const item = {
 
 export function Hero() {
   const ref = useRef(null)
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
 
-  // Scroll-linked parallax: copy drifts up and fades, the 3D scene sinks slower.
+  // Scroll-linked parallax: copy drifts up and fades as the hero scrolls out.
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
   const contentY = useTransform(scrollYProgress, [0, 1], [0, -120])
   const contentOpacity = useTransform(scrollYProgress, [0, 0.75], [1, 0])
-  const sceneY = useTransform(scrollYProgress, [0, 1], [0, 140])
-  const sceneScale = useTransform(scrollYProgress, [0, 1], [1, 1.15])
 
   return (
     <section ref={ref} className="bg-grid relative flex min-h-[100svh] items-center overflow-hidden">
-      {/* 3D backdrop */}
-      {mounted && (
-        <motion.div style={{ y: sceneY, scale: sceneScale }} className="absolute inset-0">
-          <Suspense fallback={null}>
-            <HeroScene />
-          </Suspense>
-        </motion.div>
-      )}
-
       {/* Ambient glows */}
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-acm-500/15 blur-[120px]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-white dark:to-neutral-950" />
