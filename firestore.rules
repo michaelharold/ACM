@@ -14,21 +14,30 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // User profiles — a user manages their own; only admins set roles.
+    // An editor holds a specific grant in their profile's permissions map,
+    // handed out by an admin from the Access tab.
+    function hasPerm(key) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions', {}).get(key, false) == true;
+    }
+
+    // User profiles — a user manages their own; only admins set roles/grants.
     match /users/{uid} {
       allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow create: if request.auth.uid == uid;
       allow update: if isAdmin()
         || (request.auth.uid == uid
-            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions']));
       allow delete: if isAdmin();
     }
 
-    // Public content — anyone can read; only admins can write.
-    match /events/{id}        { allow read: if true; allow write: if isAdmin(); }
-    match /execomGroups/{id}   { allow read: if true; allow write: if isAdmin(); }
+    // Public content — anyone can read; admins or granted editors write.
+    match /events/{id}        { allow read: if true; allow write: if isAdmin() || hasPerm('events'); }
+    match /execomGroups/{id}   { allow read: if true; allow write: if isAdmin() || hasPerm('execom'); }
     match /testimonials/{id}   { allow read: if true; allow write: if isAdmin(); }
     match /gallery/{id}        { allow read: if true; allow write: if isAdmin(); }
+    match /siteContent/{id}    { allow read: if true; allow write: if isAdmin() || hasPerm('content'); }
 
     // Registrations — a user creates & reads their own; admins read all.
     match /registrations/{id} {
