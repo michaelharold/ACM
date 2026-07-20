@@ -21,7 +21,8 @@ const cols = [
   {
     title: 'Engage',
     links: [
-      { label: 'Testimonials', to: '/#testimonials' },
+      // { label: 'Testimonials', to: '/#testimonials' }, // hidden for now
+      { label: 'Gallery', to: '/#gallery' },
       { label: 'Contact', to: '/#contact' },
       { label: 'Login / Sign Up', to: '/auth' },
       { label: 'Dashboard', to: '/dashboard' },

@@ -5,7 +5,8 @@ import { TiltCard } from '../ui/Card'
 import { Reveal, Item } from '../ui/Reveal'
 import { useCountUp } from '../../lib/useCountUp'
 import { iconMap } from '../../lib/icons'
-import { chapter, stats, whyJoin } from '../../data/mock'
+import { useData } from '../../context/DataContext'
+import { chapter, whyJoin } from '../../data/mock'
 
 function StatCard({ stat }) {
   const [ref, value] = useCountUp(stat.value)
@@ -24,13 +25,17 @@ function StatCard({ stat }) {
 }
 
 export function About() {
+  // Stats + establishment year are admin-editable site content.
+  const { content } = useData()
+  const stats = content.stats
+  const established = content.established
   return (
     <section id="about" className="scroll-mt-24 py-24 sm:py-28">
       <div className="section-shell">
         <SectionHeading
           eyebrow="About"
           title="Built by students, for builders"
-          description={`${chapter.fullName}. Since ${chapter.established}, we’ve turned curious first-years into confident engineers through relentless hands-on learning.`}
+          description={`${chapter.fullName}. Since ${established}, we’ve turned curious first-years into confident engineers through relentless hands-on learning.`}
         />
 
         {/* Establishment + statistics */}
@@ -38,7 +43,7 @@ export function About() {
           <Item className="relative flex flex-col justify-between overflow-hidden rounded-2xl border border-acm-200 bg-gradient-to-br from-acm-600 to-acm-800 p-6 text-white sm:col-span-2 lg:col-span-1 dark:border-acm-500/30">
             <CalendarClock className="h-6 w-6 opacity-80" />
             <div className="mt-8">
-              <div className="text-4xl font-extrabold tracking-tight">{chapter.established}</div>
+              <div className="text-4xl font-extrabold tracking-tight">{established}</div>
               <div className="mt-1 text-sm text-acm-100">Year of establishment</div>
             </div>
           </Item>

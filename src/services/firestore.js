@@ -1,6 +1,7 @@
 import {
   collection,
   getDocs,
+  getDoc,
   doc,
   addDoc,
   setDoc,
@@ -41,10 +42,58 @@ export async function deleteEvent(id) {
 }
 
 // ── Execom ───────────────────────────────────────────────────
+const readLocal = (key) => {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 export async function fetchExecomGroups() {
-  if (!isFirebaseConfigured) return mock.execomGroups
+  if (!isFirebaseConfigured) return readLocal('acm-execom') || mock.execomGroups
   const snap = await getDocs(query(collection(db, 'execomGroups'), orderBy('order')))
   return snap.empty ? mock.execomGroups : map(snap)
+}
+
+const teamSlug = (team) => team.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+
+export async function saveExecomGroups(groups) {
+  if (!isFirebaseConfigured) {
+    localStorage.setItem('acm-execom', JSON.stringify(groups))
+    return
+  }
+  await Promise.all(
+    groups.map((g, i) => setDoc(doc(db, 'execomGroups', g.id || teamSlug(g.team)), { ...stripId(g), order: i })),
+  )
+}
+
+// ── Site content (announcements, stats, editable copy) ───────
+export async function fetchSiteContent() {
+  if (!isFirebaseConfigured) return readLocal('acm-site-content')
+  const snap = await getDoc(doc(db, 'siteContent', 'main'))
+  return snap.exists() ? snap.data() : null
+}
+
+export async function saveSiteContent(content) {
+  if (!isFirebaseConfigured) {
+    localStorage.setItem('acm-site-content', JSON.stringify(content))
+    return
+  }
+  await setDoc(doc(db, 'siteContent', 'main'), content, { merge: true })
+}
+
+// ── Users & access grants ────────────────────────────────────
+// Returns null in mock mode; the admin Access panel falls back to demo users.
+export async function fetchUsers() {
+  if (!isFirebaseConfigured) return null
+  const snap = await getDocs(collection(db, 'users'))
+  return map(snap)
+}
+
+export async function updateUserAccess(uid, permissions) {
+  if (isFirebaseConfigured) await updateDoc(doc(db, 'users', uid), { permissions })
 }
 
 // ── Testimonials ─────────────────────────────────────────────

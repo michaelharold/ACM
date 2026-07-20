@@ -16,7 +16,9 @@ const sections = [
   { id: 'goals', label: 'Goals' },
   { id: 'execom', label: 'Execom' },
   { id: 'events', label: 'Events', route: '/events' },
-  { id: 'testimonials', label: 'Testimonials' },
+  // Hidden with the testimonials section — restore when alumni content returns.
+  // { id: 'testimonials', label: 'Testimonials' },
+  { id: 'gallery', label: 'Gallery' },
   { id: 'contact', label: 'Contact' },
 ]
 
@@ -175,9 +177,9 @@ export function Navbar() {
                     <MenuItem to="/dashboard" icon={LayoutDashboard} onClick={() => setMenuUser(false)}>
                       Dashboard
                     </MenuItem>
-                    {user.role === 'admin' && (
+                    {(user.role === 'admin' || Object.values(user.permissions || {}).some(Boolean)) && (
                       <MenuItem to="/admin" icon={UserIcon} onClick={() => setMenuUser(false)}>
-                        Admin Panel
+                        {user.role === 'admin' ? 'Admin Panel' : 'Editor Panel'}
                       </MenuItem>
                     )}
                     <button

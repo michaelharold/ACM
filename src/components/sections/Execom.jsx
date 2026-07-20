@@ -7,7 +7,7 @@ import { iconMap, initials, gradientFor } from '../../lib/icons'
 import { avatarDataUri } from '../../lib/avatar'
 import { cn } from '../../lib/cn'
 
-// Monogram avatar — clean, consistent identity per member.
+// Monogram avatar — used by the leadership row.
 function Avatar({ name, size = 'md' }) {
   const dims = size === 'lg' ? 'h-20 w-20 text-2xl' : 'aspect-square w-full text-3xl'
   return (
@@ -23,17 +23,19 @@ function Avatar({ name, size = 'md' }) {
   )
 }
 
-function MemberCard({ m }) {
+function MemberCard({ m, size = 'md', offset = false }) {
   const isHead = m.role === 'Head'
+  const width = size === 'lg' ? 'w-64 sm:w-72' : 'w-56 sm:w-60'
+  const height = size === 'lg' ? '260px' : '224px'
   return (
-    <Item>
+    <Item className={cn(width, offset && 'sm:mt-10')}>
       <TiltedCard
-        imageSrc={avatarDataUri(m.name)}
+        imageSrc={m.photo || avatarDataUri(m.name)}
         altText={m.name}
         captionText={`${m.name} · ${m.role}`}
-        containerHeight="230px"
+        containerHeight={height}
         containerWidth="100%"
-        imageHeight="230px"
+        imageHeight={height}
         imageWidth="100%"
         rotateAmplitude={12}
         scaleOnHover={1.07}
@@ -90,35 +92,47 @@ export function Execom() {
           description="The students who plan, build and run everything — organised department by department, in order of responsibility."
         />
 
-        <div className="mt-16 space-y-14">
-          {execomGroups.map((group, gi) => {
+        <div className="mt-16 space-y-20">
+          {execomGroups.map((group) => {
             if (group.lead) return <LeadRow key={group.team} group={group} />
 
             const Icon = iconMap[group.icon]
+            const heads = group.members.filter((m) => m.role === 'Head')
+            const members = group.members.filter((m) => m.role !== 'Head')
             return (
               <div key={group.team}>
-                {/* Department title */}
+                {/* Centered department title */}
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-                  className="mb-7 flex items-center gap-3.5"
+                  className="mb-10 flex flex-col items-center gap-3 text-center"
                 >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-neutral-200 bg-neutral-50 text-acm-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-acm-400">
-                    {Icon && <Icon className="h-[18px] w-[18px]" />}
+                  <span className="grid h-11 w-11 place-items-center rounded-xl border border-neutral-200 bg-neutral-50 text-acm-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-acm-400">
+                    {Icon && <Icon className="h-5 w-5" />}
                   </span>
-                  <h3 className="text-lg font-bold tracking-tight sm:text-xl">{group.team}</h3>
-                  <span className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
-                  <span className="text-xs font-medium text-neutral-400">{String(gi).padStart(2, '0')}</span>
+                  <h3 className="text-xl font-bold tracking-tight sm:text-2xl">{group.team}</h3>
+                  <span className="h-1 w-10 rounded-full bg-gradient-to-r from-acm-600 to-acm-400" />
                 </motion.div>
 
-                {/* Members — Heads first (data is pre-ordered) */}
-                <Reveal className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 lg:grid-cols-4" amount={0.1}>
-                  {group.members.map((m) => (
-                    <MemberCard key={m.name} m={m} />
-                  ))}
-                </Reveal>
+                {/* Heads first — centered on their own row */}
+                {heads.length > 0 && (
+                  <Reveal className="flex flex-wrap items-start justify-center gap-6" amount={0.1}>
+                    {heads.map((m) => (
+                      <MemberCard key={m.name} m={m} size="lg" />
+                    ))}
+                  </Reveal>
+                )}
+
+                {/* Members below — staggered so the rows breathe */}
+                {members.length > 0 && (
+                  <Reveal className="mt-8 flex flex-wrap items-start justify-center gap-x-6 gap-y-8" amount={0.1}>
+                    {members.map((m, i) => (
+                      <MemberCard key={m.name} m={m} offset={i % 2 === 1} />
+                    ))}
+                  </Reveal>
+                )}
               </div>
             )
           })}

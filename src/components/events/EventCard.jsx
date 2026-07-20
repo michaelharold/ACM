@@ -1,12 +1,15 @@
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, ArrowUpRight } from 'lucide-react'
+import { CalendarDays, MapPin, ArrowUpRight, Timer, Radio } from 'lucide-react'
 import { Badge } from '../ui/Badge'
 import { fadeUp } from '../ui/Reveal'
 import { statusMeta } from '../../data/mock'
+import { useEventClock } from '../../lib/eventClock'
 import { formatDate } from '../../lib/format'
 
 export function EventCard({ event, onOpen }) {
   const meta = statusMeta[event.status]
+  const { isLive, countdown } = useEventClock(event)
+
   return (
     <motion.button
       variants={fadeUp}
@@ -35,6 +38,28 @@ export function EventCard({ event, onOpen }) {
             {meta.label}
           </Badge>
         </div>
+
+        {/* LIVE NOW — red badge in the top-right once the event has started */}
+        {isLive && (
+          <motion.span
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-lg shadow-red-600/40"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+            </span>
+            Live Now
+          </motion.span>
+        )}
+
+        {/* Countdown until start */}
+        {!isLive && countdown && event.status !== 'closed' && (
+          <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur">
+            <Timer className="h-3 w-3 text-acm-300" /> Starts in {countdown}
+          </span>
+        )}
       </div>
 
       {/* Body */}
@@ -52,6 +77,11 @@ export function EventCard({ event, onOpen }) {
           <span className="inline-flex items-center gap-1.5">
             <MapPin className="h-3.5 w-3.5" /> {event.venue}
           </span>
+          {isLive && (
+            <span className="inline-flex items-center gap-1.5 font-semibold text-red-600 dark:text-red-500">
+              <Radio className="h-3.5 w-3.5" /> Happening now
+            </span>
+          )}
         </div>
       </div>
     </motion.button>

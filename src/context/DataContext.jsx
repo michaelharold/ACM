@@ -8,26 +8,35 @@ const DataContext = createContext(null)
 // Central store for public content (events, execom, testimonials).
 // Renders instantly from mock data, then overlays live Firestore data when
 // configured — so there's never an empty flash, live or not.
+// Editable site copy defaults — everything an admin can change without code.
+const defaultContent = () => ({
+  announcements: mock.announcements,
+  stats: mock.stats,
+  established: mock.chapter.established,
+})
+
 export function DataProvider({ children }) {
   const [events, setEvents] = useState(mock.events)
   const [execomGroups, setExecomGroups] = useState(mock.execomGroups)
   const [testimonials, setTestimonials] = useState(mock.testimonials)
+  const [content, setContent] = useState(defaultContent)
   const [loaded, setLoaded] = useState(!isFirebaseConfigured)
 
   useEffect(() => {
-    if (!isFirebaseConfigured) return
     let alive = true
     ;(async () => {
       try {
-        const [ev, ex, ts] = await Promise.all([
+        const [ev, ex, ts, sc] = await Promise.all([
           svc.fetchEvents(),
           svc.fetchExecomGroups(),
           svc.fetchTestimonials(),
+          svc.fetchSiteContent(),
         ])
         if (!alive) return
         setEvents(ev)
         setExecomGroups(ex)
         setTestimonials(ts)
+        if (sc) setContent((c) => ({ ...c, ...sc }))
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('[ACM] Firestore fetch failed, using mock data.', err)
@@ -55,6 +64,17 @@ export function DataProvider({ children }) {
     setEvents((p) => p.filter((e) => e.id !== id))
   }
 
+  // ── Site content + execom mutators (admin / editors) ───────
+  async function updateContent(patch) {
+    const next = { ...content, ...patch }
+    setContent(next)
+    await svc.saveSiteContent(next)
+  }
+  async function updateExecom(groups) {
+    setExecomGroups(groups)
+    await svc.saveExecomGroups(groups)
+  }
+
   // ── Testimonial mutators (admin) ───────────────────────────
   async function addTestimonial(data) {
     const created = await svc.createTestimonial(data)
@@ -72,7 +92,10 @@ export function DataProvider({ children }) {
         events,
         execomGroups,
         testimonials,
+        content,
         loaded,
+        updateContent,
+        updateExecom,
         addEvent,
         editEvent,
         removeEvent,

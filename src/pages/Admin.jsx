@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
-  CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight,
+  CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
+  Contact2, ImageUp, ChevronDown, Save,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -11,25 +12,42 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { participants as seedParticipants, statusMeta } from '../data/mock'
 import * as svc from '../services/firestore'
+import { avatarDataUri } from '../lib/avatar'
 import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
 
-const tabs = [
-  { key: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { key: 'events', label: 'Events', icon: CalendarCog },
-  { key: 'registrations', label: 'Registrations', icon: Users },
-  { key: 'content', label: 'Content', icon: SlidersHorizontal },
-]
-
 const statusCycle = ['open', 'coming-soon', 'closed']
 
+// Read an uploaded image as a data URL (stored inline — no bucket needed).
+const fileToDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(r.result)
+    r.onerror = reject
+    r.readAsDataURL(file)
+  })
+
 export default function Admin() {
-  const { user, loading, loginAsAdmin, logout, isLive } = useAuth()
+  const { user, loading, loginAsAdmin, loginAsEditor, logout, isLive } = useAuth()
   const { events, addEvent, editEvent, removeEvent } = useData()
   const navigate = useNavigate()
   const [tab, setTab] = useState('overview')
-  const [content, setContent] = useState({ testimonials: true, execom: true, gallery: false, announcements: true })
   const [regRows, setRegRows] = useState(seedParticipants)
+
+  const isAdmin = user?.role === 'admin'
+  const perms = user?.permissions || {}
+  const can = (key) => isAdmin || !!perms[key]
+  const hasAnyAccess = isAdmin || Object.values(perms).some(Boolean)
+
+  // Tabs are permission-gated: editors only see what they were granted.
+  const tabs = [
+    { key: 'overview', label: 'Overview', icon: LayoutDashboard, show: hasAnyAccess },
+    { key: 'events', label: 'Events', icon: CalendarCog, show: can('events') },
+    { key: 'execom', label: 'Execom', icon: Contact2, show: can('execom') },
+    { key: 'content', label: 'Site Content', icon: SlidersHorizontal, show: can('content') },
+    { key: 'registrations', label: 'Registrations', icon: Users, show: isAdmin },
+    { key: 'access', label: 'Access', icon: KeyRound, show: isAdmin },
+  ].filter((t) => t.show)
 
   useEffect(() => {
     let alive = true
@@ -60,21 +78,22 @@ export default function Admin() {
       </div>
     )
 
-  // ── Access gate ──────────────────────────────────────────
-  if (!user || user.role !== 'admin') {
+  // ── Access gate: admins, or members holding at least one grant ──
+  if (!user || !hasAnyAccess) {
     return (
       <div className="section-shell flex min-h-screen flex-col items-center justify-center py-32 text-center">
         <span className="grid h-14 w-14 place-items-center rounded-2xl border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900">
           <ShieldCheck className="h-6 w-6 text-acm-500" />
         </span>
-        <h1 className="mt-6 text-2xl font-bold tracking-tight">Admin access required</h1>
+        <h1 className="mt-6 text-2xl font-bold tracking-tight">Editor access required</h1>
         <p className="mt-2 max-w-sm text-sm text-neutral-500 dark:text-neutral-400">
           {isLive
-            ? 'This control center is restricted to administrators. Set your user’s `role` field to "admin" in Firestore to gain access.'
-            : 'This control center is restricted to chapter administrators.'}
+            ? 'This control center is restricted to administrators and members granted edit access from the Access tab.'
+            : 'This control center is restricted to chapter administrators and members with edit access.'}
         </p>
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
           {!isLive && <Button onClick={() => loginAsAdmin()}>Continue as Admin (demo)</Button>}
+          {!isLive && <Button variant="secondary" onClick={() => loginAsEditor()}>Continue as Editor (demo)</Button>}
           <Button as={Link} to="/" variant="outline">Back home</Button>
         </div>
       </div>
@@ -111,8 +130,15 @@ export default function Admin() {
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <Badge tone="blue" className="mb-2"><ShieldCheck className="h-3.5 w-3.5" /> Admin</Badge>
+            <Badge tone="blue" className="mb-2">
+              <ShieldCheck className="h-3.5 w-3.5" /> {isAdmin ? 'Admin' : 'Editor'}
+            </Badge>
             <h1 className="text-2xl font-bold tracking-tight">Control Center</h1>
+            {!isAdmin && (
+              <p className="mt-1 text-xs text-neutral-400">
+                Access granted for: {Object.keys(perms).filter((k) => perms[k]).join(', ')}
+              </p>
+            )}
           </div>
           <Button onClick={() => { logout(); navigate('/') }} variant="ghost" size="sm">
             <LogOut className="h-4 w-4" /> Log out
@@ -145,9 +171,13 @@ export default function Admin() {
           {/* Panels */}
           <div className="min-w-0">
             {tab === 'overview' && <Overview stats={stats} events={events} />}
-            {tab === 'events' && <EventsPanel events={events} onAdd={handleAdd} onCycle={cycleStatus} onDelete={removeEvent} />}
-            {tab === 'registrations' && <RegistrationsPanel rows={regRows} />}
-            {tab === 'content' && <ContentPanel content={content} setContent={setContent} />}
+            {tab === 'events' && can('events') && (
+              <EventsPanel events={events} onAdd={handleAdd} onCycle={cycleStatus} onDelete={removeEvent} onSave={editEvent} />
+            )}
+            {tab === 'execom' && can('execom') && <ExecomPanel />}
+            {tab === 'content' && can('content') && <SiteContentPanel />}
+            {tab === 'registrations' && isAdmin && <RegistrationsPanel rows={regRows} />}
+            {tab === 'access' && isAdmin && <AccessPanel isLive={isLive} />}
           </div>
         </div>
       </div>
@@ -160,6 +190,9 @@ const toneBg = {
   green: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400',
   amber: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400',
 }
+
+const inputCls =
+  'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-acm-400 dark:border-neutral-700 dark:bg-neutral-800'
 
 function Overview({ stats, events }) {
   const upcoming = [...events].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4)
@@ -196,7 +229,68 @@ function Overview({ stats, events }) {
   )
 }
 
-function EventsPanel({ events, onAdd, onCycle, onDelete }) {
+// ── Events: inline editor + poster upload ────────────────────
+function EventEditor({ event, onSave }) {
+  const [draft, setDraft] = useState({
+    name: event.name,
+    date: event.date,
+    time: event.time,
+    venue: event.venue,
+    shortDescription: event.shortDescription,
+    description: event.description || '',
+  })
+  const fileRef = useRef(null)
+  const set = (k) => (e) => setDraft((d) => ({ ...d, [k]: e.target.value }))
+
+  async function uploadPoster(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const dataUrl = await fileToDataUrl(file)
+    onSave({ poster: dataUrl })
+  }
+
+  return (
+    <div className="grid gap-3 border-t border-neutral-100 bg-neutral-50/60 p-4 sm:grid-cols-2 dark:border-neutral-800 dark:bg-neutral-800/30">
+      <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
+        Event name
+        <input className={cn(inputCls, 'mt-1')} value={draft.name} onChange={set('name')} />
+      </label>
+      <label className="text-xs font-medium text-neutral-500">
+        Date
+        <input type="date" className={cn(inputCls, 'mt-1')} value={draft.date} onChange={set('date')} />
+      </label>
+      <label className="text-xs font-medium text-neutral-500">
+        Time
+        <input className={cn(inputCls, 'mt-1')} placeholder="10:00 AM" value={draft.time} onChange={set('time')} />
+      </label>
+      <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
+        Venue
+        <input className={cn(inputCls, 'mt-1')} value={draft.venue} onChange={set('venue')} />
+      </label>
+      <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
+        Card blurb (short description)
+        <input className={cn(inputCls, 'mt-1')} value={draft.shortDescription} onChange={set('shortDescription')} />
+      </label>
+      <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
+        Full description
+        <textarea rows={3} className={cn(inputCls, 'mt-1')} value={draft.description} onChange={set('description')} />
+      </label>
+      <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadPoster} />
+        <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
+          <ImageUp className="h-4 w-4" /> Upload poster
+        </Button>
+        <Button size="sm" onClick={() => onSave(draft)}>
+          <Save className="h-4 w-4" /> Save details
+        </Button>
+        <span className="text-xs text-neutral-400">Countdown & LIVE badge come from date + time automatically.</span>
+      </div>
+    </div>
+  )
+}
+
+function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
+  const [openId, setOpenId] = useState(null)
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex items-center justify-between border-b border-neutral-100 p-5 dark:border-neutral-800">
@@ -205,28 +299,302 @@ function EventsPanel({ events, onAdd, onCycle, onDelete }) {
       </div>
       <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
         {events.map((e) => (
-          <div key={e.id} className="flex flex-wrap items-center gap-4 p-4">
-            <img src={e.poster} alt="" className="h-12 w-12 rounded-lg object-cover" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{e.name}</p>
-              <p className="text-xs text-neutral-400">{formatDate(e.date)} · {e.venue}</p>
+          <div key={e.id}>
+            <div className="flex flex-wrap items-center gap-4 p-4">
+              <img src={e.poster} alt="" className="h-12 w-12 rounded-lg object-cover" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{e.name}</p>
+                <p className="text-xs text-neutral-400">{formatDate(e.date)} · {e.time} · {e.venue}</p>
+              </div>
+              <button onClick={() => onCycle(e)} title="Click to change status" className="transition-transform hover:scale-105">
+                <Badge tone={statusMeta[e.status].tone} dot={e.status === 'open'}>{statusMeta[e.status].label}</Badge>
+              </button>
+              <button
+                onClick={() => setOpenId(openId === e.id ? null : e.id)}
+                aria-label="Edit event"
+                className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-acm-300 hover:text-acm-600 dark:border-neutral-800"
+              >
+                <ChevronDown className={cn('h-4 w-4 transition-transform', openId === e.id && 'rotate-180')} />
+              </button>
+              <button
+                onClick={() => onDelete(e.id)}
+                aria-label="Delete event"
+                className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-rose-300 hover:text-rose-500 dark:border-neutral-800"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
-            <button onClick={() => onCycle(e)} title="Click to change status" className="transition-transform hover:scale-105">
-              <Badge tone={statusMeta[e.status].tone} dot={e.status === 'open'}>{statusMeta[e.status].label}</Badge>
-            </button>
-            <button
-              onClick={() => onDelete(e.id)}
-              aria-label="Delete event"
-              className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-rose-300 hover:text-rose-500 dark:border-neutral-800"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {openId === e.id && <EventEditor key={e.id} event={e} onSave={(patch) => onSave(e.id, patch)} />}
           </div>
         ))}
       </div>
       <p className="border-t border-neutral-100 p-4 text-xs text-neutral-400 dark:border-neutral-800">
-        Tip: click a status badge to cycle Open → Coming Soon → Closed.
+        Tip: click a status badge to cycle Open → Coming Soon → Closed. Expand a row to edit details or upload a poster.
       </p>
+    </motion.div>
+  )
+}
+
+// ── Execom: member details + profile photo uploads ───────────
+function ExecomPanel() {
+  const { execomGroups, updateExecom } = useData()
+  const [draft, setDraft] = useState(execomGroups)
+  const [dirty, setDirty] = useState(false)
+
+  const patch = (gi, mi, p) => {
+    setDraft((groups) =>
+      groups.map((g, i) =>
+        i !== gi ? g : { ...g, members: g.members.map((m, j) => (j !== mi ? m : { ...m, ...p })) },
+      ),
+    )
+    setDirty(true)
+  }
+  const addMember = (gi) => {
+    setDraft((groups) =>
+      groups.map((g, i) => (i !== gi ? g : { ...g, members: [...g.members, { name: 'New Member', role: 'Member' }] })),
+    )
+    setDirty(true)
+  }
+  const removeMember = (gi, mi) => {
+    setDraft((groups) =>
+      groups.map((g, i) => (i !== gi ? g : { ...g, members: g.members.filter((_, j) => j !== mi) })),
+    )
+    setDirty(true)
+  }
+  const uploadPhoto = (gi, mi) => async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    patch(gi, mi, { photo: await fileToDataUrl(file) })
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 p-5 dark:border-neutral-800">
+        <div>
+          <h3 className="font-semibold tracking-tight">Execom members</h3>
+          <p className="mt-1 text-xs text-neutral-400">Edit names, roles and profile photos shown on the member cards.</p>
+        </div>
+        <Button size="sm" disabled={!dirty} onClick={() => { updateExecom(draft); setDirty(false) }}>
+          <Save className="h-4 w-4" /> {dirty ? 'Save changes' : 'Saved'}
+        </Button>
+      </div>
+      <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
+        {draft.map((g, gi) => (
+          <div key={g.team} className="p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">{g.team}</h4>
+              <Button size="sm" variant="outline" onClick={() => addMember(gi)}>
+                <Plus className="h-4 w-4" /> Add member
+              </Button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {g.members.map((m, mi) => (
+                <div key={mi} className="flex items-center gap-3 rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
+                  <label className="group relative shrink-0 cursor-pointer" title="Upload photo">
+                    <img
+                      src={m.photo || avatarDataUri(m.name)}
+                      alt=""
+                      className="h-14 w-14 rounded-xl object-cover"
+                    />
+                    <span className="absolute inset-0 grid place-items-center rounded-xl bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                      <ImageUp className="h-5 w-5 text-white" />
+                    </span>
+                    <input type="file" accept="image/*" className="hidden" onChange={uploadPhoto(gi, mi)} />
+                  </label>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <input className={inputCls} value={m.name} onChange={(e) => patch(gi, mi, { name: e.target.value })} />
+                    <input className={inputCls} value={m.role} onChange={(e) => patch(gi, mi, { role: e.target.value })} />
+                  </div>
+                  <button
+                    onClick={() => removeMember(gi, mi)}
+                    aria-label="Remove member"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-rose-300 hover:text-rose-500 dark:border-neutral-800"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
+// ── Site content: ticker, stats, establishment — no code needed ──
+function SiteContentPanel() {
+  const { content, updateContent } = useData()
+  const [draft, setDraft] = useState(content)
+  const [dirty, setDirty] = useState(false)
+  const mark = (next) => { setDraft(next); setDirty(true) }
+
+  const setStat = (i, p) => mark({ ...draft, stats: draft.stats.map((s, j) => (j === i ? { ...s, ...p } : s)) })
+  const setAnn = (i, p) => mark({ ...draft, announcements: draft.announcements.map((a, j) => (j === i ? { ...a, ...p } : a)) })
+  const addAnn = () => mark({ ...draft, announcements: [...draft.announcements, { id: `a_${Date.now()}`, tag: 'New', text: '' }] })
+  const delAnn = (i) => mark({ ...draft, announcements: draft.announcements.filter((_, j) => j !== i) })
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 p-5 dark:border-neutral-800">
+        <div>
+          <h3 className="font-semibold tracking-tight">Site content</h3>
+          <p className="mt-1 text-xs text-neutral-400">Edit the announcement ticker, chapter stats and establishment year — live on the site, no code.</p>
+        </div>
+        <Button size="sm" disabled={!dirty} onClick={() => { updateContent(draft); setDirty(false) }}>
+          <Save className="h-4 w-4" /> {dirty ? 'Save changes' : 'Saved'}
+        </Button>
+      </div>
+
+      <div className="space-y-8 p-5">
+        {/* Establishment */}
+        <div>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Year of establishment</h4>
+          <input
+            className={cn(inputCls, 'mt-2 max-w-[160px]')}
+            value={draft.established}
+            onChange={(e) => mark({ ...draft, established: e.target.value })}
+          />
+        </div>
+
+        {/* Stats */}
+        <div>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Chapter statistics</h4>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {draft.stats.map((s, i) => (
+              <div key={s.label} className="flex items-center gap-2 rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.label}</span>
+                <input
+                  type="number"
+                  className={cn(inputCls, 'max-w-[100px]')}
+                  value={s.value}
+                  onChange={(e) => setStat(i, { value: Number(e.target.value) })}
+                />
+                <input
+                  className={cn(inputCls, 'max-w-[60px]')}
+                  placeholder="+"
+                  value={s.suffix || ''}
+                  onChange={(e) => setStat(i, { suffix: e.target.value })}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Announcements ticker */}
+        <div>
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Announcement ticker</h4>
+            <Button size="sm" variant="outline" onClick={addAnn}><Plus className="h-4 w-4" /> Add</Button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {draft.announcements.map((a, i) => (
+              <div key={a.id} className="flex items-center gap-2">
+                <input
+                  className={cn(inputCls, 'max-w-[110px]')}
+                  value={a.tag}
+                  onChange={(e) => setAnn(i, { tag: e.target.value })}
+                />
+                <input
+                  className={cn(inputCls, 'flex-1')}
+                  value={a.text}
+                  placeholder="Announcement text…"
+                  onChange={(e) => setAnn(i, { text: e.target.value })}
+                />
+                <button
+                  onClick={() => delAnn(i)}
+                  aria-label="Delete announcement"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-rose-300 hover:text-rose-500 dark:border-neutral-800"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+// ── Access: grant per-section edit rights to members ─────────
+const grantKeys = [
+  { key: 'events', label: 'Events' },
+  { key: 'execom', label: 'Execom' },
+  { key: 'content', label: 'Site Content' },
+]
+
+const demoUsers = [
+  { id: 'du1', name: 'Parthiv P', email: 'design@acmtkmce.org', role: 'user', permissions: { execom: true } },
+  { id: 'du2', name: 'Fitha Asma Sulfeekhar', email: 'program@acmtkmce.org', role: 'user', permissions: { events: true } },
+  { id: 'du3', name: 'Ananya Suresh', email: 'docs@acmtkmce.org', role: 'user', permissions: {} },
+]
+
+function AccessPanel({ isLive }) {
+  const [rows, setRows] = useState(() => {
+    if (isLive) return []
+    try {
+      return JSON.parse(localStorage.getItem('acm-demo-users')) || demoUsers
+    } catch {
+      return demoUsers
+    }
+  })
+
+  useEffect(() => {
+    if (!isLive) return
+    let alive = true
+    svc.fetchUsers().then((users) => alive && users && setRows(users))
+    return () => { alive = false }
+  }, [isLive])
+
+  function toggle(u, key) {
+    const permissions = { ...(u.permissions || {}), [key]: !u.permissions?.[key] }
+    const next = rows.map((r) => (r.id === u.id ? { ...r, permissions } : r))
+    setRows(next)
+    if (isLive) svc.updateUserAccess(u.id, permissions)
+    else localStorage.setItem('acm-demo-users', JSON.stringify(next))
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="border-b border-neutral-100 p-5 dark:border-neutral-800">
+        <h3 className="font-semibold tracking-tight">Access grants</h3>
+        <p className="mt-1 text-xs text-neutral-400">
+          Give members (e.g. team heads) permission to edit specific sections. Admins always have full access.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-left text-sm">
+          <thead className="text-xs uppercase tracking-wide text-neutral-400">
+            <tr className="border-b border-neutral-100 dark:border-neutral-800">
+              <th className="px-5 py-3 font-medium">Member</th>
+              {grantKeys.map((g) => (
+                <th key={g.key} className="px-5 py-3 text-center font-medium">{g.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+            {rows.filter((u) => u.role !== 'admin').map((u) => (
+              <tr key={u.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40">
+                <td className="px-5 py-3">
+                  <div className="font-medium">{u.name}</div>
+                  <div className="text-xs text-neutral-400">{u.email}</div>
+                </td>
+                {grantKeys.map((g) => (
+                  <td key={g.key} className="px-5 py-3 text-center">
+                    <Switch on={!!u.permissions?.[g.key]} onClick={() => toggle(u, g.key)} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!isLive && (
+        <p className="border-t border-neutral-100 p-4 text-xs text-neutral-400 dark:border-neutral-800">
+          Demo mode: grants persist locally. With Firebase live, grants write to each user’s `permissions` field.
+        </p>
+      )}
     </motion.div>
   )
 }
@@ -271,35 +639,6 @@ function RegistrationsPanel({ rows }) {
       <div className="flex items-center justify-between border-t border-neutral-100 p-4 dark:border-neutral-800">
         <span className="text-xs text-neutral-400">{rows.length} registrations</span>
         <Button size="sm" variant="outline" disabled>Export CSV <ArrowRight className="h-4 w-4" /></Button>
-      </div>
-    </motion.div>
-  )
-}
-
-const contentItems = [
-  { key: 'testimonials', label: 'Testimonials', desc: 'Show the alumni testimonials carousel on the home page.' },
-  { key: 'execom', label: 'Execom', desc: 'Display the executive committee section.' },
-  { key: 'gallery', label: 'Gallery', desc: 'Show the event gallery preview.' },
-  { key: 'announcements', label: 'Announcements', desc: 'Display updates & announcements banner.' },
-]
-
-function ContentPanel({ content, setContent }) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="border-b border-neutral-100 p-5 dark:border-neutral-800">
-        <h3 className="font-semibold tracking-tight">Website content</h3>
-        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Toggle which sections appear on the public site.</p>
-      </div>
-      <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
-        {contentItems.map((c) => (
-          <div key={c.key} className="flex items-center justify-between gap-4 p-5">
-            <div>
-              <p className="text-sm font-medium">{c.label}</p>
-              <p className="text-xs text-neutral-400">{c.desc}</p>
-            </div>
-            <Switch on={content[c.key]} onClick={() => setContent((s) => ({ ...s, [c.key]: !s[c.key] }))} />
-          </div>
-        ))}
       </div>
     </motion.div>
   )

@@ -21,6 +21,8 @@ const defaultProfile = (partial = {}) => ({
   year: '',
   acmMember: false,
   role: 'user',
+  // Per-section edit grants an admin can hand out: { events, execom, content }
+  permissions: {},
   ...partial,
 })
 
@@ -89,6 +91,7 @@ export function AuthProvider({ children }) {
       year: '3rd Year',
       acmMember: true,
       role: 'user',
+      permissions: {},
       ...partial,
     })
 
@@ -118,6 +121,17 @@ export function AuthProvider({ children }) {
     mockUser({ name: 'Admin', email: 'admin@acmtkmce.org', role: 'admin', acmMember: true })
   }
 
+  // Demo-only editor shortcut (mock mode): a member with partial edit access.
+  const loginAsEditor = () => {
+    if (isFirebaseConfigured) return
+    mockUser({
+      name: 'Parthiv P',
+      email: 'design@acmtkmce.org',
+      role: 'user',
+      permissions: { events: true, execom: true },
+    })
+  }
+
   async function logout() {
     if (isFirebaseConfigured) await signOut(auth)
     else setUser(null)
@@ -134,6 +148,7 @@ export function AuthProvider({ children }) {
         signInWithEmail,
         signUpWithEmail,
         loginAsAdmin,
+        loginAsEditor,
         logout,
       }}
     >

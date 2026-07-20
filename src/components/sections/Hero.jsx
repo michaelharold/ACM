@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, Sparkles, ArrowDown } from 'lucide-react'
 import SpecularButton from '../reactbits/SpecularButton'
+import BlurText from '../reactbits/BlurText'
 import { SocialLinks } from '../SocialLinks'
 import { useTheme } from '../../context/ThemeContext'
 import { scrollToId } from '../../lib/smoothScroll'
@@ -47,13 +48,18 @@ export function Hero() {
         <div className="absolute inset-0" aria-hidden>
           <Suspense fallback={null}>
             <LiquidEther
-              colors={['#1f47f5', '#5227FF', '#FF9FFC']}
-              mouseForce={18}
-              cursorSize={110}
+              colors={['#0d75e7', '#1173e6', '#0c04f2']}
+              mouseForce={15}
+              cursorSize={100}
+              isViscous={false}
+              viscous={30}
+              iterationsViscous={32}
+              iterationsPoisson={32}
               resolution={0.5}
+              isBounce
               autoDemo
-              autoSpeed={0.5}
-              autoIntensity={2.4}
+              autoSpeed={0.6}
+              autoIntensity={2.7}
               takeoverDuration={0.25}
               autoResumeDelay={3000}
               autoRampDuration={0.6}
@@ -118,12 +124,15 @@ export function Hero() {
           </span>
         </motion.h1>
 
-        <motion.p
-          variants={item}
-          className="mx-auto mt-7 max-w-xl text-pretty text-base leading-relaxed text-neutral-500 dark:text-neutral-400 sm:text-lg"
-        >
-          {chapter.description}
-        </motion.p>
+        <motion.div variants={item} className="mx-auto mt-7 max-w-xl">
+          <BlurText
+            text={chapter.description}
+            delay={40}
+            animateBy="words"
+            direction="top"
+            className="justify-center text-pretty text-base leading-relaxed text-neutral-500 dark:text-neutral-400 sm:text-lg"
+          />
+        </motion.div>
 
         <motion.div variants={item} className="pointer-events-auto mt-9 flex flex-wrap items-center justify-center gap-3">
           <SpecularButton

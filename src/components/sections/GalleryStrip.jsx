@@ -1,4 +1,4 @@
-import { SectionHeading } from '../SectionHeading'
+import ScrollFloat from '../reactbits/ScrollFloat'
 import { cn } from '../../lib/cn'
 import { gallery } from '../../data/mock'
 
@@ -39,12 +39,22 @@ export function GalleryStrip() {
   const half = Math.ceil(gallery.length / 2)
   return (
     <section id="gallery" className="scroll-mt-24 overflow-hidden py-24 sm:py-28">
-      <div className="section-shell">
-        <SectionHeading
-          eyebrow="Gallery"
-          title="Life at the chapter"
-          description="Hack nights, workshops, mentor circles — a running reel of what we get up to."
-        />
+      <div className="section-shell text-center">
+        <span className="eyebrow">Gallery</span>
+        <ScrollFloat
+          animationDuration={1}
+          ease="back.inOut(2)"
+          scrollStart="center bottom+=40%"
+          scrollEnd="bottom bottom-=30%"
+          stagger={0.03}
+          containerClassName="mt-2"
+          textClassName="!text-3xl sm:!text-4xl !font-bold tracking-tight !leading-tight"
+        >
+          Life at the chapter
+        </ScrollFloat>
+        <p className="mx-auto mt-3 max-w-2xl text-pretty leading-relaxed text-neutral-500 dark:text-neutral-400">
+          Hack nights, workshops, mentor circles — a running reel of what we get up to.
+        </p>
       </div>
       <div className="mt-14 space-y-4">
         <Row items={gallery.slice(0, half)} duration="52s" />

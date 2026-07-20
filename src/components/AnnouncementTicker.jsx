@@ -1,8 +1,12 @@
 import { Megaphone } from 'lucide-react'
-import { announcements } from '../data/mock'
+import { useData } from '../context/DataContext'
 
 // Slim infinite ticker of chapter updates, sitting between hero and about.
+// Text comes from admin-editable site content, not code.
 export function AnnouncementTicker() {
+  const { content } = useData()
+  const announcements = content.announcements?.length ? content.announcements : []
+  if (!announcements.length) return null
   const items = [...announcements, ...announcements]
   return (
     <div className="marquee-paused relative overflow-hidden border-y border-neutral-200 bg-neutral-50/80 py-3 dark:border-neutral-800 dark:bg-neutral-900/50">
