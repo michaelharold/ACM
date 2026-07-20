@@ -1,11 +1,15 @@
-import { useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Suspense, lazy, useRef, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, Sparkles, ArrowDown } from 'lucide-react'
-import { Button } from '../ui/Button'
+import SpecularButton from '../reactbits/SpecularButton'
 import { SocialLinks } from '../SocialLinks'
+import { useTheme } from '../../context/ThemeContext'
 import { scrollToId } from '../../lib/smoothScroll'
 import { chapter } from '../../data/mock'
+
+// Fluid-sim backdrop (three.js) stays in its own lazy chunk.
+const LiquidEther = lazy(() => import('../reactbits/LiquidEther'))
 
 const container = {
   hidden: {},
@@ -18,15 +22,47 @@ const item = {
 
 export function Hero() {
   const ref = useRef(null)
+  const navigate = useNavigate()
+  const { theme } = useTheme()
+  const dark = theme === 'dark'
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) setMounted(true)
+  }, [])
 
   // Scroll-linked parallax: copy drifts up and fades as the hero scrolls out.
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
   const contentY = useTransform(scrollYProgress, [0, 1], [0, -120])
   const contentOpacity = useTransform(scrollYProgress, [0, 0.75], [1, 0])
 
+  // Shared theme-aware styling for the secondary specular CTAs.
+  const secondary = dark
+    ? { tint: '#ffffff', tintOpacity: 0.07, blur: 8, textColor: '#f5f5f5', lineColor: '#9db9ff', baseColor: '#3f3f46' }
+    : { tint: '#ffffff', tintOpacity: 0.65, blur: 8, textColor: '#171717', lineColor: '#1f47f5', baseColor: '#a3a3a3' }
+
   return (
     <section ref={ref} className="bg-grid relative flex min-h-[100svh] items-center overflow-hidden">
-      {/* Ambient glows */}
+      {/* Liquid ether fluid backdrop — reacts to the cursor, self-drives when idle */}
+      {mounted && (
+        <div className="absolute inset-0" aria-hidden>
+          <Suspense fallback={null}>
+            <LiquidEther
+              colors={['#1f47f5', '#5227FF', '#FF9FFC']}
+              mouseForce={18}
+              cursorSize={110}
+              resolution={0.5}
+              autoDemo
+              autoSpeed={0.5}
+              autoIntensity={2.4}
+              takeoverDuration={0.25}
+              autoResumeDelay={3000}
+              autoRampDuration={0.6}
+            />
+          </Suspense>
+        </div>
+      )}
+
+      {/* Ambient glow + bottom fade above the fluid layer */}
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-acm-500/15 blur-[120px]" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-white dark:to-neutral-950" />
 
@@ -35,7 +71,7 @@ export function Hero() {
         initial="hidden"
         animate="show"
         style={{ y: contentY, opacity: contentOpacity }}
-        className="section-shell relative py-28 text-center"
+        className="section-shell pointer-events-none relative z-10 py-28 text-center"
       >
         {/* Big ACM mark */}
         <motion.div variants={item} className="mx-auto mb-8 flex justify-center">
@@ -89,19 +125,32 @@ export function Hero() {
           {chapter.description}
         </motion.p>
 
-        <motion.div variants={item} className="mt-9 flex flex-wrap items-center justify-center gap-3">
-          <Button as={Link} to="/auth" size="lg">
-            Join ACM <ArrowRight className="h-4 w-4" />
-          </Button>
-          <Button as={Link} to="/events" size="lg" variant="secondary">
+        <motion.div variants={item} className="pointer-events-auto mt-9 flex flex-wrap items-center justify-center gap-3">
+          <SpecularButton
+            size="md"
+            radius={14}
+            tint="#1f47f5"
+            tintOpacity={1}
+            textColor="#ffffff"
+            lineColor="#bcd0ff"
+            baseColor="#1634b8"
+            intensity={1}
+            proximity={220}
+            onClick={() => navigate('/auth')}
+          >
+            <span className="inline-flex items-center gap-2">
+              Join ACM <ArrowRight className="h-4 w-4" />
+            </span>
+          </SpecularButton>
+          <SpecularButton size="md" radius={14} {...secondary} proximity={220} onClick={() => navigate('/events')}>
             Explore Events
-          </Button>
-          <Button size="lg" variant="outline" onClick={() => scrollToId('about')}>
+          </SpecularButton>
+          <SpecularButton size="md" radius={14} {...secondary} proximity={220} onClick={() => scrollToId('about')}>
             Learn More
-          </Button>
+          </SpecularButton>
         </motion.div>
 
-        <motion.div variants={item} className="mt-10 flex justify-center">
+        <motion.div variants={item} className="pointer-events-auto mt-10 flex justify-center">
           <SocialLinks />
         </motion.div>
       </motion.div>

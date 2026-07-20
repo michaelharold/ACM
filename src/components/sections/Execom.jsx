@@ -1,8 +1,10 @@
 import { motion } from 'framer-motion'
 import { SectionHeading } from '../SectionHeading'
 import { Reveal, Item } from '../ui/Reveal'
+import TiltedCard from '../reactbits/TiltedCard'
 import { useData } from '../../context/DataContext'
 import { iconMap, initials, gradientFor } from '../../lib/icons'
+import { avatarDataUri } from '../../lib/avatar'
 import { cn } from '../../lib/cn'
 
 // Monogram avatar — clean, consistent identity per member.
@@ -25,20 +27,31 @@ function MemberCard({ m }) {
   const isHead = m.role === 'Head'
   return (
     <Item>
-      <div className="group text-center">
-        <div className="relative">
-          <Avatar name={m.name} />
-          {isHead && (
-            <span className="absolute -right-1.5 -top-1.5 rounded-full border border-acm-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-acm-600 shadow-sm dark:border-acm-500/30 dark:bg-neutral-900 dark:text-acm-400">
-              Head
-            </span>
-          )}
-        </div>
-        <h4 className="mt-3.5 text-sm font-semibold leading-tight tracking-tight text-neutral-900 dark:text-white">
-          {m.name}
-        </h4>
-        <p className="text-xs text-neutral-500 dark:text-neutral-400">{m.role}</p>
-      </div>
+      <TiltedCard
+        imageSrc={avatarDataUri(m.name)}
+        altText={m.name}
+        captionText={`${m.name} · ${m.role}`}
+        containerHeight="230px"
+        containerWidth="100%"
+        imageHeight="230px"
+        imageWidth="100%"
+        rotateAmplitude={12}
+        scaleOnHover={1.07}
+        showMobileWarning={false}
+        showTooltip
+        displayOverlayContent
+        overlayContent={
+          <div className="flex h-full w-full flex-col justify-end rounded-[15px] bg-gradient-to-t from-black/65 via-black/10 to-transparent p-4 text-left">
+            {isHead && (
+              <span className="mb-1.5 w-fit rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-acm-700">
+                Head
+              </span>
+            )}
+            <h4 className="text-sm font-semibold leading-tight tracking-tight text-white">{m.name}</h4>
+            <p className="mt-0.5 text-xs text-white/70">{m.role}</p>
+          </div>
+        }
+      />
     </Item>
   )
 }
