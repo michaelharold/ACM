@@ -4,6 +4,9 @@ import { Mail, Linkedin, Github, Instagram, Send, CheckCircle2, ArrowUpRight } f
 import { SectionHeading } from '../SectionHeading'
 import { Input } from '../ui/Input'
 import { Button } from '../ui/Button'
+import { LazyBackdrop } from '../ui/LazyBackdrop'
+import Threads from '../reactbits/Threads'
+import { useTheme } from '../../context/ThemeContext'
 import { chapter } from '../../data/mock'
 
 const channels = [
@@ -15,6 +18,9 @@ const channels = [
 
 export function Contact() {
   const [sent, setSent] = useState(false)
+  const { theme } = useTheme()
+  // White threads read on the dark canvas; brand blue on light.
+  const threadColor = theme === 'dark' ? [1, 1, 1] : [0.12, 0.28, 0.96]
 
   function onSubmit(e) {
     e.preventDefault()
@@ -23,8 +29,13 @@ export function Contact() {
   }
 
   return (
-    <section id="contact" className="scroll-mt-24 py-24 sm:py-28">
-      <div className="section-shell">
+    <section id="contact" className="relative scroll-mt-24 overflow-hidden py-24 sm:py-28">
+      {/* Flowing threads that bend toward the cursor */}
+      <LazyBackdrop className="pointer-events-none absolute inset-x-0 bottom-0 h-[60%] opacity-40 dark:opacity-55">
+        <Threads amplitude={1} distance={0} enableMouseInteraction color={threadColor} />
+      </LazyBackdrop>
+
+      <div className="section-shell relative">
         <SectionHeading eyebrow="Contact" title="Let’s connect" description="Questions, collaborations, or want to join a team? Reach out — we reply fast." />
 
         <div className="mt-14 grid gap-6 lg:grid-cols-2">

@@ -12,11 +12,16 @@ import Dashboard from './pages/Dashboard'
 import Admin from './pages/Admin'
 import NotFound from './pages/NotFound'
 
+// Only the top-level route counts as a "page" — opening /events/:id keeps the
+// list's scroll position and doesn't replay the page transition.
+const baseRoute = (pathname) => pathname.split('/')[1] || ''
+
 function ScrollToTop() {
   const { pathname } = useLocation()
+  const base = baseRoute(pathname)
   useEffect(() => {
     if (!window.location.hash) scrollToTop(true)
-  }, [pathname])
+  }, [base])
   return null
 }
 
@@ -31,7 +36,7 @@ export default function App() {
       <main className="flex-1">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={location.pathname}
+            key={baseRoute(location.pathname)}
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
@@ -42,6 +47,7 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/events" element={<Events />} />
+              <Route path="/events/:eventId" element={<Events />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="*" element={<NotFound />} />

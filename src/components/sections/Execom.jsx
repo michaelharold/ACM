@@ -2,6 +2,9 @@ import { motion } from 'framer-motion'
 import { SectionHeading } from '../SectionHeading'
 import { Reveal, Item } from '../ui/Reveal'
 import TiltedCard from '../reactbits/TiltedCard'
+import DotGrid from '../reactbits/DotGrid'
+import { LazyBackdrop } from '../ui/LazyBackdrop'
+import { useTheme } from '../../context/ThemeContext'
 import { useData } from '../../context/DataContext'
 import { iconMap, initials, gradientFor } from '../../lib/icons'
 import { avatarDataUri } from '../../lib/avatar'
@@ -83,9 +86,27 @@ function LeadRow({ group }) {
 
 export function Execom() {
   const { execomGroups } = useData()
+  const { theme } = useTheme()
+  const dark = theme === 'dark'
+
   return (
-    <section id="execom" className="scroll-mt-24 py-24 sm:py-28">
-      <div className="section-shell">
+    <section id="execom" className="relative scroll-mt-24 overflow-hidden py-24 sm:py-28">
+      {/* Interactive dot grid — dots scatter from the cursor and settle back */}
+      <LazyBackdrop className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(110%_70%_at_50%_40%,#000_35%,transparent_80%)]">
+        <DotGrid
+          dotSize={4}
+          gap={26}
+          baseColor={dark ? '#27272a' : '#e2e5ec'}
+          activeColor={dark ? '#598eff' : '#1f47f5'}
+          proximity={130}
+          shockRadius={230}
+          shockStrength={4}
+          resistance={750}
+          returnDuration={1.5}
+        />
+      </LazyBackdrop>
+
+      <div className="section-shell relative">
         <SectionHeading
           eyebrow="Execom"
           title="The team behind ACM TKMCE"

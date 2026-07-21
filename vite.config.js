@@ -11,6 +11,7 @@ export default defineConfig({
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
           motion: ['framer-motion'],
           three: ['three'],
+          gsap: ['gsap', '@gsap/react'],
         },
       },
     },

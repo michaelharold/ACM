@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { SectionHeading } from '../SectionHeading'
 import { Reveal, Item } from '../ui/Reveal'
+import { LazyBackdrop } from '../ui/LazyBackdrop'
+import MagicRings from '../reactbits/MagicRings'
 import { iconMap } from '../../lib/icons'
 import { goals } from '../../data/mock'
 import { cn } from '../../lib/cn'
@@ -10,8 +12,35 @@ export function Goals() {
   const [active, setActive] = useState(0)
 
   return (
-    <section id="goals" className="scroll-mt-24 border-y border-neutral-200 bg-neutral-50/60 py-24 sm:py-28 dark:border-neutral-800 dark:bg-neutral-900/30">
-      <div className="section-shell">
+    <section id="goals" className="relative scroll-mt-24 overflow-hidden border-y border-neutral-200 bg-neutral-50/60 py-24 sm:py-28 dark:border-neutral-800 dark:bg-neutral-900/30">
+      {/* Concentric magic rings radiating behind the three pillars */}
+      <LazyBackdrop className="pointer-events-none absolute inset-0 opacity-50 dark:opacity-70">
+        <MagicRings
+          color="#1f47f5"
+          colorTwo="#8a5cff"
+          ringCount={6}
+          speed={0.85}
+          attenuation={10}
+          lineThickness={2}
+          baseRadius={0.35}
+          radiusStep={0.1}
+          scaleRate={0.1}
+          opacity={1}
+          blur={0}
+          noiseAmount={0.06}
+          rotation={0}
+          ringGap={1.5}
+          fadeIn={0.7}
+          fadeOut={0.5}
+          followMouse
+          mouseInfluence={0.18}
+          hoverScale={1.15}
+          parallax={0.05}
+          clickBurst
+        />
+      </LazyBackdrop>
+
+      <div className="section-shell relative">
         <SectionHeading
           eyebrow="Our Goals"
           title="What we point every event toward"

@@ -3,6 +3,8 @@ import { ArrowUpRight, CalendarClock } from 'lucide-react'
 import { SectionHeading } from '../SectionHeading'
 import { TiltCard } from '../ui/Card'
 import { Reveal, Item } from '../ui/Reveal'
+import { LazyBackdrop } from '../ui/LazyBackdrop'
+import ColorBends from '../reactbits/ColorBends'
 import { useCountUp } from '../../lib/useCountUp'
 import { iconMap } from '../../lib/icons'
 import { useData } from '../../context/DataContext'
@@ -30,8 +32,27 @@ export function About() {
   const stats = content.stats
   const established = content.established
   return (
-    <section id="about" className="scroll-mt-24 py-24 sm:py-28">
-      <div className="section-shell">
+    <section id="about" className="relative scroll-mt-24 overflow-hidden py-24 sm:py-28">
+      {/* Flowing colour bends behind the copy */}
+      <LazyBackdrop className="pointer-events-none absolute inset-0 opacity-[0.28] [mask-image:radial-gradient(120%_80%_at_50%_35%,#000_25%,transparent_75%)] dark:opacity-40">
+        <ColorBends
+          colors={['#1f47f5', '#598eff', '#8a5cff']}
+          rotation={90}
+          speed={0.18}
+          scale={1}
+          frequency={1}
+          warpStrength={1}
+          mouseInfluence={1}
+          noise={0.12}
+          parallax={0.5}
+          iterations={1}
+          intensity={1.35}
+          bandWidth={6}
+          transparent
+        />
+      </LazyBackdrop>
+
+      <div className="section-shell relative">
         <SectionHeading
           eyebrow="About"
           title="Built by students, for builders"

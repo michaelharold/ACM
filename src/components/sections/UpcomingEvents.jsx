@@ -5,6 +5,7 @@ import { SectionHeading } from '../SectionHeading'
 import { EventCard } from '../events/EventCard'
 import { Button } from '../ui/Button'
 import { Reveal } from '../ui/Reveal'
+import SplitText from '../reactbits/SplitText'
 import { useData } from '../../context/DataContext'
 
 // Home-page preview of what's next — the three most relevant events,
@@ -19,8 +20,6 @@ export function UpcomingEvents() {
       .sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3) || new Date(a.date) - new Date(b.date))
       .slice(0, 3)
   }, [events])
-
-  if (!featured.length) return null
 
   return (
     <section id="upcoming" className="scroll-mt-24 py-24 sm:py-28">
@@ -37,11 +36,33 @@ export function UpcomingEvents() {
           </Button>
         </div>
 
-        <Reveal className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" amount={0.15}>
-          {featured.map((event) => (
-            <EventCard key={event.id} event={event} onOpen={() => navigate('/events')} />
-          ))}
-        </Reveal>
+        {featured.length ? (
+          <Reveal className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" amount={0.15}>
+            {featured.map((event) => (
+              <EventCard key={event.id} event={event} onOpen={(e) => navigate(`/events/${e.id}`)} />
+            ))}
+          </Reveal>
+        ) : (
+          <div className="mt-12 flex flex-col items-center rounded-2xl border border-dashed border-neutral-300 py-16 text-center dark:border-neutral-700">
+            <SplitText
+              text="Coming Soon....."
+              tag="h3"
+              className="text-3xl font-extrabold tracking-tight sm:text-4xl"
+              delay={70}
+              duration={0.8}
+              ease="power3.out"
+              splitType="chars"
+              from={{ opacity: 0, y: 40 }}
+              to={{ opacity: 1, y: 0 }}
+              threshold={0.1}
+              rootMargin="-40px"
+              textAlign="center"
+            />
+            <p className="mt-3 max-w-sm text-sm text-neutral-500 dark:text-neutral-400">
+              Nothing on the calendar right now — the next line-up is being planned.
+            </p>
+          </div>
+        )}
       </div>
     </section>
   )

@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { CalendarClock } from 'lucide-react'
 import { SectionHeading } from '../components/SectionHeading'
 import { Reveal } from '../components/ui/Reveal'
 import { EventCard } from '../components/events/EventCard'
 import { EventDetailsModal } from '../components/events/EventDetailsModal'
 import { RegistrationDrawer } from '../components/events/RegistrationDrawer'
+import SplitText from '../components/reactbits/SplitText'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
@@ -19,11 +21,11 @@ const filters = [
 
 export default function Events() {
   const [filter, setFilter] = useState('all')
-  const [selected, setSelected] = useState(null)
   const [registering, setRegistering] = useState(null)
   const navigate = useNavigate()
+  const { eventId } = useParams()
   const { isAuthed } = useAuth()
-  const { events } = useData()
+  const { events, loaded } = useData()
   const { isRegistered, register } = useRegistrations()
 
   const list = useMemo(
@@ -31,15 +33,28 @@ export default function Events() {
     [filter, events],
   )
 
+  // The open event is derived from the URL, so /events/:id is shareable and the
+  // back button closes the details view.
+  const selected = useMemo(() => events.find((e) => e.id === eventId) || null, [events, eventId])
+
+  // Unknown id (stale link, deleted event) falls back to the list.
+  useEffect(() => {
+    if (eventId && loaded && !events.some((e) => e.id === eventId)) {
+      navigate('/events', { replace: true })
+    }
+  }, [eventId, events, loaded, navigate])
+
   function handleRegister(event) {
     if (!isAuthed) {
       // Per SDD: redirect to Authentication Page if login is required, then back.
-      navigate('/auth', { state: { from: '/events' } })
+      navigate('/auth', { state: { from: `/events/${event.id}` } })
       return
     }
-    setSelected(null)
+    navigate('/events')
     setTimeout(() => setRegistering(event), 180)
   }
+
+  const noEventsAtAll = loaded && events.length === 0
 
   return (
     <div className="pt-28">
@@ -50,41 +65,69 @@ export default function Events() {
           description="Browse upcoming, ongoing and past events. Tap any card for the full breakdown and to register."
         />
 
-        {/* Filters */}
-        <div className="mt-10 flex flex-wrap justify-center gap-2">
-          {filters.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={cn(
-                'relative rounded-full px-4 py-2 text-sm font-medium transition-colors',
-                filter === f.key ? 'text-white' : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white',
-              )}
-            >
-              {filter === f.key && (
-                <span className="absolute inset-0 -z-10 rounded-full bg-acm-600" style={{ borderRadius: 9999 }} />
-              )}
-              {f.label}
-            </button>
-          ))}
-        </div>
+        {noEventsAtAll ? (
+          /* Nothing scheduled yet — a deliberate, animated placeholder. */
+          <div className="mt-20 flex flex-col items-center text-center">
+            <span className="grid h-14 w-14 place-items-center rounded-2xl border border-neutral-200 bg-neutral-50 text-acm-500 dark:border-neutral-800 dark:bg-neutral-900">
+              <CalendarClock className="h-6 w-6" />
+            </span>
+            <SplitText
+              text="Coming Soon....."
+              tag="h3"
+              className="mt-6 text-4xl font-extrabold tracking-tight sm:text-5xl"
+              delay={70}
+              duration={0.8}
+              ease="power3.out"
+              splitType="chars"
+              from={{ opacity: 0, y: 40 }}
+              to={{ opacity: 1, y: 0 }}
+              threshold={0.1}
+              rootMargin="-40px"
+              textAlign="center"
+            />
+            <p className="mt-4 max-w-sm text-sm text-neutral-500 dark:text-neutral-400">
+              We’re lining up the next set of workshops, talks and hackathons. Check back shortly.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Filters */}
+            <div className="mt-10 flex flex-wrap justify-center gap-2">
+              {filters.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key)}
+                  className={cn(
+                    'relative rounded-full px-4 py-2 text-sm font-medium transition-colors',
+                    filter === f.key ? 'text-white' : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white',
+                  )}
+                >
+                  {filter === f.key && (
+                    <span className="absolute inset-0 -z-10 rounded-full bg-acm-600" style={{ borderRadius: 9999 }} />
+                  )}
+                  {f.label}
+                </button>
+              ))}
+            </div>
 
-        {/* Grid */}
-        <Reveal key={filter} className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" amount={0.05}>
-          {list.map((event) => (
-            <EventCard key={event.id} event={event} onOpen={setSelected} />
-          ))}
-        </Reveal>
+            {/* Grid */}
+            <Reveal key={filter} className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" amount={0.05}>
+              {list.map((event) => (
+                <EventCard key={event.id} event={event} onOpen={(e) => navigate(`/events/${e.id}`)} />
+              ))}
+            </Reveal>
 
-        {list.length === 0 && (
-          <p className="mt-16 text-center text-sm text-neutral-500">No events in this category yet.</p>
+            {list.length === 0 && (
+              <p className="mt-16 text-center text-sm text-neutral-500">No events in this category yet.</p>
+            )}
+          </>
         )}
       </div>
 
       <EventDetailsModal
         event={selected}
         open={!!selected}
-        onClose={() => setSelected(null)}
+        onClose={() => navigate('/events')}
         onRegister={handleRegister}
         registered={selected ? isRegistered(selected.id) : false}
       />
