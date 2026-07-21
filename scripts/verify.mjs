@@ -176,9 +176,16 @@ const run = async () => {
   // ── 9. Hero: official logo, no "Est." pill ───────────────────
   const heroLogo = page.locator('section img[src*="acm-logo"]').first()
   const heroBox = await heroLogo.boundingBox().catch(() => null)
-  heroBox && heroBox.width > 80
-    ? pass(`hero: official logo rendered (${Math.round(heroBox.width)}px)`)
-    : fail('hero: official logo rendered', heroBox ? `only ${Math.round(heroBox.width)}px` : 'not found')
+  heroBox && heroBox.width >= 200
+    ? pass(`hero: official logo rendered large (${Math.round(heroBox.width)}px)`)
+    : fail('hero: official logo rendered large', heroBox ? `only ${Math.round(heroBox.width)}px` : 'not found')
+  // The mark should settle and hold — no perpetual float.
+  const y1 = (await heroLogo.boundingBox()).y
+  await page.waitForTimeout(1800)
+  const y2 = (await heroLogo.boundingBox()).y
+  Math.abs(y1 - y2) < 1
+    ? pass('hero: logo holds still after reveal')
+    : fail('hero: logo holds still after reveal', `drifted ${Math.abs(y1 - y2).toFixed(1)}px`)
   const estPill = await page.getByText(/Est\. \d{4}\s*·/).count()
   estPill === 0 ? pass('hero: Est. pill removed') : fail('hero: Est. pill removed', `${estPill} found`)
 
@@ -206,6 +213,27 @@ const run = async () => {
     ;(await page.locator(`#${id}`).count()) === 0
       ? pass(`home: #${id} moved to its own page`)
       : fail(`home: #${id} moved to its own page`, 'still on home')
+  }
+
+  // ── 11. Real chapter links ───────────────────────────────────
+  const expectLinks = {
+    'instagram.com/acm_tkmce': 'Instagram',
+    'linkedin.com/company/acm-tkmce': 'LinkedIn',
+    'mailto:acm.cse@tkmce.ac.in': 'email',
+  }
+  await page.goto(BASE + '/contact', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  const hrefs = await page.$$eval('a[href]', (els) => els.map((e) => e.getAttribute('href')))
+  for (const [needle, label] of Object.entries(expectLinks)) {
+    hrefs.some((h) => h && h.includes(needle))
+      ? pass(`links: ${label} -> ${needle}`)
+      : fail(`links: ${label}`, `no href containing "${needle}"`)
+  }
+  // Stale handles must be gone everywhere.
+  for (const stale of ['instagram.com/acmtkmce', 'hello@acmtkmce.org', 'linkedin.com/company/acmtkmce']) {
+    hrefs.some((h) => h && h.includes(stale))
+      ? fail(`links: stale ${stale} removed`, 'still present')
+      : pass(`links: stale ${stale} removed`)
   }
 
   await browser.close()

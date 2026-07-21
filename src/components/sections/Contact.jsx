@@ -11,9 +11,9 @@ import { chapter } from '../../data/mock'
 
 const channels = [
   { label: 'Email', value: chapter.socials.email, href: `mailto:${chapter.socials.email}`, Icon: Mail },
-  { label: 'LinkedIn', value: '/acmtkmce', href: chapter.socials.linkedin, Icon: Linkedin },
+  { label: 'LinkedIn', value: '/company/acm-tkmce', href: chapter.socials.linkedin, Icon: Linkedin },
   { label: 'GitHub', value: '/acmtkmce', href: chapter.socials.github, Icon: Github },
-  { label: 'Instagram', value: '@acmtkmce', href: chapter.socials.instagram, Icon: Instagram },
+  { label: 'Instagram', value: '@acm_tkmce', href: chapter.socials.instagram, Icon: Instagram },
 ]
 
 export function Contact() {

@@ -10,10 +10,10 @@ export const chapter = {
   description:
     'The official ACM Student Chapter at TKM College of Engineering. We host workshops, hackathons and talks that turn curious students into confident builders.',
   socials: {
-    instagram: 'https://instagram.com/acmtkmce',
-    linkedin: 'https://linkedin.com/company/acmtkmce',
+    instagram: 'https://www.instagram.com/acm_tkmce',
+    linkedin: 'https://www.linkedin.com/company/acm-tkmce/',
     github: 'https://github.com/acmtkmce',
-    email: 'hello@acmtkmce.org',
+    email: 'acm.cse@tkmce.ac.in',
   },
 }
 
