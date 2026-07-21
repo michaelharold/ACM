@@ -3,8 +3,7 @@ import { ArrowUpRight, CalendarClock } from 'lucide-react'
 import { SectionHeading } from '../SectionHeading'
 import { TiltCard } from '../ui/Card'
 import { Reveal, Item } from '../ui/Reveal'
-import { LazyBackdrop } from '../ui/LazyBackdrop'
-import ColorBends from '../reactbits/ColorBends'
+import { BrandBackdrop } from './BrandBackdrop'
 import ScrollFloat from '../reactbits/ScrollFloat'
 import { useCountUp } from '../../lib/useCountUp'
 import { iconMap } from '../../lib/icons'
@@ -37,36 +36,9 @@ export function About() {
   const whyJoin = content.whyJoin
   return (
     <section id="about" className="relative scroll-mt-24 overflow-hidden">
-      {/* One colour-bend field spans the whole section — the "Think. Build. Ship."
-          band and the about content below it now share this single background
-          instead of each carrying its own. */}
-      <LazyBackdrop className="pointer-events-none absolute inset-0">
-        <ColorBends
-          // Dark indigo end of the brand palette — acm-950/900 with an indigo
-          // mid, kept deliberately deep so the field reads as texture on a dark
-          // canvas rather than a light source.
-          colors={['#151d57', '#1c2f8f', '#312e81']}
-          rotation={90}
-          speed={0.2}
-          scale={1}
-          frequency={1}
-          warpStrength={1}
-          mouseInfluence={0.9}
-          noise={0.15}
-          parallax={2}
-          iterations={1}
-          // Down from 1.5 — the bands were blowing out to near-white where they
-          // overlapped, which is what read as glow.
-          intensity={0.75}
-          bandWidth={6}
-          transparent
-        />
-      </LazyBackdrop>
-      {/* Scrim: keeps body copy legible and holds the section on a dark canvas */}
-      <div className="pointer-events-none absolute inset-0 bg-neutral-950/75" />
-      {/* Feather the seams into the sections above and below */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-neutral-950 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-neutral-950 to-transparent" />
+      {/* Shared brand backdrop — the "Think. Build. Ship." band and the about
+          content below it sit on one field rather than each carrying its own. */}
+      <BrandBackdrop />
 
       {/* Merged band — the headline that used to be its own Lightfall section */}
       <div className="relative z-10 flex min-h-[300px] items-center justify-center px-5 pb-4 pt-20 sm:min-h-[360px]">

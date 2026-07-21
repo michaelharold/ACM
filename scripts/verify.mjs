@@ -289,13 +289,13 @@ const run = async () => {
       : fail('about: backdrop is animating', 'frames identical — shader may be stalled')
   }
 
-  // Events page carries the PixelBlast backdrop.
+  // Events page carries the same shared brand backdrop as About.
   await page.goto(BASE + '/events', { waitUntil: 'domcontentloaded' })
   await settle(page)
   await page.waitForTimeout(2500)
-  ;(await page.locator('.pixel-blast-container canvas').count()) === 1
-    ? pass('events: PixelBlast backdrop present')
-    : fail('events: PixelBlast backdrop', 'no canvas')
+  ;(await page.locator('.color-bends-container canvas').count()) === 1
+    ? pass('events: shared brand backdrop present')
+    : fail('events: shared brand backdrop', 'no canvas')
 
   // Execom page carries the DotField backdrop.
   await page.goto(BASE + '/execom', { waitUntil: 'domcontentloaded' })

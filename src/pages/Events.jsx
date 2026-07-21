@@ -7,8 +7,7 @@ import { EventCard } from '../components/events/EventCard'
 import { EventDetailsModal } from '../components/events/EventDetailsModal'
 import { RegistrationDrawer } from '../components/events/RegistrationDrawer'
 import SplitText from '../components/reactbits/SplitText'
-import PixelBlast from '../components/reactbits/PixelBlast'
-import { LazyBackdrop } from '../components/ui/LazyBackdrop'
+import { BrandBackdrop } from '../components/sections/BrandBackdrop'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
@@ -60,31 +59,9 @@ export default function Events() {
 
   return (
     <div className="relative pt-28">
-      {/* Dithered pixel field behind the catalogue. Interactive (click ripples,
-          liquid drag) so it stays pointer-enabled, but pinned to the top band
-          and faded out before the cards. */}
-      <LazyBackdrop className="absolute inset-x-0 top-0 h-[70vh]">
-        <PixelBlast
-          variant="circle"
-          pixelSize={5}
-          color="#160fe0"
-          patternScale={3}
-          patternDensity={0.85}
-          pixelSizeJitter={0.5}
-          enableRipples
-          rippleSpeed={0.4}
-          rippleThickness={0.12}
-          rippleIntensityScale={1.5}
-          liquid
-          liquidStrength={0.12}
-          liquidRadius={1.2}
-          liquidWobbleSpeed={5}
-          speed={0.6}
-          edgeFade={0.25}
-          transparent
-        />
-      </LazyBackdrop>
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[70vh] bg-gradient-to-b from-transparent via-neutral-950/60 to-neutral-950" />
+      {/* Same brand backdrop as the About section. It spans the whole page here
+          rather than a fixed band, so it stays behind the cards as you scroll. */}
+      <BrandBackdrop feather={false} />
 
       <div className="section-shell relative z-10 py-16">
         <SectionHeading

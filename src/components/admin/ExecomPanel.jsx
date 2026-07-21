@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Trash2, Save, ImageUp, ChevronUp, ChevronDown, Users, GripVertical } from 'lucide-react'
+import { Plus, Trash2, Save, ImageUp, ChevronUp, ChevronDown, Users, GripVertical, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { useData } from '../../context/DataContext'
 import { iconMap } from '../../lib/icons'
 import { avatarDataUri } from '../../lib/avatar'
+import { cropToPortrait } from '../../lib/imagePrep'
 import { cn } from '../../lib/cn'
 
 const inputCls =
@@ -12,14 +13,6 @@ const inputCls =
 
 const iconNames = Object.keys(iconMap)
 const roles = ['Head', 'Member', 'Secretary', 'Joint Secretary', 'Treasurer', 'Junior Representative']
-
-const fileToDataUrl = (file) =>
-  new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(r.result)
-    r.onerror = reject
-    r.readAsDataURL(file)
-  })
 
 // Move an item within an array; returns a new array.
 const moveItem = (arr, from, to) => {
@@ -35,6 +28,8 @@ export function ExecomPanel() {
   const [draft, setDraft] = useState(execomGroups)
   const [dirty, setDirty] = useState(false)
   const [open, setOpen] = useState(() => new Set([0]))
+  const [saving, setSaving] = useState(false)
+  const [status, setStatus] = useState(null)
 
   const mark = (next) => {
     setDraft(next)
@@ -66,10 +61,43 @@ export function ExecomPanel() {
   const moveMember = (gi, mi, dir) =>
     mark(draft.map((g, i) => (i !== gi ? g : { ...g, members: moveItem(g.members, mi, mi + dir) })))
 
+  // Photos are cropped and recompressed before they go anywhere near state.
+  // Several members share one Firestore document (1 MB cap), and a raw phone
+  // photo is megabytes once base64-encoded — storing it uncompressed made the
+  // save fail, so the picture survived until the next reload and then vanished.
   const uploadPhoto = (gi, mi) => async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setMember(gi, mi, { photo: await fileToDataUrl(file) })
+    setStatus(null)
+    try {
+      setMember(gi, mi, { photo: await cropToPortrait(file) })
+    } catch (err) {
+      setStatus({ ok: false, msg: err?.message || 'Could not read that image.' })
+    } finally {
+      e.target.value = ''
+    }
+  }
+
+  // Awaited and caught — an unhandled rejection here is what made a failed
+  // save look successful.
+  async function save() {
+    setSaving(true)
+    setStatus(null)
+    try {
+      await updateExecom(draft)
+      setDirty(false)
+      setStatus({ ok: true, msg: 'Saved — changes are live on the site.' })
+    } catch (err) {
+      setStatus({
+        ok: false,
+        msg:
+          err?.code === 'invalid-argument' || /longer than|1048487|exceeds/i.test(err?.message || '')
+            ? 'A team is too large to save — try removing or re-uploading its largest photos.'
+            : err?.message || 'Could not save. Your changes are still here; try again.',
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -87,11 +115,26 @@ export function ExecomPanel() {
           <Button size="sm" variant="outline" onClick={addTeam}>
             <Plus className="h-4 w-4" /> Add team
           </Button>
-          <Button size="sm" disabled={!dirty} onClick={() => { updateExecom(draft); setDirty(false) }}>
-            <Save className="h-4 w-4" /> {dirty ? 'Save changes' : 'Saved'}
+          <Button size="sm" disabled={!dirty || saving} onClick={save}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
           </Button>
         </div>
       </div>
+
+      {status && (
+        <div
+          className={cn(
+            'flex items-start gap-2 border-b px-5 py-3 text-sm',
+            status.ok
+              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+              : 'border-rose-500/20 bg-rose-500/10 text-rose-400',
+          )}
+        >
+          {status.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
+          {status.msg}
+        </div>
+      )}
 
       <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
         {draft.map((g, gi) => {

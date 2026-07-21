@@ -16,19 +16,11 @@ import { useData } from '../context/DataContext'
 import { participants as seedParticipants, statusMeta } from '../data/mock'
 import * as svc from '../services/firestore'
 import { avatarDataUri } from '../lib/avatar'
+import { cropToPoster } from '../lib/imagePrep'
 import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
 
 const statusCycle = ['open', 'coming-soon', 'closed']
-
-// Read an uploaded image as a data URL (stored inline — no bucket needed).
-const fileToDataUrl = (file) =>
-  new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(r.result)
-    r.onerror = reject
-    r.readAsDataURL(file)
-  })
 
 export default function Admin() {
   const { user, loading, loginAsAdmin, loginAsEditor, logout, isLive } = useAuth()
@@ -265,8 +257,16 @@ function EventEditor({ event, onSave }) {
   async function uploadPoster(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    const dataUrl = await fileToDataUrl(file)
-    onSave({ poster: dataUrl })
+    // Cropped and recompressed first — a raw phone photo is megabytes once
+    // base64-encoded and would push the event document past Firestore's 1 MB
+    // cap, so the save would fail and the poster would vanish on reload.
+    try {
+      onSave({ poster: await cropToPoster(file) })
+    } catch {
+      /* not a readable image — leave the existing poster in place */
+    } finally {
+      e.target.value = ''
+    }
   }
 
   return (

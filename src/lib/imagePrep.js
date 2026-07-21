@@ -22,11 +22,15 @@ const loadImage = (file) =>
   })
 
 // Centre-crop to the target ratio, then scale — never letterbox or squash.
-export async function cropToCard(file) {
+//
+// Every inline image in this app lives in a Firestore document, which is hard
+// capped at 1 MB. A raw phone photo is several MB once base64-encoded, so
+// anything uploaded MUST come through here or the write silently fails.
+export async function prepareImage(file, { width = TARGET_W, height = TARGET_H, maxBytes = MAX_BYTES } = {}) {
   if (!file.type.startsWith('image/')) throw new Error(`${file.name} is not an image.`)
   const img = await loadImage(file)
 
-  const targetRatio = TARGET_W / TARGET_H
+  const targetRatio = width / height
   const srcRatio = img.width / img.height
   let sx = 0
   let sy = 0
@@ -44,19 +48,29 @@ export async function cropToCard(file) {
   }
 
   const canvas = document.createElement('canvas')
-  canvas.width = TARGET_W
-  canvas.height = TARGET_H
+  canvas.width = width
+  canvas.height = height
   const ctx = canvas.getContext('2d')
   ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, TARGET_W, TARGET_H)
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, width, height)
 
   // Step the quality down until it fits comfortably in a Firestore document.
   for (const q of [0.82, 0.7, 0.58, 0.45, 0.34]) {
     const url = canvas.toDataURL('image/jpeg', q)
-    if (url.length * 0.75 <= MAX_BYTES) return url
+    if (url.length * 0.75 <= maxBytes) return url
   }
   return canvas.toDataURL('image/jpeg', 0.3)
 }
+
+// Gallery cards (10:7).
+export const cropToCard = (file) => prepareImage(file)
+
+// Execom member portraits. Several members share one team document, so these
+// are budgeted much smaller than a gallery image.
+export const cropToPortrait = (file) => prepareImage(file, { width: 480, height: 480, maxBytes: 90 * 1024 })
+
+// Event posters — one per event document, so they can afford the card budget.
+export const cropToPoster = (file) => prepareImage(file, { width: 800, height: 560, maxBytes: 300 * 1024 })
 
 // Deterministic-per-load shuffle so the strip looks fresh on every visit
 // without reordering mid-session (which would fight the marquee animation).
