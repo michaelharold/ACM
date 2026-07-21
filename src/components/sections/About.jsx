@@ -42,7 +42,9 @@ export function About() {
           instead of each carrying its own. */}
       <LazyBackdrop className="pointer-events-none absolute inset-0">
         <ColorBends
-          colors={['#ff5c7a', '#8a5cff', '#00ffd1']}
+          // Brand palette: acm-600 core, acm-400 light, and the violet already
+          // used by MagicRings and the Explore cards as the secondary accent.
+          colors={['#1f47f5', '#598eff', '#8a5cff']}
           rotation={90}
           speed={0.2}
           scale={1}
