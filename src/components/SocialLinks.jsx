@@ -1,11 +1,10 @@
-import { Instagram, Linkedin, Github } from 'lucide-react'
+import { Instagram, Linkedin } from 'lucide-react'
 import { chapter } from '../data/mock'
 import { cn } from '../lib/cn'
 
 const links = [
   { href: chapter.socials.instagram, label: 'Instagram', Icon: Instagram },
   { href: chapter.socials.linkedin, label: 'LinkedIn', Icon: Linkedin },
-  { href: chapter.socials.github, label: 'GitHub', Icon: Github },
 ]
 
 export function SocialLinks({ className, size = 'md' }) {

@@ -229,8 +229,8 @@ const run = async () => {
       ? pass(`links: ${label} -> ${needle}`)
       : fail(`links: ${label}`, `no href containing "${needle}"`)
   }
-  // Stale handles must be gone everywhere.
-  for (const stale of ['instagram.com/acmtkmce', 'hello@acmtkmce.org', 'linkedin.com/company/acmtkmce']) {
+  // Stale handles and the dropped GitHub link must be gone everywhere.
+  for (const stale of ['instagram.com/acmtkmce', 'hello@acmtkmce.org', 'linkedin.com/company/acmtkmce', 'github.com']) {
     hrefs.some((h) => h && h.includes(stale))
       ? fail(`links: stale ${stale} removed`, 'still present')
       : pass(`links: stale ${stale} removed`)

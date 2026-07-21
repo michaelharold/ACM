@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Mail, Linkedin, Github, Instagram, Send, CheckCircle2, ArrowUpRight } from 'lucide-react'
+import { Mail, Linkedin, Instagram, Send, CheckCircle2, ArrowUpRight } from 'lucide-react'
 import { SectionHeading } from '../SectionHeading'
 import { Input } from '../ui/Input'
 import { Button } from '../ui/Button'
@@ -12,7 +12,6 @@ import { chapter } from '../../data/mock'
 const channels = [
   { label: 'Email', value: chapter.socials.email, href: `mailto:${chapter.socials.email}`, Icon: Mail },
   { label: 'LinkedIn', value: '/company/acm-tkmce', href: chapter.socials.linkedin, Icon: Linkedin },
-  { label: 'GitHub', value: '/acmtkmce', href: chapter.socials.github, Icon: Github },
   { label: 'Instagram', value: '@acm_tkmce', href: chapter.socials.instagram, Icon: Instagram },
 ]
 
@@ -40,7 +39,8 @@ export function Contact() {
 
         <div className="mt-14 grid gap-6 lg:grid-cols-2">
           {/* Channels */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:content-start">
+          {/* Three channels: paired on tablet, a clean stack beside the form on desktop */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 lg:content-start">
             {channels.map((c) => (
               <a
                 key={c.label}

@@ -12,7 +12,6 @@ export const chapter = {
   socials: {
     instagram: 'https://www.instagram.com/acm_tkmce',
     linkedin: 'https://www.linkedin.com/company/acm-tkmce/',
-    github: 'https://github.com/acmtkmce',
     email: 'acm.cse@tkmce.ac.in',
   },
 }
