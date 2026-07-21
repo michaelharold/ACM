@@ -6,8 +6,8 @@ import SpecularButton from '../reactbits/SpecularButton'
 import BlurText from '../reactbits/BlurText'
 import { SocialLinks } from '../SocialLinks'
 import { useTheme } from '../../context/ThemeContext'
+import { useData } from '../../context/DataContext'
 import { scrollToId } from '../../lib/smoothScroll'
-import { chapter } from '../../data/mock'
 
 // Fluid-sim backdrop (three.js) stays in its own lazy chunk.
 const LiquidEther = lazy(() => import('../reactbits/LiquidEther'))
@@ -25,6 +25,7 @@ export function Hero() {
   const ref = useRef(null)
   const navigate = useNavigate()
   const { theme } = useTheme()
+  const { content } = useData()
   const dark = theme === 'dark'
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
@@ -134,7 +135,7 @@ export function Hero() {
 
         <motion.div variants={item} className="mx-auto mt-7 max-w-xl">
           <BlurText
-            text={chapter.description}
+            text={content.heroTagline}
             delay={40}
             animateBy="words"
             direction="top"

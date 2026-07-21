@@ -1,6 +1,8 @@
+import { useMemo } from 'react'
 import ScrollFloat from '../reactbits/ScrollFloat'
 import { cn } from '../../lib/cn'
-import { gallery } from '../../data/mock'
+import { shuffle } from '../../lib/imagePrep'
+import { useData } from '../../context/DataContext'
 
 function Row({ items, reverse = false, duration = '46s' }) {
   return (
@@ -36,7 +38,14 @@ function Row({ items, reverse = false, duration = '46s' }) {
 
 // Two counter-scrolling photo marquees; hover pauses a row and reveals captions.
 export function GalleryStrip() {
-  const half = Math.ceil(gallery.length / 2)
+  const { gallery, content } = useData()
+  // Reshuffled once per mount, so newly uploaded photos surface in different
+  // positions on each visit rather than always landing at the end.
+  const shuffled = useMemo(() => shuffle(gallery), [gallery])
+  const half = Math.ceil(shuffled.length / 2)
+
+  if (shuffled.length === 0) return null
+
   return (
     <section id="gallery" className="scroll-mt-24 overflow-hidden py-24 sm:py-28">
       <div className="section-shell text-center">
@@ -50,15 +59,15 @@ export function GalleryStrip() {
           containerClassName="mt-2"
           textClassName="!text-3xl sm:!text-4xl !font-bold tracking-tight !leading-tight"
         >
-          Life at the chapter
+          {content.galleryTitle}
         </ScrollFloat>
         <p className="mx-auto mt-3 max-w-2xl text-pretty leading-relaxed text-neutral-500 dark:text-neutral-400">
-          Hack nights, workshops, mentor circles — a running reel of what we get up to.
+          {content.galleryBlurb}
         </p>
       </div>
       <div className="mt-14 space-y-4">
-        <Row items={gallery.slice(0, half)} duration="52s" />
-        <Row items={gallery.slice(half)} reverse duration="60s" />
+        <Row items={shuffled.slice(0, half)} duration="52s" />
+        {shuffled.length > 1 && <Row items={shuffled.slice(half)} reverse duration="60s" />}
       </div>
     </section>
   )

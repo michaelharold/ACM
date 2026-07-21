@@ -265,6 +265,37 @@ const run = async () => {
   const demoNote = await page.getByText(/demo form|aren.t stored/i).count()
   demoNote === 0 ? pass('contact: demo disclaimer gone') : fail('contact: demo disclaimer gone', 'still present')
 
+  // ── 13. Merged About band + shared backdrop ──────────────────
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  await page.locator('#about').scrollIntoViewIfNeeded()
+  await page.waitForTimeout(2000)
+  // The headline used to live in its own section with its own Lightfall; it
+  // should now sit inside #about sharing one backdrop.
+  const bandInAbout = await page.locator('#about').getByText(/Think|Build|Ship/).count()
+  bandInAbout > 0 ? pass('about: Think/Build/Ship merged into the section') : fail('about: band merged', 'not inside #about')
+  const canvases = await page.locator('#about canvas').count()
+  canvases === 1
+    ? pass('about: exactly one shared backdrop canvas')
+    : fail('about: one shared backdrop', `${canvases} canvases`)
+
+  // Events page carries the Lightfall backdrop.
+  await page.goto(BASE + '/events', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  await page.waitForTimeout(1500)
+  ;(await page.locator('canvas').count()) > 0
+    ? pass('events: Lightfall backdrop present')
+    : fail('events: Lightfall backdrop', 'no canvas')
+
+  // ── 14. Gallery renders from the data layer ──────────────────
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  await page.locator('#gallery').scrollIntoViewIfNeeded()
+  await page.waitForTimeout(1200)
+  ;(await page.locator('#gallery figure').count()) > 0
+    ? pass('gallery: strip renders images')
+    : fail('gallery: strip renders images', 'empty')
+
   await browser.close()
 
   // ── Report ──────────────────────────────────────────────────

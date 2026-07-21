@@ -13,12 +13,20 @@ const defaultContent = () => ({
   announcements: mock.announcements,
   stats: mock.stats,
   established: mock.chapter.established,
+  // Front-page copy an admin can rewrite without touching code.
+  goals: mock.goals, // Vision / Mission / Values
+  whyJoin: mock.whyJoin,
+  heroTagline: mock.chapter.description,
+  aboutTitle: 'Built by students, for builders',
+  galleryTitle: 'Life at the chapter',
+  galleryBlurb: 'Hack nights, workshops, mentor circles — a running reel of what we get up to.',
 })
 
 export function DataProvider({ children }) {
   const [events, setEvents] = useState(mock.events)
   const [execomGroups, setExecomGroups] = useState(mock.execomGroups)
   const [testimonials, setTestimonials] = useState(mock.testimonials)
+  const [gallery, setGallery] = useState(mock.gallery)
   const [content, setContent] = useState(defaultContent)
   const [loaded, setLoaded] = useState(!isFirebaseConfigured)
 
@@ -26,16 +34,18 @@ export function DataProvider({ children }) {
     let alive = true
     ;(async () => {
       try {
-        const [ev, ex, ts, sc] = await Promise.all([
+        const [ev, ex, ts, sc, gal] = await Promise.all([
           svc.fetchEvents(),
           svc.fetchExecomGroups(),
           svc.fetchTestimonials(),
           svc.fetchSiteContent(),
+          svc.fetchGallery(),
         ])
         if (!alive) return
         setEvents(ev)
         setExecomGroups(ex)
         setTestimonials(ts)
+        if (gal?.length) setGallery(gal)
         if (sc) setContent((c) => ({ ...c, ...sc }))
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -75,6 +85,17 @@ export function DataProvider({ children }) {
     await svc.saveExecomGroups(groups)
   }
 
+  // ── Gallery mutators (admin) ───────────────────────────────
+  async function addGalleryImages(items) {
+    const created = await Promise.all(items.map((i) => svc.createGalleryImage(i)))
+    setGallery((p) => [...created, ...p])
+    return created
+  }
+  async function removeGalleryImage(id) {
+    await svc.deleteGalleryImage(id)
+    setGallery((p) => p.filter((g) => g.id !== id))
+  }
+
   // ── Testimonial mutators (admin) ───────────────────────────
   async function addTestimonial(data) {
     const created = await svc.createTestimonial(data)
@@ -92,8 +113,11 @@ export function DataProvider({ children }) {
         events,
         execomGroups,
         testimonials,
+        gallery,
         content,
         loaded,
+        addGalleryImages,
+        removeGalleryImage,
         updateContent,
         updateExecom,
         addEvent,

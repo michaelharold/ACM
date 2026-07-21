@@ -36,7 +36,9 @@ service cloud.firestore {
     match /events/{id}        { allow read: if true; allow write: if isAdmin() || hasPerm('events'); }
     match /execomGroups/{id}   { allow read: if true; allow write: if isAdmin() || hasPerm('execom'); }
     match /testimonials/{id}   { allow read: if true; allow write: if isAdmin(); }
-    match /gallery/{id}        { allow read: if true; allow write: if isAdmin(); }
+    // Gallery: one image per document (inline data URI), so uploads never
+    // approach the 1 MB per-document cap.
+    match /gallery/{id}        { allow read: if true; allow write: if isAdmin() || hasPerm('content'); }
     match /siteContent/{id}    { allow read: if true; allow write: if isAdmin() || hasPerm('content'); }
 
     // Contact messages — a signed-in user may send one as themselves and read

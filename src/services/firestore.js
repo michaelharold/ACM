@@ -141,6 +141,53 @@ export async function createRegistration(regDoc) {
   return { id: ref.id, ...regDoc }
 }
 
+// ── Gallery ──────────────────────────────────────────────────
+// One image per document, not an array on a single doc: Firestore caps a
+// document at 1 MB, and inline image data would blow through that after a
+// handful of uploads.
+// Mock-mode uploads persist in localStorage so the demo survives a reload,
+// same as the mock message inbox.
+const GAL_KEY = 'acm-gallery'
+const readGallery = () => {
+  try {
+    return JSON.parse(localStorage.getItem(GAL_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+const writeGallery = (rows) => {
+  try {
+    localStorage.setItem(GAL_KEY, JSON.stringify(rows))
+  } catch {
+    /* quota exceeded — images are big; the demo just won't persist */
+  }
+}
+
+export async function fetchGallery() {
+  if (!isFirebaseConfigured) return [...readGallery(), ...mock.gallery]
+  const snap = await getDocs(collection(db, 'gallery'))
+  return snap.empty ? mock.gallery : map(snap)
+}
+
+export async function createGalleryImage({ image, caption }) {
+  const data = { image, caption: caption || '' }
+  if (!isFirebaseConfigured) {
+    const local = { id: `g_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, ...data }
+    writeGallery([local, ...readGallery()])
+    return local
+  }
+  const ref = await addDoc(collection(db, 'gallery'), { ...data, createdAt: serverTimestamp() })
+  return { id: ref.id, ...data }
+}
+
+export async function deleteGalleryImage(id) {
+  if (!isFirebaseConfigured) {
+    writeGallery(readGallery().filter((g) => g.id !== id))
+    return
+  }
+  await deleteDoc(doc(db, 'gallery', id))
+}
+
 // ── Contact messages ─────────────────────────────────────────
 // A message's identity always comes from the signed-in Firebase user, never
 // from form input — the rules reject any doc whose userEmail doesn't match the

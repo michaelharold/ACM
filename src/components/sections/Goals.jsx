@@ -5,11 +5,14 @@ import { Reveal, Item } from '../ui/Reveal'
 import { LazyBackdrop } from '../ui/LazyBackdrop'
 import MagicRings from '../reactbits/MagicRings'
 import { iconMap } from '../../lib/icons'
-import { goals } from '../../data/mock'
+import { useData } from '../../context/DataContext'
 import { cn } from '../../lib/cn'
 
 export function Goals() {
   const [active, setActive] = useState(0)
+  // Vision / Mission / Values are admin-editable site content.
+  const { content } = useData()
+  const goals = content.goals
 
   return (
     <section id="goals" className="relative scroll-mt-24 overflow-hidden border-y border-neutral-200 bg-neutral-50/60 py-24 sm:py-28 dark:border-neutral-800 dark:bg-neutral-900/30">

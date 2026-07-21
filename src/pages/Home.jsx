@@ -1,5 +1,4 @@
 import { Hero } from '../components/sections/Hero'
-import { LightfallBand } from '../components/sections/LightfallBand'
 import { AnnouncementTicker } from '../components/AnnouncementTicker'
 import { About } from '../components/sections/About'
 import { Goals } from '../components/sections/Goals'
@@ -12,7 +11,6 @@ export default function Home() {
   return (
     <>
       <Hero />
-      <LightfallBand />
       <AnnouncementTicker />
       <About />
       <Goals />

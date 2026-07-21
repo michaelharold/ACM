@@ -7,6 +7,8 @@ import { EventCard } from '../components/events/EventCard'
 import { EventDetailsModal } from '../components/events/EventDetailsModal'
 import { RegistrationDrawer } from '../components/events/RegistrationDrawer'
 import SplitText from '../components/reactbits/SplitText'
+import Lightfall from '../components/reactbits/Lightfall'
+import { LazyBackdrop } from '../components/ui/LazyBackdrop'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
@@ -57,8 +59,31 @@ export default function Events() {
   const noEventsAtAll = loaded && events.length === 0
 
   return (
-    <div className="pt-28">
-      <div className="section-shell py-16">
+    <div className="relative pt-28">
+      {/* Falling light streaks behind the catalogue. Fixed to the top band and
+          faded out so it never competes with the cards further down. */}
+      <LazyBackdrop className="pointer-events-none absolute inset-x-0 top-0 h-[70vh]">
+        <Lightfall
+          colors={['#A6C8FF', '#5227FF', '#FF9FFC']}
+          backgroundColor="#0A29FF"
+          speed={0.3}
+          streakCount={8}
+          streakWidth={0.2}
+          streakLength={1.1}
+          glow={0.9}
+          density={0.3}
+          twinkle={1}
+          zoom={1.8}
+          backgroundGlow={0}
+          opacity={1}
+          mouseInteraction={false}
+          mouseStrength={0.2}
+          mouseRadius={0.6}
+        />
+      </LazyBackdrop>
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[70vh] bg-gradient-to-b from-neutral-950/70 via-neutral-950/80 to-neutral-950" />
+
+      <div className="section-shell relative z-10 py-16">
         <SectionHeading
           eyebrow="Events"
           title="Everything happening at ACM TKMCE"

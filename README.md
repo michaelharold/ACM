@@ -196,6 +196,27 @@ whole flow can be clicked through without a backend.
 
 ---
 
+## 5b. Editing the site without touching code
+
+**Admin → Site Content** edits the front-page copy live: hero tagline, About
+title, Vision/Mission/Values, the "why join us" cards, chapter stats,
+establishment year, gallery heading and the announcement ticker.
+
+**Admin → Gallery** takes photo uploads for the "Life at the chapter" strip.
+Drop in any number of images at any size — each is centre-cropped to the card
+ratio (800×560) and recompressed in the browser before saving, so the strip
+stays uniform whatever you upload. The strip reshuffles on every visit, so new
+photos surface in different positions rather than always landing last.
+
+Images are stored inline, one per Firestore document. That keeps each upload
+far below the 1 MB per-document cap and avoids needing Cloud Storage, at the
+cost of the photos counting toward your Firestore quota — fine for a gallery of
+tens of images, not for hundreds.
+
+Both panels are open to admins and to editors holding the `content` grant.
+
+---
+
 ## 6. Verifying the site works
 
 `scripts/verify.mjs` drives the app in a real Chromium browser and asserts that
@@ -255,7 +276,7 @@ rejected in production.
 | `messages` | Contact messages + reply history | signed-in user creates as themselves, admin manages |
 | `mail` | Outbound queue drained by the Trigger Email extension | admin only |
 | `testimonials` | Alumni testimonials | admin |
-| `gallery` | Event photos | admin |
+| `gallery` | Photos for the "Life at the chapter" strip, one image per doc | admin or `content` grant |
 
 Admins can hand out per-section edit grants from **Admin → Access**, letting a
 member edit (say) only events without full admin rights.

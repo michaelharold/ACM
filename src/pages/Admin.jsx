@@ -4,9 +4,10 @@ import { motion } from 'framer-motion'
 import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
-  Contact2, ImageUp, ChevronDown, Save, Inbox,
+  Contact2, ImageUp, ChevronDown, Save, Inbox, Images,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
+import { GalleryPanel } from '../components/admin/GalleryPanel'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { useAuth } from '../context/AuthContext'
@@ -47,6 +48,7 @@ export default function Admin() {
     { key: 'events', label: 'Events', icon: CalendarCog, show: can('events') },
     { key: 'execom', label: 'Execom', icon: Contact2, show: can('execom') },
     { key: 'content', label: 'Site Content', icon: SlidersHorizontal, show: can('content') },
+    { key: 'gallery', label: 'Gallery', icon: Images, show: can('content') },
     { key: 'messages', label: 'Messages', icon: Inbox, show: isAdmin },
     { key: 'registrations', label: 'Registrations', icon: Users, show: isAdmin },
     { key: 'access', label: 'Access', icon: KeyRound, show: isAdmin },
@@ -191,6 +193,7 @@ export default function Admin() {
             )}
             {tab === 'execom' && can('execom') && <ExecomPanel />}
             {tab === 'content' && can('content') && <SiteContentPanel />}
+            {tab === 'gallery' && can('content') && <GalleryPanel />}
             {tab === 'messages' && isAdmin && <MessagesPanel adminName={user.name} />}
             {tab === 'registrations' && isAdmin && <RegistrationsPanel rows={regRows} />}
             {tab === 'access' && isAdmin && <AccessPanel isLive={isLive} />}
@@ -446,6 +449,8 @@ function SiteContentPanel() {
   const mark = (next) => { setDraft(next); setDirty(true) }
 
   const setStat = (i, p) => mark({ ...draft, stats: draft.stats.map((s, j) => (j === i ? { ...s, ...p } : s)) })
+  const setGoal = (i, p) => mark({ ...draft, goals: draft.goals.map((g, j) => (j === i ? { ...g, ...p } : g)) })
+  const setWhy = (i, p) => mark({ ...draft, whyJoin: draft.whyJoin.map((w, j) => (j === i ? { ...w, ...p } : w)) })
   const setAnn = (i, p) => mark({ ...draft, announcements: draft.announcements.map((a, j) => (j === i ? { ...a, ...p } : a)) })
   const addAnn = () => mark({ ...draft, announcements: [...draft.announcements, { id: `a_${Date.now()}`, tag: 'New', text: '' }] })
   const delAnn = (i) => mark({ ...draft, announcements: draft.announcements.filter((_, j) => j !== i) })
@@ -455,7 +460,7 @@ function SiteContentPanel() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 p-5 dark:border-neutral-800">
         <div>
           <h3 className="font-semibold tracking-tight">Site content</h3>
-          <p className="mt-1 text-xs text-neutral-400">Edit the announcement ticker, chapter stats and establishment year — live on the site, no code.</p>
+          <p className="mt-1 text-xs text-neutral-400">Edit the front-page copy — headline, vision/mission/values, why-join cards, stats and the ticker. Live on the site, no code.</p>
         </div>
         <Button size="sm" disabled={!dirty} onClick={() => { updateContent(draft); setDirty(false) }}>
           <Save className="h-4 w-4" /> {dirty ? 'Save changes' : 'Saved'}
@@ -463,6 +468,90 @@ function SiteContentPanel() {
       </div>
 
       <div className="space-y-8 p-5">
+        {/* Headline copy */}
+        <div className="grid gap-4">
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Headline copy</h4>
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-neutral-400">Hero tagline</span>
+            <textarea
+              rows={2}
+              className={cn(inputCls, 'resize-y')}
+              value={draft.heroTagline}
+              onChange={(e) => mark({ ...draft, heroTagline: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-neutral-400">About section title</span>
+            <input
+              className={inputCls}
+              value={draft.aboutTitle}
+              onChange={(e) => mark({ ...draft, aboutTitle: e.target.value })}
+            />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-neutral-400">Gallery title</span>
+              <input
+                className={inputCls}
+                value={draft.galleryTitle}
+                onChange={(e) => mark({ ...draft, galleryTitle: e.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-neutral-400">Gallery blurb</span>
+              <input
+                className={inputCls}
+                value={draft.galleryBlurb}
+                onChange={(e) => mark({ ...draft, galleryBlurb: e.target.value })}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Vision / Mission / Values */}
+        <div>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Vision · Mission · Values</h4>
+          <div className="mt-3 space-y-3">
+            {draft.goals.map((g, i) => (
+              <div key={i} className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
+                <input
+                  className={cn(inputCls, 'max-w-[200px] font-semibold')}
+                  value={g.key}
+                  onChange={(e) => setGoal(i, { key: e.target.value })}
+                />
+                <textarea
+                  rows={2}
+                  className={cn(inputCls, 'mt-2 resize-y')}
+                  value={g.text}
+                  onChange={(e) => setGoal(i, { text: e.target.value })}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Why join cards */}
+        <div>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">“Why join us” cards</h4>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {draft.whyJoin.map((w, i) => (
+              <div key={i} className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
+                <input
+                  className={cn(inputCls, 'font-semibold')}
+                  value={w.title}
+                  onChange={(e) => setWhy(i, { title: e.target.value })}
+                />
+                <textarea
+                  rows={3}
+                  className={cn(inputCls, 'mt-2 resize-y')}
+                  value={w.body}
+                  onChange={(e) => setWhy(i, { body: e.target.value })}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Establishment */}
         <div>
           <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Year of establishment</h4>
