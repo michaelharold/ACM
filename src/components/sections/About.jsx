@@ -43,17 +43,18 @@ export function About() {
       <LazyBackdrop className="pointer-events-none absolute inset-0">
         <ColorBends
           colors={['#ff5c7a', '#8a5cff', '#00ffd1']}
-          rotation={72}
-          speed={0.41}
-          scale={1}
-          frequency={1.8}
+          rotation={-92}
+          speed={0.13}
+          scale={1.4}
+          frequency={1}
           warpStrength={1}
-          mouseInfluence={1}
+          mouseInfluence={1.1}
           noise={0}
-          parallax={1.55}
+          parallax={1.4}
           iterations={1}
           intensity={1.5}
-          bandWidth={6}
+          bandWidth={12.5}
+          autoRotate={-2}
           transparent
         />
       </LazyBackdrop>

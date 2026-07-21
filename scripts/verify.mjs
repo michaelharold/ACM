@@ -278,6 +278,16 @@ const run = async () => {
   canvases === 1
     ? pass('about: exactly one shared backdrop canvas')
     : fail('about: one shared backdrop', `${canvases} canvases`)
+  // autoRotate + speed mean the field must visibly change over time.
+  if (canvases === 1) {
+    const shot = () => page.locator('#about canvas').screenshot()
+    const f1 = await shot()
+    await page.waitForTimeout(2500)
+    const f2 = await shot()
+    !f1.equals(f2)
+      ? pass('about: backdrop is animating')
+      : fail('about: backdrop is animating', 'frames identical — shader may be stalled')
+  }
 
   // Events page carries the Lightfall backdrop.
   await page.goto(BASE + '/events', { waitUntil: 'domcontentloaded' })
