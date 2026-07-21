@@ -289,13 +289,21 @@ const run = async () => {
       : fail('about: backdrop is animating', 'frames identical — shader may be stalled')
   }
 
-  // Events page carries the Lightfall backdrop.
+  // Events page carries the PixelBlast backdrop.
   await page.goto(BASE + '/events', { waitUntil: 'domcontentloaded' })
   await settle(page)
+  await page.waitForTimeout(2500)
+  ;(await page.locator('.pixel-blast-container canvas').count()) === 1
+    ? pass('events: PixelBlast backdrop present')
+    : fail('events: PixelBlast backdrop', 'no canvas')
+
+  // Execom page carries the DotField backdrop.
+  await page.goto(BASE + '/execom', { waitUntil: 'domcontentloaded' })
+  await settle(page)
   await page.waitForTimeout(1500)
-  ;(await page.locator('canvas').count()) > 0
-    ? pass('events: Lightfall backdrop present')
-    : fail('events: Lightfall backdrop', 'no canvas')
+  ;(await page.locator('.dot-field-container canvas').count()) === 1
+    ? pass('execom: DotField backdrop present')
+    : fail('execom: DotField backdrop', 'no canvas')
 
   // ── 14. Gallery renders from the data layer ──────────────────
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' })

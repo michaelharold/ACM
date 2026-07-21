@@ -7,7 +7,7 @@ import { EventCard } from '../components/events/EventCard'
 import { EventDetailsModal } from '../components/events/EventDetailsModal'
 import { RegistrationDrawer } from '../components/events/RegistrationDrawer'
 import SplitText from '../components/reactbits/SplitText'
-import Lightfall from '../components/reactbits/Lightfall'
+import PixelBlast from '../components/reactbits/PixelBlast'
 import { LazyBackdrop } from '../components/ui/LazyBackdrop'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
@@ -60,28 +60,31 @@ export default function Events() {
 
   return (
     <div className="relative pt-28">
-      {/* Falling light streaks behind the catalogue. Fixed to the top band and
-          faded out so it never competes with the cards further down. */}
-      <LazyBackdrop className="pointer-events-none absolute inset-x-0 top-0 h-[70vh]">
-        <Lightfall
-          colors={['#A6C8FF', '#5227FF', '#FF9FFC']}
-          backgroundColor="#0A29FF"
-          speed={0.3}
-          streakCount={8}
-          streakWidth={0.2}
-          streakLength={1.1}
-          glow={0.9}
-          density={0.3}
-          twinkle={1}
-          zoom={1.8}
-          backgroundGlow={0}
-          opacity={1}
-          mouseInteraction={false}
-          mouseStrength={0.2}
-          mouseRadius={0.6}
+      {/* Dithered pixel field behind the catalogue. Interactive (click ripples,
+          liquid drag) so it stays pointer-enabled, but pinned to the top band
+          and faded out before the cards. */}
+      <LazyBackdrop className="absolute inset-x-0 top-0 h-[70vh]">
+        <PixelBlast
+          variant="circle"
+          pixelSize={5}
+          color="#160fe0"
+          patternScale={3}
+          patternDensity={0.85}
+          pixelSizeJitter={0.5}
+          enableRipples
+          rippleSpeed={0.4}
+          rippleThickness={0.12}
+          rippleIntensityScale={1.5}
+          liquid
+          liquidStrength={0.12}
+          liquidRadius={1.2}
+          liquidWobbleSpeed={5}
+          speed={0.6}
+          edgeFade={0.25}
+          transparent
         />
       </LazyBackdrop>
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[70vh] bg-gradient-to-b from-neutral-950/70 via-neutral-950/80 to-neutral-950" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[70vh] bg-gradient-to-b from-transparent via-neutral-950/60 to-neutral-950" />
 
       <div className="section-shell relative z-10 py-16">
         <SectionHeading

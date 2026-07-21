@@ -4,9 +4,8 @@ import { SectionHeading } from '../SectionHeading'
 import { MemberDetail } from './MemberDetail'
 import { Reveal, Item } from '../ui/Reveal'
 import TiltedCard from '../reactbits/TiltedCard'
-import DotGrid from '../reactbits/DotGrid'
+import DotField from '../reactbits/DotField'
 import { LazyBackdrop } from '../ui/LazyBackdrop'
-import { useTheme } from '../../context/ThemeContext'
 import { useData } from '../../context/DataContext'
 import { iconMap, initials, gradientFor } from '../../lib/icons'
 import { avatarDataUri } from '../../lib/avatar'
@@ -104,24 +103,22 @@ function LeadRow({ group, onOpen }) {
 
 export function Execom() {
   const { execomGroups } = useData()
-  const { theme } = useTheme()
-  const dark = theme === 'dark'
   const [selected, setSelected] = useState(null)
 
   return (
     <section id="execom" className="relative scroll-mt-24 overflow-hidden py-24 sm:py-28">
-      {/* Interactive dot grid — dots scatter from the cursor and settle back */}
+      {/* Dot field — the grid bulges away from the cursor and settles back */}
       <LazyBackdrop className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(110%_70%_at_50%_40%,#000_35%,transparent_80%)]">
-        <DotGrid
-          dotSize={4}
-          gap={26}
-          baseColor={dark ? '#27272a' : '#e2e5ec'}
-          activeColor={dark ? '#598eff' : '#1f47f5'}
-          proximity={130}
-          shockRadius={230}
-          shockStrength={4}
-          resistance={750}
-          returnDuration={1.5}
+        <DotField
+          dotRadius={2.5}
+          dotSpacing={30}
+          bulgeStrength={94}
+          glowRadius={400}
+          sparkle
+          waveAmplitude={3}
+          cursorRadius={550}
+          gradientFrom="#0c29e8"
+          gradientTo="#0b109c"
         />
       </LazyBackdrop>
 
