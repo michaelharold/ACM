@@ -42,9 +42,10 @@ export function About() {
           instead of each carrying its own. */}
       <LazyBackdrop className="pointer-events-none absolute inset-0">
         <ColorBends
-          // Brand palette: acm-600 core, acm-400 light, and the violet already
-          // used by MagicRings and the Explore cards as the secondary accent.
-          colors={['#1f47f5', '#598eff', '#8a5cff']}
+          // Dark indigo end of the brand palette — acm-950/900 with an indigo
+          // mid, kept deliberately deep so the field reads as texture on a dark
+          // canvas rather than a light source.
+          colors={['#151d57', '#1c2f8f', '#312e81']}
           rotation={90}
           speed={0.2}
           scale={1}
@@ -54,13 +55,15 @@ export function About() {
           noise={0.15}
           parallax={2}
           iterations={1}
-          intensity={1.5}
+          // Down from 1.5 — the bands were blowing out to near-white where they
+          // overlapped, which is what read as glow.
+          intensity={0.75}
           bandWidth={6}
           transparent
         />
       </LazyBackdrop>
-      {/* Scrim: keeps body copy legible over the moving colour without hiding it */}
-      <div className="pointer-events-none absolute inset-0 bg-neutral-950/55" />
+      {/* Scrim: keeps body copy legible and holds the section on a dark canvas */}
+      <div className="pointer-events-none absolute inset-0 bg-neutral-950/75" />
       {/* Feather the seams into the sections above and below */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-neutral-950 to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-neutral-950 to-transparent" />
