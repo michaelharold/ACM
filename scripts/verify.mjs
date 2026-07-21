@@ -305,6 +305,36 @@ const run = async () => {
   ;(await page.locator('#gallery figure').count()) > 0
     ? pass('gallery: strip renders images')
     : fail('gallery: strip renders images', 'empty')
+  await page.waitForTimeout(1500)
+  ;(await page.locator('#gallery canvas').count()) === 1
+    ? pass('gallery: SoftAurora backdrop present')
+    : fail('gallery: SoftAurora backdrop', 'no canvas')
+  // The marquee translates by exactly -50%, so one half must be at least as
+  // wide as the viewport or a gap opens at the wrap point when there are few
+  // images. Assert the full track covers 2x the viewport.
+  const vw = page.viewportSize().width
+  const trackW = await page.locator('#gallery .marquee-track').first().evaluate((e) => e.scrollWidth)
+  trackW >= vw * 2
+    ? pass(`gallery: track ${trackW}px fills 2x viewport — no wrap gap`)
+    : fail('gallery: no wrap gap', `track ${trackW}px < ${vw * 2}px`)
+
+  // ── 15. Execom member detail ─────────────────────────────────
+  await page.goto(BASE + '/execom', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  await page.waitForTimeout(1500)
+  const memberBtn = page.locator('button[aria-label*="profile"]').first()
+  if (!(await memberBtn.count())) fail('execom: member cards clickable', 'no member buttons')
+  else {
+    await memberBtn.click()
+    await page.waitForTimeout(1000)
+    const opened = await page.getByRole('button', { name: 'Close' }).count()
+    opened > 0 ? pass('execom: member card opens a detail view') : fail('execom: detail view opens', 'nothing opened')
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(700)
+    ;(await page.getByRole('button', { name: 'Close' }).count()) === 0
+      ? pass('execom: detail view closes on Escape')
+      : fail('execom: detail closes', 'still open')
+  }
 
   await browser.close()
 

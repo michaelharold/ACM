@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
+import { ExecomPanel } from '../components/admin/ExecomPanel'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { useAuth } from '../context/AuthContext'
@@ -355,92 +356,6 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
 }
 
 // ── Execom: member details + profile photo uploads ───────────
-function ExecomPanel() {
-  const { execomGroups, updateExecom } = useData()
-  const [draft, setDraft] = useState(execomGroups)
-  const [dirty, setDirty] = useState(false)
-
-  const patch = (gi, mi, p) => {
-    setDraft((groups) =>
-      groups.map((g, i) =>
-        i !== gi ? g : { ...g, members: g.members.map((m, j) => (j !== mi ? m : { ...m, ...p })) },
-      ),
-    )
-    setDirty(true)
-  }
-  const addMember = (gi) => {
-    setDraft((groups) =>
-      groups.map((g, i) => (i !== gi ? g : { ...g, members: [...g.members, { name: 'New Member', role: 'Member' }] })),
-    )
-    setDirty(true)
-  }
-  const removeMember = (gi, mi) => {
-    setDraft((groups) =>
-      groups.map((g, i) => (i !== gi ? g : { ...g, members: g.members.filter((_, j) => j !== mi) })),
-    )
-    setDirty(true)
-  }
-  const uploadPhoto = (gi, mi) => async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    patch(gi, mi, { photo: await fileToDataUrl(file) })
-  }
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 p-5 dark:border-neutral-800">
-        <div>
-          <h3 className="font-semibold tracking-tight">Execom members</h3>
-          <p className="mt-1 text-xs text-neutral-400">Edit names, roles and profile photos shown on the member cards.</p>
-        </div>
-        <Button size="sm" disabled={!dirty} onClick={() => { updateExecom(draft); setDirty(false) }}>
-          <Save className="h-4 w-4" /> {dirty ? 'Save changes' : 'Saved'}
-        </Button>
-      </div>
-      <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
-        {draft.map((g, gi) => (
-          <div key={g.team} className="p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">{g.team}</h4>
-              <Button size="sm" variant="outline" onClick={() => addMember(gi)}>
-                <Plus className="h-4 w-4" /> Add member
-              </Button>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {g.members.map((m, mi) => (
-                <div key={mi} className="flex items-center gap-3 rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
-                  <label className="group relative shrink-0 cursor-pointer" title="Upload photo">
-                    <img
-                      src={m.photo || avatarDataUri(m.name)}
-                      alt=""
-                      className="h-14 w-14 rounded-xl object-cover"
-                    />
-                    <span className="absolute inset-0 grid place-items-center rounded-xl bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                      <ImageUp className="h-5 w-5 text-white" />
-                    </span>
-                    <input type="file" accept="image/*" className="hidden" onChange={uploadPhoto(gi, mi)} />
-                  </label>
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <input className={inputCls} value={m.name} onChange={(e) => patch(gi, mi, { name: e.target.value })} />
-                    <input className={inputCls} value={m.role} onChange={(e) => patch(gi, mi, { role: e.target.value })} />
-                  </div>
-                  <button
-                    onClick={() => removeMember(gi, mi)}
-                    aria-label="Remove member"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-rose-300 hover:text-rose-500 dark:border-neutral-800"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </motion.div>
-  )
-}
-
 // ── Site content: ticker, stats, establishment — no code needed ──
 function SiteContentPanel() {
   const { content, updateContent } = useData()

@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { SectionHeading } from '../SectionHeading'
+import { MemberDetail } from './MemberDetail'
 import { Reveal, Item } from '../ui/Reveal'
 import TiltedCard from '../reactbits/TiltedCard'
 import DotGrid from '../reactbits/DotGrid'
@@ -26,7 +28,7 @@ function Avatar({ name, size = 'md' }) {
   )
 }
 
-function MemberCard({ m, size = 'md' }) {
+function MemberCard({ m, size = 'md', onOpen }) {
   const isHead = m.role === 'Head'
   // Fixed widths keep every card in a row on the same grid; heads sit one step
   // larger so the leadership row still reads as the lead.
@@ -34,6 +36,12 @@ function MemberCard({ m, size = 'md' }) {
   const height = size === 'lg' ? '260px' : '224px'
   return (
     <Item className={cn('shrink-0', width)}>
+      <button
+        type="button"
+        onClick={() => onOpen?.(m)}
+        aria-label={`View ${m.name}'s profile`}
+        className="block w-full cursor-pointer rounded-[15px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acm-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+      >
       <TiltedCard
         imageSrc={m.photo || avatarDataUri(m.name)}
         altText={m.name}
@@ -59,30 +67,38 @@ function MemberCard({ m, size = 'md' }) {
           </div>
         }
       />
+      </button>
     </Item>
   )
 }
 
 // Standalone leadership row (Secretary / Junior Representative).
-function LeadRow({ group }) {
+function LeadRow({ group, onOpen }) {
   const Icon = iconMap[group.icon]
   const m = group.members[0]
   return (
-    <motion.div
+    <motion.button
+      type="button"
+      onClick={() => onOpen?.({ ...m, team: group.team })}
       initial={{ opacity: 0, y: 14 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
+      whileHover={{ y: -3 }}
       transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-      className="group mx-auto flex max-w-md items-center gap-5 rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900"
+      className="group mx-auto flex w-full max-w-md items-center gap-5 rounded-2xl border border-neutral-200 bg-white p-5 text-left transition-colors hover:border-acm-400/60 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-acm-500/50"
     >
-      <Avatar name={m.name} size="lg" />
+      {m.photo ? (
+        <img src={m.photo} alt="" className="h-20 w-20 shrink-0 rounded-2xl object-cover" />
+      ) : (
+        <Avatar name={m.name} size="lg" />
+      )}
       <div className="text-left">
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-acm-600 dark:text-acm-400">
           {Icon && <Icon className="h-3.5 w-3.5" />} {group.team}
         </span>
         <h4 className="mt-1 text-lg font-bold tracking-tight">{m.name}</h4>
       </div>
-    </motion.div>
+    </motion.button>
   )
 }
 
@@ -90,6 +106,7 @@ export function Execom() {
   const { execomGroups } = useData()
   const { theme } = useTheme()
   const dark = theme === 'dark'
+  const [selected, setSelected] = useState(null)
 
   return (
     <section id="execom" className="relative scroll-mt-24 overflow-hidden py-24 sm:py-28">
@@ -117,7 +134,7 @@ export function Execom() {
 
         <div className="mt-16 space-y-20">
           {execomGroups.map((group) => {
-            if (group.lead) return <LeadRow key={group.team} group={group} />
+            if (group.lead) return <LeadRow key={group.team} group={group} onOpen={setSelected} />
 
             const Icon = iconMap[group.icon]
             const heads = group.members.filter((m) => m.role === 'Head')
@@ -143,7 +160,7 @@ export function Execom() {
                 {heads.length > 0 && (
                   <Reveal className="flex flex-wrap items-stretch justify-center gap-6" amount={0.1}>
                     {heads.map((m) => (
-                      <MemberCard key={m.name} m={m} size="lg" />
+                      <MemberCard key={m.name} m={{ ...m, team: group.team }} size="lg" onOpen={setSelected} />
                     ))}
                   </Reveal>
                 )}
@@ -152,7 +169,7 @@ export function Execom() {
                 {members.length > 0 && (
                   <Reveal className="mt-10 flex flex-wrap items-stretch justify-center gap-x-6 gap-y-8" amount={0.1}>
                     {members.map((m) => (
-                      <MemberCard key={m.name} m={m} />
+                      <MemberCard key={m.name} m={{ ...m, team: group.team }} onOpen={setSelected} />
                     ))}
                   </Reveal>
                 )}
@@ -161,6 +178,8 @@ export function Execom() {
           })}
         </div>
       </div>
+
+      <MemberDetail member={selected} open={!!selected} onClose={() => setSelected(null)} />
     </section>
   )
 }
