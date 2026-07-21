@@ -8,6 +8,8 @@ import { SmoothScroll, resetScroll, scrollToId } from './lib/smoothScroll'
 import Home from './pages/Home'
 import Auth from './pages/Auth'
 import Events from './pages/Events'
+import Execom from './pages/Execom'
+import Contact from './pages/Contact'
 import Dashboard from './pages/Dashboard'
 import Admin from './pages/Admin'
 import NotFound from './pages/NotFound'
@@ -63,6 +65,8 @@ export default function App() {
             <Route path="/auth" element={<Auth />} />
             <Route path="/events" element={<Events />} />
             <Route path="/events/:eventId" element={<Events />} />
+            <Route path="/execom" element={<Execom />} />
+            <Route path="/contact" element={<Contact />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />

@@ -1,7 +1,7 @@
 import { Suspense, lazy, useRef, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
-import { ArrowRight, Sparkles, ArrowDown } from 'lucide-react'
+import { ArrowRight, ArrowDown } from 'lucide-react'
 import SpecularButton from '../reactbits/SpecularButton'
 import BlurText from '../reactbits/BlurText'
 import { SocialLinks } from '../SocialLinks'
@@ -79,23 +79,33 @@ export function Hero() {
         style={{ y: contentY, opacity: contentOpacity }}
         className="section-shell pointer-events-none relative z-10 py-28 text-center"
       >
-        {/* Big ACM mark */}
-        <motion.div variants={item} className="mx-auto mb-8 flex justify-center">
+        {/* Official chapter mark — unblurs and settles in, then breathes */}
+        <motion.div variants={item} className="mx-auto mb-10 flex justify-center">
           <motion.div
-            animate={{ y: [0, -7, 0] }}
-            transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
-            className="grid h-20 w-20 place-items-center rounded-3xl bg-acm-600 shadow-lg shadow-acm-600/25"
+            initial={{ opacity: 0, scale: 0.72, filter: 'blur(14px)' }}
+            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+            transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
+            className="relative"
           >
-            <svg viewBox="0 0 64 64" className="h-11 w-11" fill="none">
-              <path d="M20 44 L32 20 L44 44" stroke="white" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M25 44 A9 9 0 1 0 25 31" stroke="white" strokeWidth="5" strokeLinecap="round" fill="none" opacity="0.55" />
-            </svg>
+            {/* Glow that blooms outward as the mark lands */}
+            <motion.span
+              aria-hidden
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: [0, 0.85, 0.45], scale: [0.5, 1.35, 1.15] }}
+              transition={{ duration: 1.8, ease: 'easeOut', delay: 0.2 }}
+              className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-acm-500/35 blur-[52px]"
+            />
+            <motion.img
+              src="/acm-logo.png"
+              alt="ACM TKMCE Student Chapter"
+              width={311}
+              height={311}
+              animate={{ y: [0, -9, 0] }}
+              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+              className="h-28 w-28 object-contain drop-shadow-[0_8px_28px_rgba(31,71,245,0.35)] sm:h-36 sm:w-36"
+            />
           </motion.div>
         </motion.div>
-
-        <motion.span variants={item} className="eyebrow mx-auto">
-          <Sparkles className="h-3.5 w-3.5 text-acm-500" /> Est. {chapter.established} · TKM College of Engineering
-        </motion.span>
 
         <motion.h1
           variants={item}

@@ -4,7 +4,6 @@ import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-
 import { LayoutDashboard, LogOut, User as UserIcon, ChevronDown } from 'lucide-react'
 import { Logo } from '../Logo'
 import { SocialLinks } from '../SocialLinks'
-import { ThemeToggle } from '../ThemeToggle'
 import { Button } from '../ui/Button'
 import { Magnetic } from '../ui/Magnetic'
 import { useAuth } from '../../context/AuthContext'
@@ -12,15 +11,15 @@ import { avatarDataUri } from '../../lib/avatar'
 import { scrollToId, scrollToTop } from '../../lib/smoothScroll'
 import { cn } from '../../lib/cn'
 
+// Items without a `route` are scroll targets on the home page; the rest are
+// dedicated routes.
 const sections = [
   { id: 'about', label: 'About' },
   { id: 'goals', label: 'Goals' },
-  { id: 'execom', label: 'Execom' },
-  { id: 'events', label: 'Events', route: '/events' },
-  // Hidden with the testimonials section — restore when alumni content returns.
-  // { id: 'testimonials', label: 'Testimonials' },
   { id: 'gallery', label: 'Gallery' },
-  { id: 'contact', label: 'Contact' },
+  { id: 'events', label: 'Events', route: '/events' },
+  { id: 'execom', label: 'Execom', route: '/execom' },
+  { id: 'contact', label: 'Contact', route: '/contact' },
 ]
 
 const drawerItem = {
@@ -66,7 +65,7 @@ export function Navbar() {
     return () => obs.disconnect()
   }, [onHome])
 
-  // Deep-link hashes (arriving at /#execom from another route) are handled by
+  // Deep-link hashes (arriving at /#about from another route) are handled by
   // RouteScroll in App — it waits for the incoming page to mount before scrolling.
 
   // Never leave a menu hanging open across a route change.
@@ -161,7 +160,6 @@ export function Navbar() {
         <div className="flex items-center gap-2">
           <SocialLinks className="hidden md:flex" size="sm" />
           <span className="mx-0.5 hidden h-5 w-px bg-neutral-200 md:block dark:bg-neutral-800" />
-          <ThemeToggle />
 
           {!isAuthed ? (
             <Button as={Link} to="/auth" size="sm" className="hidden sm:inline-flex">

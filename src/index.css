@@ -3,11 +3,12 @@
 @tailwind utilities;
 
 @layer base {
+  /* Dark-only for now — see ThemeContext. */
   :root {
-    color-scheme: light;
-  }
-  html.dark {
     color-scheme: dark;
+  }
+  html {
+    @apply bg-neutral-950;
   }
   * {
     -webkit-font-smoothing: antialiased;

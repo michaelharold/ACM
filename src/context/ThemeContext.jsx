@@ -1,26 +1,19 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect } from 'react'
 
-const ThemeContext = createContext({ theme: 'light', toggle: () => {} })
-
-function getInitialTheme() {
-  if (typeof window === 'undefined') return 'light'
-  const stored = localStorage.getItem('acm-theme')
-  if (stored === 'light' || stored === 'dark') return stored
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
+// The site is dark-only for now. This provider is kept (rather than ripped out)
+// so the components that branch on `theme` — WebGL backdrops picking colours,
+// mostly — keep working, and so light mode can be restored by reinstating the
+// state here without touching every consumer.
+const ThemeContext = createContext({ theme: 'dark', toggle: () => {} })
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(getInitialTheme)
-
   useEffect(() => {
-    const root = document.documentElement
-    root.classList.toggle('dark', theme === 'dark')
-    localStorage.setItem('acm-theme', theme)
-  }, [theme])
+    document.documentElement.classList.add('dark')
+    // Clear any light preference persisted before the site went dark-only.
+    localStorage.removeItem('acm-theme')
+  }, [])
 
-  const toggle = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
-
-  return <ThemeContext.Provider value={{ theme, toggle }}>{children}</ThemeContext.Provider>
+  return <ThemeContext.Provider value={{ theme: 'dark', toggle: () => {} }}>{children}</ThemeContext.Provider>
 }
 
 export const useTheme = () => useContext(ThemeContext)

@@ -11,12 +11,17 @@ const fail = (n, d = '') => results.push({ ok: false, n, d })
 
 // Text that proves a given route actually painted its own content.
 const marker = {
-  '/': 'ACM',
+  '/': 'Advancing computing at',
   '/events': 'Everything happening at ACM TKMCE',
+  '/execom': 'The team behind ACM TKMCE',
+  '/contact': 'Let’s connect',
   '/auth': 'Sign in to ACM TKMCE',
   '/dashboard': 'Sign in to ACM TKMCE', // unauthenticated -> redirected to auth
   '/admin': 'Editor access required',
 }
+
+// Sections that remain scroll targets on the home page.
+const homeSections = ['about', 'goals', 'gallery']
 
 const mainText = (page) => page.locator('main').innerText().catch(() => '')
 
@@ -46,12 +51,14 @@ const run = async () => {
   // This is the reported bug: click a link, get a blank page until F5.
   const navCases = []
   // Every route -> every reachable destination, via the real UI controls.
-  for (const from of ['/', '/events', '/admin', '/nope']) { // /auth is bare by design
-    navCases.push({ from, click: 'Events', expect: marker['/events'] })
+  for (const from of ['/', '/events', '/execom', '/contact', '/admin', '/nope']) { // /auth is bare by design
+    for (const dest of ['Events', 'Execom', 'Contact']) {
+      navCases.push({ from, click: dest, expect: marker['/' + dest.toLowerCase()] })
+    }
     navCases.push({ from, click: 'Login / Sign Up', expect: marker['/auth'] })
   }
   // Footer links (present on every non-auth route).
-  for (const from of ['/', '/events', '/admin']) {
+  for (const from of ['/', '/events', '/execom', '/contact', '/admin']) {
     navCases.push({ from, click: 'Dashboard', expect: marker['/auth'], where: 'footer' })
   }
   for (const c of navCases) {
@@ -71,7 +78,7 @@ const run = async () => {
   }
 
   // Logo returns home from every route.
-  for (const from of ['/events', '/admin', '/auth']) {
+  for (const from of ['/events', '/execom', '/contact', '/admin', '/auth']) {
     await page.goto(BASE + from, { waitUntil: 'domcontentloaded' })
     await settle(page)
     await page.getByRole('link').filter({ hasText: 'ACM TKMCE' }).first().click()
@@ -83,7 +90,7 @@ const run = async () => {
 
   // ── 3. Section links scroll, from home and from another route ─
   for (const from of ['/', '/admin', '/events']) {
-    for (const id of ['about', 'goals', 'execom', 'gallery', 'contact']) {
+    for (const id of homeSections) {
       await page.goto(BASE + from, { waitUntil: 'domcontentloaded' })
       await settle(page)
       await page.getByRole('button', { name: new RegExp(`^${id}$`, 'i') }).first().click()
@@ -120,8 +127,8 @@ const run = async () => {
   google === 1 ? pass('auth: Google button present') : fail('auth: Google button present', `${google} found`)
 
   // ── 6. Execom rows align (no stagger offsets) ────────────────
-  await page.goto(BASE + '/#execom', { waitUntil: 'domcontentloaded' })
-  await page.waitForTimeout(2000)
+  await page.goto(BASE + '/execom', { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
   const tops = await page.$$eval('#execom figure', (els) =>
     els.map((e) => Math.round(e.getBoundingClientRect().top)))
   if (tops.length < 2) fail('execom: cards found', `${tops.length}`)
@@ -149,6 +156,57 @@ const run = async () => {
   after && before && after.width > before.width + 2
     ? pass(`goals: hover enlarges (${Math.round(before.width)} -> ${Math.round(after.width)}px)`)
     : fail('goals: hover enlarges', `${before?.width} -> ${after?.width}`)
+
+  // ── 8. Dark-only theme ───────────────────────────────────────
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  const htmlDark = await page.locator('html').evaluate((el) => el.classList.contains('dark'))
+  htmlDark ? pass('theme: html is dark') : fail('theme: html is dark', 'missing .dark')
+  const toggle = await page.getByRole('button', { name: /toggle theme/i }).count()
+  toggle === 0 ? pass('theme: toggle removed') : fail('theme: toggle removed', `${toggle} found`)
+  // Light-scheme visitors must still get the dark canvas.
+  const lightPage = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: 'light' })
+  await lightPage.goto(BASE + '/', { waitUntil: 'domcontentloaded' })
+  await lightPage.waitForTimeout(1200)
+  const bg = await lightPage.locator('body').evaluate((el) => getComputedStyle(el).backgroundColor)
+  const [r, g, b] = bg.match(/\d+/g).map(Number)
+  r + g + b < 120 ? pass(`theme: dark canvas under light OS (${bg})`) : fail('theme: dark canvas under light OS', bg)
+  await lightPage.close()
+
+  // ── 9. Hero: official logo, no "Est." pill ───────────────────
+  const heroLogo = page.locator('section img[src*="acm-logo"]').first()
+  const heroBox = await heroLogo.boundingBox().catch(() => null)
+  heroBox && heroBox.width > 80
+    ? pass(`hero: official logo rendered (${Math.round(heroBox.width)}px)`)
+    : fail('hero: official logo rendered', heroBox ? `only ${Math.round(heroBox.width)}px` : 'not found')
+  const estPill = await page.getByText(/Est\. \d{4}\s*·/).count()
+  estPill === 0 ? pass('hero: Est. pill removed') : fail('hero: Est. pill removed', `${estPill} found`)
+
+  // ── 10. Explore cards link to the dedicated routes ───────────
+  for (const [name, path, text] of [
+    ['Events', '/events', marker['/events']],
+    ['Execom', '/execom', marker['/execom']],
+    ['Contact', '/contact', marker['/contact']],
+  ]) {
+    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' })
+    await settle(page)
+    const card = page.locator('#explore a[href="' + path + '"]')
+    if (!(await card.count())) { fail(`explore card -> ${name}`, 'card not found'); continue }
+    await card.first().click()
+    await settle(page)
+    ;(await mainText(page)).includes(text)
+      ? pass(`explore card -> ${name}`)
+      : fail(`explore card -> ${name}`, `landed on ${new URL(page.url()).pathname}`)
+  }
+
+  // Sections moved off the home page must no longer be there.
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  for (const id of ['execom', 'contact']) {
+    ;(await page.locator(`#${id}`).count()) === 0
+      ? pass(`home: #${id} moved to its own page`)
+      : fail(`home: #${id} moved to its own page`, 'still on home')
+  }
 
   await browser.close()
 

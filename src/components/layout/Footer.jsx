@@ -14,16 +14,15 @@ const cols = [
     links: [
       { label: 'About', to: '/#about' },
       { label: 'Goals', to: '/#goals' },
-      { label: 'Execom', to: '/#execom' },
+      { label: 'Gallery', to: '/#gallery' },
       { label: 'Events', to: '/events' },
     ],
   },
   {
     title: 'Engage',
     links: [
-      // { label: 'Testimonials', to: '/#testimonials' }, // hidden for now
-      { label: 'Gallery', to: '/#gallery' },
-      { label: 'Contact', to: '/#contact' },
+      { label: 'Execom', to: '/execom' },
+      { label: 'Contact', to: '/contact' },
       { label: 'Login / Sign Up', to: '/auth' },
       { label: 'Dashboard', to: '/dashboard' },
     ],
