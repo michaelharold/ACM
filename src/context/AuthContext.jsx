@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db, googleProvider, isFirebaseConfigured } from '../lib/firebase'
+import { updateUserProfile } from '../services/firestore'
 
 const AuthContext = createContext(null)
 
@@ -132,6 +133,17 @@ export function AuthProvider({ children }) {
     })
   }
 
+  // Self-service profile edit from the dashboard. Persists in live mode and
+  // updates local state either way so the UI reflects it immediately.
+  async function saveProfile(patch) {
+    if (!user) return
+    const clean = await updateUserProfile(user.id, { ...user, ...patch })
+    if (isFirebaseConfigured && auth.currentUser && clean.name !== auth.currentUser.displayName) {
+      await updateProfile(auth.currentUser, { displayName: clean.name })
+    }
+    setUser((u) => ({ ...u, ...clean }))
+  }
+
   async function logout() {
     if (isFirebaseConfigured) await signOut(auth)
     else setUser(null)
@@ -149,6 +161,7 @@ export function AuthProvider({ children }) {
         signUpWithEmail,
         loginAsAdmin,
         loginAsEditor,
+        saveProfile,
         logout,
       }}
     >

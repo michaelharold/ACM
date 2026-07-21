@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-motion'
 import { LayoutDashboard, LogOut, User as UserIcon, ChevronDown } from 'lucide-react'
@@ -8,7 +8,8 @@ import { ThemeToggle } from '../ThemeToggle'
 import { Button } from '../ui/Button'
 import { Magnetic } from '../ui/Magnetic'
 import { useAuth } from '../../context/AuthContext'
-import { scrollToEl, scrollToTop } from '../../lib/smoothScroll'
+import { avatarDataUri } from '../../lib/avatar'
+import { scrollToId, scrollToTop } from '../../lib/smoothScroll'
 import { cn } from '../../lib/cn'
 
 const sections = [
@@ -33,7 +34,8 @@ export function Navbar() {
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState('')
   const [menuUser, setMenuUser] = useState(false)
-  const { pathname, hash } = useLocation()
+  const userMenuRef = useRef(null)
+  const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user, logout, isAuthed } = useAuth()
   const onHome = pathname === '/'
@@ -64,22 +66,38 @@ export function Navbar() {
     return () => obs.disconnect()
   }, [onHome])
 
-  // Handle deep-link hashes (e.g. arriving at /#execom from another route).
+  // Deep-link hashes (arriving at /#execom from another route) are handled by
+  // RouteScroll in App — it waits for the incoming page to mount before scrolling.
+
+  // Never leave a menu hanging open across a route change.
   useEffect(() => {
-    if (onHome && hash) {
-      const el = document.getElementById(hash.slice(1))
-      if (el) setTimeout(() => scrollToEl(el), 80)
+    setOpen(false)
+    setMenuUser(false)
+  }, [pathname])
+
+  // Dismiss the account menu on an outside click or Escape — mouse-leave alone
+  // strands it open for keyboard and touch users.
+  useEffect(() => {
+    if (!menuUser) return
+    const onDown = (e) => {
+      if (!userMenuRef.current?.contains(e.target)) setMenuUser(false)
     }
-  }, [onHome, hash])
+    const onKey = (e) => e.key === 'Escape' && setMenuUser(false)
+    document.addEventListener('pointerdown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuUser])
 
   function goToSection(s) {
     setOpen(false)
     if (s.route) return navigate(s.route)
-    if (onHome) {
-      scrollToEl(document.getElementById(s.id))
-    } else {
-      navigate(`/#${s.id}`)
-    }
+    // Already home: scroll directly, so re-clicking the current section still
+    // works (navigating to an identical URL is a no-op React Router won't fire).
+    if (onHome) return scrollToId(s.id)
+    navigate(`/#${s.id}`)
   }
 
   return (
@@ -113,7 +131,8 @@ export function Navbar() {
         {/* Desktop nav */}
         <div className="hidden items-center gap-0.5 lg:flex">
           {sections.map((s) => {
-            const isActive = onHome && active === s.id
+            // Routed items (Events) stay lit while you're on their route.
+            const isActive = s.route ? pathname.startsWith(s.route) : onHome && active === s.id
             return (
               <Magnetic key={s.id} strength={4}>
                 <button
@@ -149,12 +168,16 @@ export function Navbar() {
               Login / Sign Up
             </Button>
           ) : (
-            <div className="relative hidden sm:block">
+            <div ref={userMenuRef} className="relative hidden sm:block">
               <button
                 onClick={() => setMenuUser((v) => !v)}
                 className="flex items-center gap-2 rounded-xl border border-neutral-200 py-1 pl-1 pr-2 transition-colors hover:border-neutral-300 dark:border-neutral-800 dark:hover:border-neutral-700"
               >
-                <img src={user.avatar} alt="" className="h-7 w-7 rounded-lg object-cover" />
+                <img
+                  src={user.avatar || avatarDataUri(user.name || 'ACM Member')}
+                  alt=""
+                  className="h-7 w-7 rounded-lg object-cover"
+                />
                 <motion.span animate={{ rotate: menuUser ? 180 : 0 }}>
                   <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
                 </motion.span>
@@ -253,15 +276,35 @@ export function Navbar() {
                 </motion.button>
               ))}
             </motion.div>
+            {/* Account actions — mirrors the desktop avatar menu */}
+            {isAuthed && (
+              <div className="mt-3 grid gap-1 border-t border-neutral-100 pt-3 dark:border-neutral-800">
+                <MenuItem to="/dashboard" icon={LayoutDashboard} onClick={() => setOpen(false)}>
+                  Dashboard
+                </MenuItem>
+                {(user.role === 'admin' || Object.values(user.permissions || {}).some(Boolean)) && (
+                  <MenuItem to="/admin" icon={UserIcon} onClick={() => setOpen(false)}>
+                    {user.role === 'admin' ? 'Admin Panel' : 'Editor Panel'}
+                  </MenuItem>
+                )}
+                <button
+                  onClick={() => {
+                    logout()
+                    setOpen(false)
+                    navigate('/')
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-rose-600 transition-colors hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                >
+                  <LogOut className="h-4 w-4" /> Log out
+                </button>
+              </div>
+            )}
+
             <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3 dark:border-neutral-800">
               <SocialLinks size="sm" />
-              {!isAuthed ? (
+              {!isAuthed && (
                 <Button as={Link} to="/auth" size="sm" onClick={() => setOpen(false)}>
                   Login / Sign Up
-                </Button>
-              ) : (
-                <Button as={Link} to="/dashboard" size="sm" variant="outline" onClick={() => setOpen(false)}>
-                  Dashboard
                 </Button>
               )}
             </div>

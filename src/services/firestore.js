@@ -96,6 +96,14 @@ export async function updateUserAccess(uid, permissions) {
   if (isFirebaseConfigured) await updateDoc(doc(db, 'users', uid), { permissions })
 }
 
+// Self-service profile fields only — role and permissions are never writable here.
+export async function updateUserProfile(uid, patch) {
+  const { name = '', department = '', year = '', acmMember = false } = patch
+  const clean = { name, department, year, acmMember: !!acmMember }
+  if (isFirebaseConfigured) await updateDoc(doc(db, 'users', uid), clean)
+  return clean
+}
+
 // ── Testimonials ─────────────────────────────────────────────
 export async function fetchTestimonials() {
   if (!isFirebaseConfigured) return mock.testimonials

@@ -1,9 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, Lock, User as UserIcon, ArrowRight, ShieldCheck, Sparkles, AlertCircle } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, Sparkles, AlertCircle, CalendarCheck, Ticket, UserCircle2 } from 'lucide-react'
 import { Logo } from '../components/Logo'
-import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
 import { chapter } from '../data/mock'
@@ -22,22 +21,30 @@ function GoogleIcon(props) {
 function friendlyError(err) {
   const code = err?.code || ''
   if (code.includes('popup-closed') || code.includes('cancelled-popup')) return 'Sign-in was cancelled.'
-  if (code.includes('invalid-credential') || code.includes('wrong-password')) return 'Incorrect email or password.'
-  if (code.includes('user-not-found')) return 'No account found for that email.'
-  if (code.includes('email-already-in-use')) return 'An account already exists for that email.'
-  if (code.includes('weak-password')) return 'Password should be at least 6 characters.'
-  if (code.includes('popup-blocked')) return 'Popup blocked — allow popups and try again.'
+  if (code.includes('popup-blocked')) return 'Popup blocked — allow popups for this site and try again.'
+  if (code.includes('network-request-failed')) return 'Network error — check your connection and try again.'
+  if (code.includes('unauthorized-domain')) return 'This domain is not authorised for sign-in yet.'
   return err?.message?.replace('Firebase: ', '') || 'Something went wrong. Please try again.'
 }
 
+const perks = [
+  { icon: CalendarCheck, text: 'Register for workshops, talks and hackathons' },
+  { icon: Ticket, text: 'Track every registration in one dashboard' },
+  { icon: UserCircle2, text: 'Keep your chapter profile up to date' },
+]
+
 export default function Auth() {
-  const [mode, setMode] = useState('login') // 'login' | 'signup'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const { signInWithGoogle, signInWithEmail, signUpWithEmail, isLive } = useAuth()
+  const { signInWithGoogle, isAuthed, loading: authLoading, isLive } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const redirectTo = location.state?.from || '/dashboard'
+
+  // Already signed in (or the session restores while sitting here) — move on.
+  useEffect(() => {
+    if (!authLoading && isAuthed) navigate(redirectTo, { replace: true })
+  }, [authLoading, isAuthed, navigate, redirectTo])
 
   async function handleGoogle() {
     setError('')
@@ -47,23 +54,6 @@ export default function Auth() {
       navigate(redirectTo, { replace: true })
     } catch (err) {
       setError(friendlyError(err))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleEmail(e) {
-    e.preventDefault()
-    setError('')
-    const data = Object.fromEntries(new FormData(e.currentTarget))
-    setLoading(true)
-    try {
-      if (mode === 'signup') await signUpWithEmail(data.email, data.password, data.name)
-      else await signInWithEmail(data.email, data.password)
-      navigate(redirectTo, { replace: true })
-    } catch (err) {
-      setError(friendlyError(err))
-    } finally {
       setLoading(false)
     }
   }
@@ -75,7 +65,7 @@ export default function Auth() {
         <div className="bg-grid absolute inset-0 opacity-40" />
         <div className="pointer-events-none absolute -left-20 top-1/3 h-96 w-96 rounded-full bg-acm-600/30 blur-[120px]" />
         <div className="relative flex h-full flex-col justify-between p-12 text-white">
-          <Link to="/" className="[&_span]:!text-white [&_.text-neutral-400]:!text-neutral-500">
+          <Link to="/" className="w-fit [&_span]:!text-white [&_.text-neutral-400]:!text-neutral-500">
             <Logo />
           </Link>
           <div>
@@ -83,9 +73,16 @@ export default function Auth() {
             <h2 className="mt-6 max-w-sm text-3xl font-bold leading-tight tracking-tight">
               One account for every ACM TKMCE event.
             </h2>
-            <p className="mt-4 max-w-sm text-neutral-400">
-              Sign in to register for events, track your registrations, and manage your profile — all in one place.
-            </p>
+            <ul className="mt-8 grid gap-3">
+              {perks.map((p) => (
+                <li key={p.text} className="flex items-center gap-3 text-sm text-neutral-300">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-acm-400">
+                    <p.icon className="h-4 w-4" />
+                  </span>
+                  {p.text}
+                </li>
+              ))}
+            </ul>
           </div>
           <div className="flex items-center gap-2 text-sm text-neutral-400">
             <ShieldCheck className="h-4 w-4 text-acm-400" /> Secured with Google Authentication
@@ -93,23 +90,28 @@ export default function Auth() {
         </div>
       </div>
 
-      {/* Right — form */}
-      <div className="flex items-center justify-center px-5 py-24 sm:px-8">
+      {/* Right — sign in */}
+      <div className="relative flex items-center justify-center px-5 py-16 sm:px-8">
+        {/* The global navbar is hidden here, so this route carries its own way back. */}
+        <Link
+          to="/"
+          className="absolute left-5 top-6 inline-flex items-center gap-1.5 text-sm text-neutral-500 transition-colors hover:text-neutral-900 sm:left-8 dark:text-neutral-400 dark:hover:text-white"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to site
+        </Link>
+
         <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden">
-            <Link to="/">
+          <div className="mb-10 lg:hidden">
+            <Link to="/" className="inline-block">
               <Logo />
             </Link>
           </div>
 
-          <h1 className="text-2xl font-bold tracking-tight">
-            {mode === 'login' ? 'Welcome back' : 'Create your account'}
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight">Sign in to ACM TKMCE</h1>
           <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
-            {mode === 'login' ? 'Sign in to continue to ACM TKMCE.' : 'Join the chapter and start registering for events.'}
+            Continue with your Google account. New here? Signing in creates your chapter profile automatically.
           </p>
 
-          {/* Error */}
           <AnimatePresence>
             {error && (
               <motion.div
@@ -123,54 +125,19 @@ export default function Auth() {
             )}
           </AnimatePresence>
 
-          {/* Google (primary) */}
           <Button
             variant="outline"
             size="lg"
             onClick={handleGoogle}
             disabled={loading}
-            className="mt-6 w-full"
+            className="mt-8 w-full"
           >
             <GoogleIcon className="h-5 w-5" />
-            {loading ? 'Signing in…' : `Continue with Google`}
+            {loading ? 'Opening Google…' : 'Continue with Google'}
           </Button>
 
-          <div className="my-6 flex items-center gap-3 text-xs text-neutral-400">
-            <span className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
-            or use email
-            <span className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
-          </div>
-
-          {/* Email fallback */}
-          <form onSubmit={handleEmail} className="grid gap-4">
-            <AnimatePresence initial={false}>
-              {mode === 'signup' && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <Input label="Full name" name="name" placeholder="Your name" icon={UserIcon} required />
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <Input label="Email" name="email" type="email" placeholder="you@tkmce.ac.in" icon={Mail} required />
-            <Input label="Password" name="password" type="password" placeholder="••••••••" icon={Lock} required />
-            <Button type="submit" size="lg" disabled={loading} className="mt-1 w-full">
-              {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
-              {!loading && <ArrowRight className="h-4 w-4" />}
-            </Button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
-            {mode === 'login' ? "Don't have an account? " : 'Already registered? '}
-            <button
-              onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-              className="font-semibold text-acm-600 hover:underline dark:text-acm-400"
-            >
-              {mode === 'login' ? 'Sign up' : 'Sign in'}
-            </button>
+          <p className="mt-6 text-center text-xs leading-relaxed text-neutral-400">
+            By continuing you agree to take part in {chapter.name} activities under the chapter code of conduct.
           </p>
 
           <p className="mt-8 text-center text-xs text-neutral-400">

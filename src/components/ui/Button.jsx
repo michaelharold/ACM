@@ -19,11 +19,19 @@ const sizes = {
   lg: 'h-12 px-6 text-base rounded-xl gap-2',
 }
 
+// motion() returns a brand-new component type on every call, so building it
+// inline would remount the button (and any Link inside it) on every render.
+const motionCache = new Map()
+const motionTag = (Tag) => {
+  if (!motionCache.has(Tag)) motionCache.set(Tag, motion(Tag))
+  return motionCache.get(Tag)
+}
+
 export const Button = forwardRef(function Button(
   { as: Tag = 'button', variant = 'primary', size = 'md', className, children, ...props },
   ref,
 ) {
-  const MotionTag = motion(Tag)
+  const MotionTag = motionTag(Tag)
   return (
     <MotionTag
       ref={ref}

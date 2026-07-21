@@ -57,10 +57,13 @@ export function Goals() {
                   onMouseEnter={() => setActive(i)}
                   onFocus={() => setActive(i)}
                   className={cn(
-                    'group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border p-7 text-left transition-colors duration-300',
+                    'group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border p-7 text-left',
+                    // The hovered pillar lifts and grows out of the row; z-10 keeps
+                    // it above its neighbours while it does.
+                    'transition-[transform,box-shadow,border-color,background-color] duration-300 ease-out will-change-transform',
                     isActive
-                      ? 'border-acm-300 bg-white shadow-sm dark:border-acm-500/40 dark:bg-neutral-900'
-                      : 'border-neutral-200 bg-white/60 dark:border-neutral-800 dark:bg-neutral-900/50',
+                      ? 'z-10 scale-[1.04] border-acm-300 bg-white shadow-xl shadow-acm-900/5 dark:border-acm-500/40 dark:bg-neutral-900 dark:shadow-black/40'
+                      : 'scale-100 border-neutral-200 bg-white/60 shadow-none dark:border-neutral-800 dark:bg-neutral-900/50',
                   )}
                 >
                   {isActive && (

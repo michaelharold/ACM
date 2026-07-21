@@ -26,12 +26,14 @@ function Avatar({ name, size = 'md' }) {
   )
 }
 
-function MemberCard({ m, size = 'md', offset = false }) {
+function MemberCard({ m, size = 'md' }) {
   const isHead = m.role === 'Head'
-  const width = size === 'lg' ? 'w-64 sm:w-72' : 'w-56 sm:w-60'
+  // Fixed widths keep every card in a row on the same grid; heads sit one step
+  // larger so the leadership row still reads as the lead.
+  const width = size === 'lg' ? 'w-64 sm:w-72' : 'w-[10.5rem] sm:w-56 lg:w-60'
   const height = size === 'lg' ? '260px' : '224px'
   return (
-    <Item className={cn(width, offset && 'sm:mt-10')}>
+    <Item className={cn('shrink-0', width)}>
       <TiltedCard
         imageSrc={m.photo || avatarDataUri(m.name)}
         altText={m.name}
@@ -139,18 +141,18 @@ export function Execom() {
 
                 {/* Heads first — centered on their own row */}
                 {heads.length > 0 && (
-                  <Reveal className="flex flex-wrap items-start justify-center gap-6" amount={0.1}>
+                  <Reveal className="flex flex-wrap items-stretch justify-center gap-6" amount={0.1}>
                     {heads.map((m) => (
                       <MemberCard key={m.name} m={m} size="lg" />
                     ))}
                   </Reveal>
                 )}
 
-                {/* Members below — staggered so the rows breathe */}
+                {/* Members below — even rows, centred, last row included */}
                 {members.length > 0 && (
-                  <Reveal className="mt-8 flex flex-wrap items-start justify-center gap-x-6 gap-y-8" amount={0.1}>
-                    {members.map((m, i) => (
-                      <MemberCard key={m.name} m={m} offset={i % 2 === 1} />
+                  <Reveal className="mt-10 flex flex-wrap items-stretch justify-center gap-x-6 gap-y-8" amount={0.1}>
+                    {members.map((m) => (
+                      <MemberCard key={m.name} m={m} />
                     ))}
                   </Reveal>
                 )}
