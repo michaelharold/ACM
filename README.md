@@ -146,7 +146,10 @@ npm run seed
 `users/{uid}` document), then in the Firestore console set that document's
 `role` field to `"admin"`. `/admin` unlocks for that account.
 
-**7. Lock the database down** with the strict rules in `firestore.rules`:
+**7. Enable reply emails** (needed for the admin Messages inbox to actually
+send replies — see §5a below).
+
+**8. Lock the database down** with the strict rules in `firestore.rules`:
 
 ```bash
 npm i -g firebase-tools
@@ -156,6 +159,40 @@ firebase deploy --only firestore:rules
 
 Order matters: seed first, grant yourself admin, *then* deploy the rules —
 public content becomes admin-write-only once they are live.
+
+---
+
+## 5a. Contact messages & admin replies
+
+Visitors sign in with Google and send a message from `/contact`. It lands in
+**Admin → Messages**, where an admin can open the thread and reply.
+
+**Sender identity is enforced server-side.** The Firestore rules require a new
+message's `userId` and `userEmail` to equal the caller's own auth token, so
+nobody can post under someone else's address — which matters, because the reply
+goes to whatever address is on the message.
+
+### Making replies actually send
+
+A static site cannot send email by itself. Replies are written to a `mail`
+collection, which is the format the official Firebase **Trigger Email**
+extension consumes:
+
+1. Firebase console → **Extensions** → install **Trigger Email from Firestore**.
+2. Set **Collection** to `mail`.
+3. Give it an SMTP connection URI — a Gmail app password works for low volume:
+   `smtps://acm.cse@tkmce.ac.in:APP_PASSWORD@smtp.gmail.com:465`
+4. Set the **default FROM** address to the chapter mailbox.
+
+Once installed, every reply sent from the admin panel is delivered
+automatically. The extension needs the **Blaze** plan.
+
+**Until you install it**, the reply is still recorded on the thread and the
+detail view offers *Open in email client*, which opens a pre-filled `mailto:`
+to the sender — so the inbox is usable from day one, just not automated.
+
+In demo mode (no Firebase config) messages persist in `localStorage` so the
+whole flow can be clicked through without a backend.
 
 ---
 
@@ -215,6 +252,8 @@ rejected in production.
 | `registrations` | Event sign-ups (denormalised user + event fields) | owner creates, admin manages |
 | `execomGroups` | Committee, ordered by `order` | admin or `execom` grant |
 | `siteContent` | Editable page copy | admin or `content` grant |
+| `messages` | Contact messages + reply history | signed-in user creates as themselves, admin manages |
+| `mail` | Outbound queue drained by the Trigger Email extension | admin only |
 | `testimonials` | Alumni testimonials | admin |
 | `gallery` | Event photos | admin |
 
@@ -245,6 +284,8 @@ member edit (say) only events without full admin rights.
 | Google sign-in fails in production | Add the domain under Firebase → Authentication → Settings → Authorized domains. |
 | `npm run seed` errors on `.env` | Create `.env` first (`cp .env.example .env`) and fill in your values. |
 | Animations stutter on a low-end machine | The WebGL backdrops are heavy; they respect `prefers-reduced-motion`, so enabling that in your OS disables them. |
+| Admin replies never arrive | The Trigger Email extension isn't installed or its SMTP credentials are wrong — see §5a. Check the `mail` collection: a doc with a `delivery.error` field tells you what SMTP rejected. |
+| "Permission denied" on the Messages tab | Only accounts with `role: "admin"` can read the inbox. Editor grants don't cover it. |
 
 ---
 

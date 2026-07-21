@@ -141,5 +141,98 @@ export async function createRegistration(regDoc) {
   return { id: ref.id, ...regDoc }
 }
 
+// ── Contact messages ─────────────────────────────────────────
+// A message's identity always comes from the signed-in Firebase user, never
+// from form input — the rules reject any doc whose userEmail doesn't match the
+// caller's auth token, so a sender cannot claim someone else's address.
+// Mock-mode inbox. Backed by localStorage rather than a module-level array so
+// a message survives the page reload between sending it and opening the admin
+// inbox — otherwise the demo silently loses everything you just sent.
+const MSG_KEY = 'acm-messages'
+const readStore = () => {
+  try {
+    return JSON.parse(localStorage.getItem(MSG_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+const writeStore = (rows) => {
+  try {
+    localStorage.setItem(MSG_KEY, JSON.stringify(rows))
+  } catch {
+    /* quota or private mode — the demo just won't persist */
+  }
+}
+
+export async function createMessage({ uid, name, email, subject, body }) {
+  const docData = {
+    userId: uid,
+    userName: name,
+    userEmail: email,
+    subject: subject || 'Website enquiry',
+    body,
+    status: 'new',
+    replies: [],
+  }
+  if (!isFirebaseConfigured) {
+    const local = { id: `m_${Date.now()}`, ...docData, createdAt: new Date().toISOString() }
+    writeStore([local, ...readStore()])
+    return local
+  }
+  const ref = await addDoc(collection(db, 'messages'), { ...docData, createdAt: serverTimestamp() })
+  return { id: ref.id, ...docData }
+}
+
+export async function fetchMessages() {
+  if (!isFirebaseConfigured) return [...readStore(), ...mock.messages]
+  const snap = await getDocs(query(collection(db, 'messages'), orderBy('createdAt', 'desc')))
+  return map(snap)
+}
+
+export async function markMessageRead(id) {
+  if (!isFirebaseConfigured) {
+    writeStore(readStore().map((m) => (m.id === id && m.status === 'new' ? { ...m, status: 'read' } : m)))
+    return
+  }
+  await updateDoc(doc(db, 'messages', id), { status: 'read' })
+}
+
+// Queues a reply for delivery and records it on the thread.
+//
+// Delivery itself is done by the Firebase "Trigger Email" extension, which
+// watches the `mail` collection and sends each document it finds. A static
+// site cannot send email on its own — without that extension installed the
+// reply is still recorded here, and the admin UI offers a mailto: fallback.
+export async function sendReply({ messageId, to, subject, body, fromName }) {
+  const reply = { body, sentAt: new Date().toISOString(), byName: fromName }
+  if (!isFirebaseConfigured) {
+    writeStore(
+      readStore().map((m) =>
+        m.id === messageId ? { ...m, replies: [...(m.replies || []), reply], status: 'replied' } : m,
+      ),
+    )
+    return { queued: false, reply }
+  }
+  await addDoc(collection(db, 'mail'), {
+    to: [to],
+    message: {
+      subject,
+      text: body,
+      html: `<p>${body.replace(/\n/g, '<br/>')}</p><hr/><p style="color:#888;font-size:12px">Sent by ${fromName} — ACM TKMCE Student Chapter</p>`,
+    },
+    createdAt: serverTimestamp(),
+  })
+  await updateDoc(doc(db, 'messages', messageId), {
+    replies: [...(await getMessageReplies(messageId)), reply],
+    status: 'replied',
+  })
+  return { queued: true, reply }
+}
+
+async function getMessageReplies(id) {
+  const snap = await getDoc(doc(db, 'messages', id))
+  return snap.exists() ? snap.data().replies || [] : []
+}
+
 // Seed helper reused by the seed script signature (documents live in mock).
 export { setDoc, doc }

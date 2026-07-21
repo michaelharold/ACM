@@ -149,13 +149,21 @@ const run = async () => {
   await page.goto(BASE + '/#goals', { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(1800)
   const cards = page.locator('#goals button')
+  // Card 0 is active by default, so hover a different one to force a change.
+  await page.mouse.move(0, 0)
+  await page.waitForTimeout(500)
   const before = await cards.nth(1).boundingBox()
   await cards.nth(1).hover()
-  await page.waitForTimeout(600)
-  const after = await cards.nth(1).boundingBox()
-  after && before && after.width > before.width + 2
+  // Poll rather than sleeping a fixed amount — it's a 300ms CSS transition and a
+  // single sample races it.
+  let after = before
+  for (let i = 0; i < 20 && after.width <= before.width + 2; i++) {
+    await page.waitForTimeout(100)
+    after = await cards.nth(1).boundingBox()
+  }
+  after.width > before.width + 2
     ? pass(`goals: hover enlarges (${Math.round(before.width)} -> ${Math.round(after.width)}px)`)
-    : fail('goals: hover enlarges', `${before?.width} -> ${after?.width}`)
+    : fail('goals: hover enlarges', `${Math.round(before.width)} -> ${Math.round(after.width)}`)
 
   // ── 8. Dark-only theme ───────────────────────────────────────
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' })
@@ -235,6 +243,27 @@ const run = async () => {
       ? fail(`links: stale ${stale} removed`, 'still present')
       : pass(`links: stale ${stale} removed`)
   }
+
+  // ── 12. Contact form is sign-in gated, not a demo ────────────
+  await page.goto(BASE + '/contact', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  // In live mode Firebase takes a few seconds to resolve auth state on a cold
+  // load, so wait for the gate rather than sampling once.
+  const gateOk = await page
+    .getByText('Sign in to send a message')
+    .waitFor({ timeout: 12000 })
+    .then(() => true)
+    .catch(() => false)
+  gateOk ? pass('contact: signed-out visitors see the sign-in gate') : fail('contact: sign-in gate', 'never appeared')
+  const msgBox = await page.locator('#c-msg').count()
+  msgBox === 0 ? pass('contact: message box hidden until signed in') : fail('contact: message box hidden', 'exposed')
+  // Sender identity must never be a free-text field.
+  const emailField = await page.locator('input[name="email"], input[name="name"]').count()
+  emailField === 0
+    ? pass('contact: no spoofable name/email inputs')
+    : fail('contact: no spoofable name/email inputs', `${emailField} found`)
+  const demoNote = await page.getByText(/demo form|aren.t stored/i).count()
+  demoNote === 0 ? pass('contact: demo disclaimer gone') : fail('contact: demo disclaimer gone', 'still present')
 
   await browser.close()
 

@@ -4,8 +4,9 @@ import { motion } from 'framer-motion'
 import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
-  Contact2, ImageUp, ChevronDown, Save,
+  Contact2, ImageUp, ChevronDown, Save, Inbox,
 } from 'lucide-react'
+import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { useAuth } from '../context/AuthContext'
@@ -33,6 +34,7 @@ export default function Admin() {
   const navigate = useNavigate()
   const [tab, setTab] = useState('overview')
   const [regRows, setRegRows] = useState(seedParticipants)
+  const [unreadMsgs, setUnreadMsgs] = useState(0)
 
   const isAdmin = user?.role === 'admin'
   const perms = user?.permissions || {}
@@ -45,6 +47,7 @@ export default function Admin() {
     { key: 'events', label: 'Events', icon: CalendarCog, show: can('events') },
     { key: 'execom', label: 'Execom', icon: Contact2, show: can('execom') },
     { key: 'content', label: 'Site Content', icon: SlidersHorizontal, show: can('content') },
+    { key: 'messages', label: 'Messages', icon: Inbox, show: isAdmin },
     { key: 'registrations', label: 'Registrations', icon: Users, show: isAdmin },
     { key: 'access', label: 'Access', icon: KeyRound, show: isAdmin },
   ].filter((t) => t.show)
@@ -70,6 +73,18 @@ export default function Admin() {
       alive = false
     }
   }, [])
+
+  // Unread count for the overview tile; the Messages panel owns the full inbox.
+  // Editors without the admin role can't read the inbox — the rules deny it —
+  // so don't even ask, or the denial surfaces as an unhandled rejection.
+  useEffect(() => {
+    if (!isAdmin) return
+    let alive = true
+    svc.fetchMessages()
+      .then((m) => alive && setUnreadMsgs(m.filter((x) => x.status === 'new').length))
+      .catch(() => {})
+    return () => { alive = false }
+  }, [tab, isAdmin])
 
   if (loading)
     return (
@@ -120,7 +135,7 @@ export default function Admin() {
   const stats = [
     { label: 'Total Events', value: events.length, icon: CalendarDays, tone: 'blue' },
     { label: 'Total Registrations', value: regRows.length, icon: Ticket, tone: 'green' },
-    { label: 'Active Users', value: 128, icon: UserCheck, tone: 'amber' },
+    { label: 'Unread Messages', value: unreadMsgs, icon: Inbox, tone: 'amber' },
     { label: 'Open Events', value: events.filter((e) => e.status === 'open').length, icon: TrendingUp, tone: 'blue' },
   ]
 
@@ -176,6 +191,7 @@ export default function Admin() {
             )}
             {tab === 'execom' && can('execom') && <ExecomPanel />}
             {tab === 'content' && can('content') && <SiteContentPanel />}
+            {tab === 'messages' && isAdmin && <MessagesPanel adminName={user.name} />}
             {tab === 'registrations' && isAdmin && <RegistrationsPanel rows={regRows} />}
             {tab === 'access' && isAdmin && <AccessPanel isLive={isLive} />}
           </div>
