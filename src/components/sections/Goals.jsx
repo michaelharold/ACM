@@ -92,7 +92,7 @@ export function Goals() {
                     </span>
                   </div>
                   <h3 className="mt-6 text-xl font-bold tracking-tight">{g.key}</h3>
-                  <p className="mt-3 text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">{g.text}</p>
+                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">{g.text}</p>
                 </button>
               </Item>
             )
