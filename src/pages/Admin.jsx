@@ -238,6 +238,8 @@ function EventEditor({ event, onSave }) {
     venue: event.venue,
     shortDescription: event.shortDescription,
     description: event.description || '',
+    fee: event.fee || 0,
+    deadline: event.deadline || ''
   })
   const fileRef = useRef(null)
   const set = (k) => (e) => setDraft((d) => ({ ...d, [k]: e.target.value }))
@@ -266,6 +268,14 @@ function EventEditor({ event, onSave }) {
       <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
         Venue
         <input className={cn(inputCls, 'mt-1')} value={draft.venue} onChange={set('venue')} />
+      </label>
+      <label className="text-xs font-medium text-neutral-500">
+        Registration Fee (₹)
+        <input type="number" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="Enter Registration Fee"  />
+      </label>
+      <label className="text-xs font-medium text-neutral-500">
+        Registration Deadline
+        <input type="date" className={cn(inputCls, 'mt-1')} value={draft.deadline} onChange={set('deadline')} />
       </label>
       <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
         Card blurb (short description)
