@@ -110,7 +110,7 @@ export function Hero() {
           variants={item}
           className="mx-auto mt-6 max-w-4xl text-balance text-5xl font-extrabold leading-[1.05] tracking-tight sm:text-7xl"
         >
-          Advancing computing at{' '}
+          Association for Computing Machinery at{' '}
           <span className="relative whitespace-nowrap">
             <span className="bg-gradient-to-r from-acm-600 to-acm-400 bg-clip-text text-transparent">TKMCE</span>
             <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 300 12" fill="none" preserveAspectRatio="none">
