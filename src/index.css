@@ -41,12 +41,21 @@
     @apply inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-medium uppercase tracking-wider text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400;
   }
 
-  /* Infinite marquee — content must be rendered twice inside the track */
+  /* Infinite marquee — content must be rendered twice inside the track.
+     translate3d + will-change keep it on the compositor, so the strip stays
+     smooth while the WebGL backdrop behind it is also drawing. */
   .marquee-track {
     animation: marquee var(--marquee-duration, 40s) linear infinite;
+    will-change: transform;
+    backface-visibility: hidden;
   }
   .marquee-track.reverse {
     animation-direction: reverse;
+  }
+  /* Ease into the pause instead of stopping dead under the cursor. */
+  .marquee-paused .marquee-track {
+    animation-play-state: running;
+    transition: opacity 0.4s ease;
   }
   .marquee-paused:hover .marquee-track {
     animation-play-state: paused;
@@ -55,10 +64,10 @@
 
 @keyframes marquee {
   from {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translateX(-50%);
+    transform: translate3d(-50%, 0, 0);
   }
 }
 

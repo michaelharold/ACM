@@ -10,10 +10,9 @@ export const chapter = {
   description:
     'The official ACM Student Chapter at TKM College of Engineering. We host workshops, hackathons and talks that turn curious students into confident builders.',
   socials: {
-    instagram: 'https://instagram.com/acmtkmce',
-    linkedin: 'https://linkedin.com/company/acmtkmce',
-    github: 'https://github.com/acmtkmce',
-    email: 'hello@acmtkmce.org',
+    instagram: 'https://www.instagram.com/acm_tkmce',
+    linkedin: 'https://www.linkedin.com/company/acm-tkmce/',
+    email: 'acm.cse@tkmce.ac.in',
   },
 }
 
@@ -299,6 +298,51 @@ export const announcements = [
   { id: 'a2', tag: 'Soon', text: 'Execom 2025–26 applications open next month' },
   { id: 'a3', tag: 'Update', text: 'ACM India Winter School shortlists announced' },
   { id: 'a4', tag: 'Weekly', text: 'CP circle every Friday, 5 PM · Seminar Hall' },
+]
+
+// ── Contact messages (demo inbox for the admin panel) ────────
+const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString()
+
+export const messages = [
+  {
+    id: 'm_demo1',
+    userId: 'u_demo1',
+    userName: 'Nandana Krishna',
+    userEmail: 'nandana@tkmce.ac.in',
+    subject: 'Joining the design team',
+    body: "Hi! I'm a second-year CSE student and I've been following the chapter's work all semester. I do a fair bit of UI design in Figma and would love to help out with posters and event branding. Is the design team taking new members this semester?",
+    status: 'new',
+    replies: [],
+    createdAt: daysAgo(1),
+  },
+  {
+    id: 'm_demo2',
+    userId: 'u_demo2',
+    userName: 'Adithyan R',
+    userEmail: 'adithyan@tkmce.ac.in',
+    subject: 'Workshop collaboration',
+    body: 'Our department association would like to co-host a workshop on embedded systems next month. Who should I talk to about dates and venue?',
+    status: 'read',
+    replies: [],
+    createdAt: daysAgo(3),
+  },
+  {
+    id: 'm_demo3',
+    userId: 'u_demo3',
+    userName: 'Fathima Rishana',
+    userEmail: 'rishana@tkmce.ac.in',
+    subject: 'Certificate for HackTKM',
+    body: "I participated in HackTKM 2025 but haven't received my participation certificate yet. Could you check?",
+    status: 'replied',
+    replies: [
+      {
+        body: 'Hi Rishana — certificates went out this morning, please check your inbox (and spam). Let us know if it still hasn\'t arrived.',
+        sentAt: daysAgo(4),
+        byName: 'Admin',
+      },
+    ],
+    createdAt: daysAgo(5),
+  },
 ]
 
 // ── Status badge helpers ─────────────────────────────────────

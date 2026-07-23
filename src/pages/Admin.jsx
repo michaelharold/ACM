@@ -4,8 +4,11 @@ import { motion } from 'framer-motion'
 import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
-  Contact2, ImageUp, ChevronDown, Save,
+  Contact2, ImageUp, ChevronDown, Save, Inbox, Images,
 } from 'lucide-react'
+import { MessagesPanel } from '../components/admin/MessagesPanel'
+import { GalleryPanel } from '../components/admin/GalleryPanel'
+import { ExecomPanel } from '../components/admin/ExecomPanel'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { useAuth } from '../context/AuthContext'
@@ -13,19 +16,11 @@ import { useData } from '../context/DataContext'
 import { participants as seedParticipants, statusMeta } from '../data/mock'
 import * as svc from '../services/firestore'
 import { avatarDataUri } from '../lib/avatar'
+import { cropToPoster } from '../lib/imagePrep'
 import { formatDate } from '../lib/format'
 import { cn } from '../lib/cn'
 
 const statusCycle = ['open', 'coming-soon', 'closed']
-
-// Read an uploaded image as a data URL (stored inline — no bucket needed).
-const fileToDataUrl = (file) =>
-  new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(r.result)
-    r.onerror = reject
-    r.readAsDataURL(file)
-  })
 
 export default function Admin() {
   const { user, loading, loginAsAdmin, loginAsEditor, logout, isLive } = useAuth()
@@ -33,6 +28,7 @@ export default function Admin() {
   const navigate = useNavigate()
   const [tab, setTab] = useState('overview')
   const [regRows, setRegRows] = useState(seedParticipants)
+  const [unreadMsgs, setUnreadMsgs] = useState(0)
 
   const isAdmin = user?.role === 'admin'
   const perms = user?.permissions || {}
@@ -45,6 +41,8 @@ export default function Admin() {
     { key: 'events', label: 'Events', icon: CalendarCog, show: can('events') },
     { key: 'execom', label: 'Execom', icon: Contact2, show: can('execom') },
     { key: 'content', label: 'Site Content', icon: SlidersHorizontal, show: can('content') },
+    { key: 'gallery', label: 'Gallery', icon: Images, show: can('content') },
+    { key: 'messages', label: 'Messages', icon: Inbox, show: isAdmin },
     { key: 'registrations', label: 'Registrations', icon: Users, show: isAdmin },
     { key: 'access', label: 'Access', icon: KeyRound, show: isAdmin },
   ].filter((t) => t.show)
@@ -70,6 +68,18 @@ export default function Admin() {
       alive = false
     }
   }, [])
+
+  // Unread count for the overview tile; the Messages panel owns the full inbox.
+  // Editors without the admin role can't read the inbox — the rules deny it —
+  // so don't even ask, or the denial surfaces as an unhandled rejection.
+  useEffect(() => {
+    if (!isAdmin) return
+    let alive = true
+    svc.fetchMessages()
+      .then((m) => alive && setUnreadMsgs(m.filter((x) => x.status === 'new').length))
+      .catch(() => {})
+    return () => { alive = false }
+  }, [tab, isAdmin])
 
   if (loading)
     return (
@@ -120,7 +130,7 @@ export default function Admin() {
   const stats = [
     { label: 'Total Events', value: events.length, icon: CalendarDays, tone: 'blue' },
     { label: 'Total Registrations', value: regRows.length, icon: Ticket, tone: 'green' },
-    { label: 'Active Users', value: 128, icon: UserCheck, tone: 'amber' },
+    { label: 'Unread Messages', value: unreadMsgs, icon: Inbox, tone: 'amber' },
     { label: 'Open Events', value: events.filter((e) => e.status === 'open').length, icon: TrendingUp, tone: 'blue' },
   ]
 
@@ -176,6 +186,8 @@ export default function Admin() {
             )}
             {tab === 'execom' && can('execom') && <ExecomPanel />}
             {tab === 'content' && can('content') && <SiteContentPanel />}
+            {tab === 'gallery' && can('content') && <GalleryPanel />}
+            {tab === 'messages' && isAdmin && <MessagesPanel adminName={user.name} />}
             {tab === 'registrations' && isAdmin && <RegistrationsPanel rows={regRows} />}
             {tab === 'access' && isAdmin && <AccessPanel isLive={isLive} />}
           </div>
@@ -247,8 +259,16 @@ function EventEditor({ event, onSave }) {
   async function uploadPoster(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    const dataUrl = await fileToDataUrl(file)
-    onSave({ poster: dataUrl })
+    // Cropped and recompressed first — a raw phone photo is megabytes once
+    // base64-encoded and would push the event document past Firestore's 1 MB
+    // cap, so the save would fail and the poster would vanish on reload.
+    try {
+      onSave({ poster: await cropToPoster(file) })
+    } catch {
+      /* not a readable image — leave the existing poster in place */
+    } finally {
+      e.target.value = ''
+    }
   }
 
   return (
@@ -346,92 +366,6 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
 }
 
 // ── Execom: member details + profile photo uploads ───────────
-function ExecomPanel() {
-  const { execomGroups, updateExecom } = useData()
-  const [draft, setDraft] = useState(execomGroups)
-  const [dirty, setDirty] = useState(false)
-
-  const patch = (gi, mi, p) => {
-    setDraft((groups) =>
-      groups.map((g, i) =>
-        i !== gi ? g : { ...g, members: g.members.map((m, j) => (j !== mi ? m : { ...m, ...p })) },
-      ),
-    )
-    setDirty(true)
-  }
-  const addMember = (gi) => {
-    setDraft((groups) =>
-      groups.map((g, i) => (i !== gi ? g : { ...g, members: [...g.members, { name: 'New Member', role: 'Member' }] })),
-    )
-    setDirty(true)
-  }
-  const removeMember = (gi, mi) => {
-    setDraft((groups) =>
-      groups.map((g, i) => (i !== gi ? g : { ...g, members: g.members.filter((_, j) => j !== mi) })),
-    )
-    setDirty(true)
-  }
-  const uploadPhoto = (gi, mi) => async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    patch(gi, mi, { photo: await fileToDataUrl(file) })
-  }
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 p-5 dark:border-neutral-800">
-        <div>
-          <h3 className="font-semibold tracking-tight">Execom members</h3>
-          <p className="mt-1 text-xs text-neutral-400">Edit names, roles and profile photos shown on the member cards.</p>
-        </div>
-        <Button size="sm" disabled={!dirty} onClick={() => { updateExecom(draft); setDirty(false) }}>
-          <Save className="h-4 w-4" /> {dirty ? 'Save changes' : 'Saved'}
-        </Button>
-      </div>
-      <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
-        {draft.map((g, gi) => (
-          <div key={g.team} className="p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">{g.team}</h4>
-              <Button size="sm" variant="outline" onClick={() => addMember(gi)}>
-                <Plus className="h-4 w-4" /> Add member
-              </Button>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {g.members.map((m, mi) => (
-                <div key={mi} className="flex items-center gap-3 rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
-                  <label className="group relative shrink-0 cursor-pointer" title="Upload photo">
-                    <img
-                      src={m.photo || avatarDataUri(m.name)}
-                      alt=""
-                      className="h-14 w-14 rounded-xl object-cover"
-                    />
-                    <span className="absolute inset-0 grid place-items-center rounded-xl bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                      <ImageUp className="h-5 w-5 text-white" />
-                    </span>
-                    <input type="file" accept="image/*" className="hidden" onChange={uploadPhoto(gi, mi)} />
-                  </label>
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <input className={inputCls} value={m.name} onChange={(e) => patch(gi, mi, { name: e.target.value })} />
-                    <input className={inputCls} value={m.role} onChange={(e) => patch(gi, mi, { role: e.target.value })} />
-                  </div>
-                  <button
-                    onClick={() => removeMember(gi, mi)}
-                    aria-label="Remove member"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-rose-300 hover:text-rose-500 dark:border-neutral-800"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </motion.div>
-  )
-}
-
 // ── Site content: ticker, stats, establishment — no code needed ──
 function SiteContentPanel() {
   const { content, updateContent } = useData()
@@ -440,6 +374,8 @@ function SiteContentPanel() {
   const mark = (next) => { setDraft(next); setDirty(true) }
 
   const setStat = (i, p) => mark({ ...draft, stats: draft.stats.map((s, j) => (j === i ? { ...s, ...p } : s)) })
+  const setGoal = (i, p) => mark({ ...draft, goals: draft.goals.map((g, j) => (j === i ? { ...g, ...p } : g)) })
+  const setWhy = (i, p) => mark({ ...draft, whyJoin: draft.whyJoin.map((w, j) => (j === i ? { ...w, ...p } : w)) })
   const setAnn = (i, p) => mark({ ...draft, announcements: draft.announcements.map((a, j) => (j === i ? { ...a, ...p } : a)) })
   const addAnn = () => mark({ ...draft, announcements: [...draft.announcements, { id: `a_${Date.now()}`, tag: 'New', text: '' }] })
   const delAnn = (i) => mark({ ...draft, announcements: draft.announcements.filter((_, j) => j !== i) })
@@ -449,7 +385,7 @@ function SiteContentPanel() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 p-5 dark:border-neutral-800">
         <div>
           <h3 className="font-semibold tracking-tight">Site content</h3>
-          <p className="mt-1 text-xs text-neutral-400">Edit the announcement ticker, chapter stats and establishment year — live on the site, no code.</p>
+          <p className="mt-1 text-xs text-neutral-400">Edit the front-page copy — headline, vision/mission/values, why-join cards, stats and the ticker. Live on the site, no code.</p>
         </div>
         <Button size="sm" disabled={!dirty} onClick={() => { updateContent(draft); setDirty(false) }}>
           <Save className="h-4 w-4" /> {dirty ? 'Save changes' : 'Saved'}
@@ -457,6 +393,90 @@ function SiteContentPanel() {
       </div>
 
       <div className="space-y-8 p-5">
+        {/* Headline copy */}
+        <div className="grid gap-4">
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Headline copy</h4>
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-neutral-400">Hero tagline</span>
+            <textarea
+              rows={2}
+              className={cn(inputCls, 'resize-y')}
+              value={draft.heroTagline}
+              onChange={(e) => mark({ ...draft, heroTagline: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-neutral-400">About section title</span>
+            <input
+              className={inputCls}
+              value={draft.aboutTitle}
+              onChange={(e) => mark({ ...draft, aboutTitle: e.target.value })}
+            />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-neutral-400">Gallery title</span>
+              <input
+                className={inputCls}
+                value={draft.galleryTitle}
+                onChange={(e) => mark({ ...draft, galleryTitle: e.target.value })}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-neutral-400">Gallery blurb</span>
+              <input
+                className={inputCls}
+                value={draft.galleryBlurb}
+                onChange={(e) => mark({ ...draft, galleryBlurb: e.target.value })}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Vision / Mission / Values */}
+        <div>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Vision · Mission · Values</h4>
+          <div className="mt-3 space-y-3">
+            {draft.goals.map((g, i) => (
+              <div key={i} className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
+                <input
+                  className={cn(inputCls, 'max-w-[200px] font-semibold')}
+                  value={g.key}
+                  onChange={(e) => setGoal(i, { key: e.target.value })}
+                />
+                <textarea
+                  rows={2}
+                  className={cn(inputCls, 'mt-2 resize-y')}
+                  value={g.text}
+                  onChange={(e) => setGoal(i, { text: e.target.value })}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Why join cards */}
+        <div>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">“Why join us” cards</h4>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {draft.whyJoin.map((w, i) => (
+              <div key={i} className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
+                <input
+                  className={cn(inputCls, 'font-semibold')}
+                  value={w.title}
+                  onChange={(e) => setWhy(i, { title: e.target.value })}
+                />
+                <textarea
+                  rows={3}
+                  className={cn(inputCls, 'mt-2 resize-y')}
+                  value={w.body}
+                  onChange={(e) => setWhy(i, { body: e.target.value })}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Establishment */}
         <div>
           <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Year of establishment</h4>

@@ -36,8 +36,35 @@ service cloud.firestore {
     match /events/{id}        { allow read: if true; allow write: if isAdmin() || hasPerm('events'); }
     match /execomGroups/{id}   { allow read: if true; allow write: if isAdmin() || hasPerm('execom'); }
     match /testimonials/{id}   { allow read: if true; allow write: if isAdmin(); }
-    match /gallery/{id}        { allow read: if true; allow write: if isAdmin(); }
+    // Gallery: one image per document (inline data URI), so uploads never
+    // approach the 1 MB per-document cap.
+    match /gallery/{id}        { allow read: if true; allow write: if isAdmin() || hasPerm('content'); }
     match /siteContent/{id}    { allow read: if true; allow write: if isAdmin() || hasPerm('content'); }
+
+    // Contact messages — a signed-in user may send one as themselves and read
+    // their own thread; only admins read the whole inbox or reply.
+    //
+    // The identity checks are the point: userId and userEmail must match the
+    // caller's own auth token, so a sender cannot post under someone else's
+    // address and cannot make a reply land in a stranger's inbox.
+    match /messages/{id} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.userEmail == request.auth.token.email
+        && request.resource.data.status == 'new'
+        && request.resource.data.replies.size() == 0
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0
+        && request.resource.data.body.size() <= 4000;
+      allow update, delete: if isAdmin();
+    }
+
+    // Outbound mail queue, drained by the Firebase "Trigger Email" extension.
+    // Admin-only: anyone able to write here could send mail as the chapter.
+    match /mail/{id} {
+      allow read, write: if isAdmin();
+    }
 
     // Registrations — a user creates & reads their own; admins read all.
     match /registrations/{id} {

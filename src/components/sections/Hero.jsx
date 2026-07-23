@@ -6,8 +6,8 @@ import SpecularButton from '../reactbits/SpecularButton'
 import BlurText from '../reactbits/BlurText'
 import { SocialLinks } from '../SocialLinks'
 import { useTheme } from '../../context/ThemeContext'
+import { useData } from '../../context/DataContext'
 import { scrollToId } from '../../lib/smoothScroll'
-import { chapter } from '../../data/mock'
 
 // Fluid-sim backdrop (three.js) stays in its own lazy chunk.
 const LiquidEther = lazy(() => import('../reactbits/LiquidEther'))
@@ -25,6 +25,7 @@ export function Hero() {
   const ref = useRef(null)
   const navigate = useNavigate()
   const { theme } = useTheme()
+  const { content } = useData()
   const dark = theme === 'dark'
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
@@ -79,30 +80,28 @@ export function Hero() {
         style={{ y: contentY, opacity: contentOpacity }}
         className="section-shell pointer-events-none relative z-10 py-28 text-center"
       >
-        {/* Official chapter mark — unblurs and settles in, then breathes */}
+        {/* Official chapter mark — a one-shot reveal on load, then it holds still */}
         <motion.div variants={item} className="mx-auto mb-10 flex justify-center">
           <motion.div
-            initial={{ opacity: 0, scale: 0.72, filter: 'blur(14px)' }}
+            initial={{ opacity: 0, scale: 0.68, filter: 'blur(18px)' }}
             animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-            transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
+            transition={{ duration: 1.25, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
             className="relative"
           >
-            {/* Glow that blooms outward as the mark lands */}
+            {/* Glow blooms outward as the mark lands, then settles */}
             <motion.span
               aria-hidden
               initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: [0, 0.85, 0.45], scale: [0.5, 1.35, 1.15] }}
-              transition={{ duration: 1.8, ease: 'easeOut', delay: 0.2 }}
-              className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-acm-500/35 blur-[52px]"
+              animate={{ opacity: [0, 0.9, 0.45], scale: [0.5, 1.4, 1.15] }}
+              transition={{ duration: 2, ease: 'easeOut', delay: 0.2 }}
+              className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-acm-500/35 blur-[64px]"
             />
-            <motion.img
+            <img
               src="/acm-logo.png"
               alt="ACM TKMCE Student Chapter"
               width={311}
               height={311}
-              animate={{ y: [0, -9, 0] }}
-              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-              className="h-28 w-28 object-contain drop-shadow-[0_8px_28px_rgba(31,71,245,0.35)] sm:h-36 sm:w-36"
+              className="h-44 w-44 object-contain drop-shadow-[0_10px_36px_rgba(31,71,245,0.4)] sm:h-60 sm:w-60"
             />
           </motion.div>
         </motion.div>
@@ -136,7 +135,7 @@ export function Hero() {
 
         <motion.div variants={item} className="mx-auto mt-7 max-w-xl">
           <BlurText
-            text={chapter.description}
+            text={content.heroTagline}
             delay={40}
             animateBy="words"
             direction="top"

@@ -7,6 +7,7 @@ import { EventCard } from '../components/events/EventCard'
 import { EventDetailsModal } from '../components/events/EventDetailsModal'
 import { RegistrationDrawer } from '../components/events/RegistrationDrawer'
 import SplitText from '../components/reactbits/SplitText'
+import { BrandBackdrop } from '../components/sections/BrandBackdrop'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
@@ -57,8 +58,12 @@ export default function Events() {
   const noEventsAtAll = loaded && events.length === 0
 
   return (
-    <div className="pt-28">
-      <div className="section-shell py-16">
+    <div className="relative pt-28">
+      {/* Same brand backdrop as the About section. It spans the whole page here
+          rather than a fixed band, so it stays behind the cards as you scroll. */}
+      <BrandBackdrop feather={false} />
+
+      <div className="section-shell relative z-10 py-16">
         <SectionHeading
           eyebrow="Events"
           title="Everything happening at ACM TKMCE"

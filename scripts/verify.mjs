@@ -149,13 +149,21 @@ const run = async () => {
   await page.goto(BASE + '/#goals', { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(1800)
   const cards = page.locator('#goals button')
+  // Card 0 is active by default, so hover a different one to force a change.
+  await page.mouse.move(0, 0)
+  await page.waitForTimeout(500)
   const before = await cards.nth(1).boundingBox()
   await cards.nth(1).hover()
-  await page.waitForTimeout(600)
-  const after = await cards.nth(1).boundingBox()
-  after && before && after.width > before.width + 2
+  // Poll rather than sleeping a fixed amount — it's a 300ms CSS transition and a
+  // single sample races it.
+  let after = before
+  for (let i = 0; i < 20 && after.width <= before.width + 2; i++) {
+    await page.waitForTimeout(100)
+    after = await cards.nth(1).boundingBox()
+  }
+  after.width > before.width + 2
     ? pass(`goals: hover enlarges (${Math.round(before.width)} -> ${Math.round(after.width)}px)`)
-    : fail('goals: hover enlarges', `${before?.width} -> ${after?.width}`)
+    : fail('goals: hover enlarges', `${Math.round(before.width)} -> ${Math.round(after.width)}`)
 
   // ── 8. Dark-only theme ───────────────────────────────────────
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' })
@@ -176,9 +184,16 @@ const run = async () => {
   // ── 9. Hero: official logo, no "Est." pill ───────────────────
   const heroLogo = page.locator('section img[src*="acm-logo"]').first()
   const heroBox = await heroLogo.boundingBox().catch(() => null)
-  heroBox && heroBox.width > 80
-    ? pass(`hero: official logo rendered (${Math.round(heroBox.width)}px)`)
-    : fail('hero: official logo rendered', heroBox ? `only ${Math.round(heroBox.width)}px` : 'not found')
+  heroBox && heroBox.width >= 200
+    ? pass(`hero: official logo rendered large (${Math.round(heroBox.width)}px)`)
+    : fail('hero: official logo rendered large', heroBox ? `only ${Math.round(heroBox.width)}px` : 'not found')
+  // The mark should settle and hold — no perpetual float.
+  const y1 = (await heroLogo.boundingBox()).y
+  await page.waitForTimeout(1800)
+  const y2 = (await heroLogo.boundingBox()).y
+  Math.abs(y1 - y2) < 1
+    ? pass('hero: logo holds still after reveal')
+    : fail('hero: logo holds still after reveal', `drifted ${Math.abs(y1 - y2).toFixed(1)}px`)
   const estPill = await page.getByText(/Est\. \d{4}\s*·/).count()
   estPill === 0 ? pass('hero: Est. pill removed') : fail('hero: Est. pill removed', `${estPill} found`)
 
@@ -206,6 +221,127 @@ const run = async () => {
     ;(await page.locator(`#${id}`).count()) === 0
       ? pass(`home: #${id} moved to its own page`)
       : fail(`home: #${id} moved to its own page`, 'still on home')
+  }
+
+  // ── 11. Real chapter links ───────────────────────────────────
+  const expectLinks = {
+    'instagram.com/acm_tkmce': 'Instagram',
+    'linkedin.com/company/acm-tkmce': 'LinkedIn',
+    'mailto:acm.cse@tkmce.ac.in': 'email',
+  }
+  await page.goto(BASE + '/contact', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  const hrefs = await page.$$eval('a[href]', (els) => els.map((e) => e.getAttribute('href')))
+  for (const [needle, label] of Object.entries(expectLinks)) {
+    hrefs.some((h) => h && h.includes(needle))
+      ? pass(`links: ${label} -> ${needle}`)
+      : fail(`links: ${label}`, `no href containing "${needle}"`)
+  }
+  // Stale handles and the dropped GitHub link must be gone everywhere.
+  for (const stale of ['instagram.com/acmtkmce', 'hello@acmtkmce.org', 'linkedin.com/company/acmtkmce', 'github.com']) {
+    hrefs.some((h) => h && h.includes(stale))
+      ? fail(`links: stale ${stale} removed`, 'still present')
+      : pass(`links: stale ${stale} removed`)
+  }
+
+  // ── 12. Contact form is sign-in gated, not a demo ────────────
+  await page.goto(BASE + '/contact', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  // In live mode Firebase takes a few seconds to resolve auth state on a cold
+  // load, so wait for the gate rather than sampling once.
+  const gateOk = await page
+    .getByText('Sign in to send a message')
+    .waitFor({ timeout: 12000 })
+    .then(() => true)
+    .catch(() => false)
+  gateOk ? pass('contact: signed-out visitors see the sign-in gate') : fail('contact: sign-in gate', 'never appeared')
+  const msgBox = await page.locator('#c-msg').count()
+  msgBox === 0 ? pass('contact: message box hidden until signed in') : fail('contact: message box hidden', 'exposed')
+  // Sender identity must never be a free-text field.
+  const emailField = await page.locator('input[name="email"], input[name="name"]').count()
+  emailField === 0
+    ? pass('contact: no spoofable name/email inputs')
+    : fail('contact: no spoofable name/email inputs', `${emailField} found`)
+  const demoNote = await page.getByText(/demo form|aren.t stored/i).count()
+  demoNote === 0 ? pass('contact: demo disclaimer gone') : fail('contact: demo disclaimer gone', 'still present')
+
+  // ── 13. Merged About band + shared backdrop ──────────────────
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  await page.locator('#about').scrollIntoViewIfNeeded()
+  await page.waitForTimeout(2000)
+  // The headline used to live in its own section with its own Lightfall; it
+  // should now sit inside #about sharing one backdrop.
+  const bandInAbout = await page.locator('#about').getByText(/Think|Build|Ship/).count()
+  bandInAbout > 0 ? pass('about: Think/Build/Ship merged into the section') : fail('about: band merged', 'not inside #about')
+  const canvases = await page.locator('#about canvas').count()
+  canvases === 1
+    ? pass('about: exactly one shared backdrop canvas')
+    : fail('about: one shared backdrop', `${canvases} canvases`)
+  // autoRotate + speed mean the field must visibly change over time.
+  if (canvases === 1) {
+    const shot = () => page.locator('#about canvas').screenshot()
+    const f1 = await shot()
+    await page.waitForTimeout(2500)
+    const f2 = await shot()
+    !f1.equals(f2)
+      ? pass('about: backdrop is animating')
+      : fail('about: backdrop is animating', 'frames identical — shader may be stalled')
+  }
+
+  // Events page carries the same shared brand backdrop as About.
+  await page.goto(BASE + '/events', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  await page.waitForTimeout(2500)
+  ;(await page.locator('.color-bends-container canvas').count()) === 1
+    ? pass('events: shared brand backdrop present')
+    : fail('events: shared brand backdrop', 'no canvas')
+
+  // Execom page carries the DotField backdrop.
+  await page.goto(BASE + '/execom', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  await page.waitForTimeout(1500)
+  ;(await page.locator('.dot-field-container canvas').count()) === 1
+    ? pass('execom: DotField backdrop present')
+    : fail('execom: DotField backdrop', 'no canvas')
+
+  // ── 14. Gallery renders from the data layer ──────────────────
+  await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  await page.locator('#gallery').scrollIntoViewIfNeeded()
+  await page.waitForTimeout(1200)
+  ;(await page.locator('#gallery figure').count()) > 0
+    ? pass('gallery: strip renders images')
+    : fail('gallery: strip renders images', 'empty')
+  await page.waitForTimeout(1500)
+  ;(await page.locator('#gallery canvas').count()) === 1
+    ? pass('gallery: SoftAurora backdrop present')
+    : fail('gallery: SoftAurora backdrop', 'no canvas')
+  // The marquee translates by exactly -50%, so one half must be at least as
+  // wide as the viewport or a gap opens at the wrap point when there are few
+  // images. Assert the full track covers 2x the viewport.
+  const vw = page.viewportSize().width
+  const trackW = await page.locator('#gallery .marquee-track').first().evaluate((e) => e.scrollWidth)
+  trackW >= vw * 2
+    ? pass(`gallery: track ${trackW}px fills 2x viewport — no wrap gap`)
+    : fail('gallery: no wrap gap', `track ${trackW}px < ${vw * 2}px`)
+
+  // ── 15. Execom member detail ─────────────────────────────────
+  await page.goto(BASE + '/execom', { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  await page.waitForTimeout(1500)
+  const memberBtn = page.locator('button[aria-label*="profile"]').first()
+  if (!(await memberBtn.count())) fail('execom: member cards clickable', 'no member buttons')
+  else {
+    await memberBtn.click()
+    await page.waitForTimeout(1000)
+    const opened = await page.getByRole('button', { name: 'Close' }).count()
+    opened > 0 ? pass('execom: member card opens a detail view') : fail('execom: detail view opens', 'nothing opened')
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(700)
+    ;(await page.getByRole('button', { name: 'Close' }).count()) === 0
+      ? pass('execom: detail view closes on Escape')
+      : fail('execom: detail closes', 'still open')
   }
 
   await browser.close()

@@ -1,45 +1,107 @@
+import { useMemo } from 'react'
 import ScrollFloat from '../reactbits/ScrollFloat'
+import SoftAurora from '../reactbits/SoftAurora'
+import { LazyBackdrop } from '../ui/LazyBackdrop'
 import { cn } from '../../lib/cn'
-import { gallery } from '../../data/mock'
+import { shuffle } from '../../lib/imagePrep'
+import { useData } from '../../context/DataContext'
+
+// Each card is ~320px + 16px gap at the widest breakpoint. The track scrolls by
+// exactly -50%, so one half has to be at least as wide as the viewport or a gap
+// opens up at the wrap point. Repeat the set until it is, then double it.
+const CARD_SPAN = 336
+
+function useFilledTrack(items) {
+  return useMemo(() => {
+    if (!items.length) return []
+    const viewport = typeof window === 'undefined' ? 1920 : window.innerWidth
+    const needed = Math.ceil((viewport + CARD_SPAN) / (items.length * CARD_SPAN))
+    const half = Array.from({ length: Math.max(needed, 1) }, () => items).flat()
+    return [...half, ...half] // the -50% animation consumes exactly one half
+  }, [items])
+}
 
 function Row({ items, reverse = false, duration = '46s' }) {
+  const track = useFilledTrack(items)
+  if (!track.length) return null
   return (
-    <div className="marquee-paused relative overflow-hidden">
+    <div className="marquee-paused group/row relative overflow-hidden">
       <div
         style={{ '--marquee-duration': duration }}
         className={cn('marquee-track flex w-max gap-4 pr-4', reverse && 'reverse')}
       >
-        {[...items, ...items].map((g, i) => (
+        {track.map((g, i) => (
           <figure
             key={`${g.id}-${i}`}
-            className="group relative h-44 w-64 shrink-0 overflow-hidden rounded-2xl border border-neutral-200 sm:h-52 sm:w-80 dark:border-neutral-800"
+            className={cn(
+              'group relative h-44 w-64 shrink-0 overflow-hidden rounded-2xl border border-white/10 sm:h-52 sm:w-80',
+              // Neighbours recede while one card is hovered, so the focused
+              // photo reads clearly instead of everything staying flat.
+              'transition-all duration-500 ease-out group-hover/row:opacity-55 hover:!opacity-100',
+              'hover:z-10 hover:!scale-[1.06] hover:border-acm-400/50 hover:shadow-2xl hover:shadow-acm-950/50',
+            )}
           >
             <img
               src={g.image}
               alt={g.caption}
               loading="lazy"
               draggable={false}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
             />
-            <figcaption className="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/70 to-transparent px-4 pb-3 pt-8 text-sm font-medium text-white transition-transform duration-300 group-hover:translate-y-0">
+            {/* Permanent bottom scrim so captions stay readable as they slide */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-70 transition-opacity duration-500 group-hover:opacity-100" />
+            <figcaption className="absolute inset-x-0 bottom-0 translate-y-2 px-4 pb-3 text-sm font-medium text-white opacity-0 transition-all duration-500 ease-out group-hover:translate-y-0 group-hover:opacity-100">
               {g.caption}
             </figcaption>
           </figure>
         ))}
       </div>
       {/* Edge fades */}
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-white to-transparent sm:w-28 dark:from-neutral-950" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-white to-transparent sm:w-28 dark:from-neutral-950" />
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-neutral-950 to-transparent sm:w-28" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-neutral-950 to-transparent sm:w-28" />
     </div>
   )
 }
 
 // Two counter-scrolling photo marquees; hover pauses a row and reveals captions.
 export function GalleryStrip() {
-  const half = Math.ceil(gallery.length / 2)
+  const { gallery, content } = useData()
+  // Reshuffled once per mount, so newly uploaded photos surface in different
+  // positions on each visit rather than always landing at the end.
+  const shuffled = useMemo(() => shuffle(gallery), [gallery])
+
+  if (shuffled.length === 0) return null
+
+  // With only a handful of photos a second row would just mirror the first,
+  // so run a single row until there are enough to make two distinct ones.
+  const twoRows = shuffled.length >= 6
+  const half = Math.ceil(shuffled.length / 2)
+
   return (
-    <section id="gallery" className="scroll-mt-24 overflow-hidden py-24 sm:py-28">
-      <div className="section-shell text-center">
+    <section id="gallery" className="relative scroll-mt-24 overflow-hidden py-24 sm:py-28">
+      {/* Aurora wash behind the reel */}
+      <LazyBackdrop className="pointer-events-none absolute inset-0">
+        <SoftAurora
+          speed={0.6}
+          scale={1.2}
+          brightness={1.3}
+          color1="#0e7ade"
+          color2="#0d08e0"
+          noiseFrequency={2.5}
+          noiseAmplitude={1.0}
+          bandHeight={0.5}
+          bandSpread={1.0}
+          octaveDecay={0.23}
+          layerOffset={0}
+          colorSpeed={1.6}
+          enableMouseInteraction
+          mouseInfluence={0.35}
+        />
+      </LazyBackdrop>
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-neutral-950 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-neutral-950 to-transparent" />
+
+      <div className="section-shell relative z-10 text-center">
         <span className="eyebrow">Gallery</span>
         <ScrollFloat
           animationDuration={1}
@@ -50,15 +112,15 @@ export function GalleryStrip() {
           containerClassName="mt-2"
           textClassName="!text-3xl sm:!text-4xl !font-bold tracking-tight !leading-tight"
         >
-          Life at the chapter
+          {content.galleryTitle}
         </ScrollFloat>
-        <p className="mx-auto mt-3 max-w-2xl text-pretty leading-relaxed text-neutral-500 dark:text-neutral-400">
-          Hack nights, workshops, mentor circles — a running reel of what we get up to.
+        <p className="mx-auto mt-3 max-w-2xl text-pretty leading-relaxed text-neutral-400">
+          {content.galleryBlurb}
         </p>
       </div>
-      <div className="mt-14 space-y-4">
-        <Row items={gallery.slice(0, half)} duration="52s" />
-        <Row items={gallery.slice(half)} reverse duration="60s" />
+      <div className="relative z-10 mt-14 space-y-4">
+        <Row items={twoRows ? shuffled.slice(0, half) : shuffled} duration="52s" />
+        {twoRows && <Row items={shuffled.slice(half)} reverse duration="60s" />}
       </div>
     </section>
   )
