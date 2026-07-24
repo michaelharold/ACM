@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import ScrollFloat from '../reactbits/ScrollFloat'
 import SoftAurora from '../reactbits/SoftAurora'
 import { LazyBackdrop } from '../ui/LazyBackdrop'
+import { GalleryLightbox } from './GalleryLightbox'
 import { cn } from '../../lib/cn'
 import { shuffle } from '../../lib/imagePrep'
 import { useData } from '../../context/DataContext'
@@ -21,7 +22,7 @@ function useFilledTrack(items) {
   }, [items])
 }
 
-function Row({ items, reverse = false, duration = '46s' }) {
+function Row({ items, reverse = false, duration = '46s', onOpen }) {
   const track = useFilledTrack(items)
   if (!track.length) return null
   return (
@@ -31,29 +32,36 @@ function Row({ items, reverse = false, duration = '46s' }) {
         className={cn('marquee-track flex w-max gap-4 pr-4', reverse && 'reverse')}
       >
         {track.map((g, i) => (
-          <figure
+          <button
+            type="button"
             key={`${g.id}-${i}`}
+            onClick={() => onOpen?.(g)}
+            aria-label={g.caption ? `View ${g.caption}` : 'View photo'}
             className={cn(
-              'group relative h-44 w-64 shrink-0 overflow-hidden rounded-2xl border border-white/10 sm:h-52 sm:w-80',
+              'group relative h-44 w-64 shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-white/10 sm:h-52 sm:w-80',
               // Neighbours recede while one card is hovered, so the focused
               // photo reads clearly instead of everything staying flat.
               'transition-all duration-500 ease-out group-hover/row:opacity-55 hover:!opacity-100',
               'hover:z-10 hover:!scale-[1.06] hover:border-acm-400/50 hover:shadow-2xl hover:shadow-acm-950/50',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acm-400/70',
             )}
           >
             <img
               src={g.image}
-              alt={g.caption}
+              alt={g.caption || 'Gallery photo'}
               loading="lazy"
               draggable={false}
               className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
             />
             {/* Permanent bottom scrim so captions stay readable as they slide */}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-70 transition-opacity duration-500 group-hover:opacity-100" />
-            <figcaption className="absolute inset-x-0 bottom-0 translate-y-2 px-4 pb-3 text-sm font-medium text-white opacity-0 transition-all duration-500 ease-out group-hover:translate-y-0 group-hover:opacity-100">
-              {g.caption}
-            </figcaption>
-          </figure>
+            {/* Title only when one has been set — otherwise no caption at all */}
+            {g.caption && (
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 block translate-y-2 px-4 pb-3 text-left text-sm font-medium text-white opacity-0 transition-all duration-500 ease-out group-hover:translate-y-0 group-hover:opacity-100">
+                {g.caption}
+              </span>
+            )}
+          </button>
         ))}
       </div>
       {/* Edge fades */}
@@ -66,6 +74,7 @@ function Row({ items, reverse = false, duration = '46s' }) {
 // Two counter-scrolling photo marquees; hover pauses a row and reveals captions.
 export function GalleryStrip() {
   const { gallery, content } = useData()
+  const [active, setActive] = useState(null)
   // Reshuffled once per mount, so newly uploaded photos surface in different
   // positions on each visit rather than always landing at the end.
   const shuffled = useMemo(() => shuffle(gallery), [gallery])
@@ -119,9 +128,12 @@ export function GalleryStrip() {
         </p>
       </div>
       <div className="relative z-10 mt-14 space-y-4">
-        <Row items={twoRows ? shuffled.slice(0, half) : shuffled} duration="52s" />
-        {twoRows && <Row items={shuffled.slice(half)} reverse duration="60s" />}
+        <Row items={twoRows ? shuffled.slice(0, half) : shuffled} duration="52s" onOpen={setActive} />
+        {twoRows && <Row items={shuffled.slice(half)} reverse duration="60s" onOpen={setActive} />}
       </div>
+
+      {/* Click a photo → it pops out of the reel as an interactive 3D card */}
+      <GalleryLightbox item={active} open={!!active} onClose={() => setActive(null)} />
     </section>
   )
 }

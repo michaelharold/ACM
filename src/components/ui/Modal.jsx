@@ -21,7 +21,9 @@ export function Modal({ open, onClose, children, className, size = 'lg' }) {
   return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center p-0 sm:items-center sm:p-6">
+        // data-lenis-prevent: without it the Lenis smooth-scroll layer keeps
+        // scrolling the page underneath instead of the modal's own content.
+        <div data-lenis-prevent className="fixed inset-0 z-[100] flex items-end justify-center p-0 sm:items-center sm:p-6">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

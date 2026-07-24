@@ -105,10 +105,21 @@ export function Execom() {
   const { execomGroups } = useData()
   const [selected, setSelected] = useState(null)
 
+  // Open the member browser on the whole team, focused on the clicked person, so
+  // the coverflow can scroll to their teammates on either side.
+  const openMember = (group, member) => {
+    const members = group.members.map((mm) => ({ ...mm, team: group.team }))
+    setSelected({ team: group.team, members, index: Math.max(0, group.members.indexOf(member)) })
+  }
+
   return (
     <section id="execom" className="relative scroll-mt-24 overflow-hidden py-24 sm:py-28">
-      {/* Dot field — the grid bulges away from the cursor and settles back */}
-      <LazyBackdrop className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(110%_70%_at_50%_40%,#000_35%,transparent_80%)]">
+      {/* Dot field — the grid bulges away from the cursor and settles back.
+          Bounded to one viewport tall (not the full section): a long roster made
+          the section ~7000px, which inflated this canvas to ~40 MP and made the
+          whole page stutter on scroll (Safari especially). The mask fades it out
+          below the heading, so a top-anchored band reads the same. */}
+      <LazyBackdrop className="pointer-events-none absolute inset-x-0 top-0 h-[100svh] [mask-image:radial-gradient(110%_70%_at_50%_40%,#000_35%,transparent_80%)]">
         <DotField
           dotRadius={2.5}
           dotSpacing={30}
@@ -131,7 +142,7 @@ export function Execom() {
 
         <div className="mt-16 space-y-20">
           {execomGroups.map((group) => {
-            if (group.lead) return <LeadRow key={group.team} group={group} onOpen={setSelected} />
+            if (group.lead) return <LeadRow key={group.team} group={group} onOpen={() => openMember(group, group.members[0])} />
 
             const Icon = iconMap[group.icon]
             const heads = group.members.filter((m) => m.role === 'Head')
@@ -157,7 +168,7 @@ export function Execom() {
                 {heads.length > 0 && (
                   <Reveal className="flex flex-wrap items-stretch justify-center gap-6" amount={0.1}>
                     {heads.map((m) => (
-                      <MemberCard key={m.name} m={{ ...m, team: group.team }} size="lg" onOpen={setSelected} />
+                      <MemberCard key={m.name} m={{ ...m, team: group.team }} size="lg" onOpen={() => openMember(group, m)} />
                     ))}
                   </Reveal>
                 )}
@@ -166,7 +177,7 @@ export function Execom() {
                 {members.length > 0 && (
                   <Reveal className="mt-10 flex flex-wrap items-stretch justify-center gap-x-6 gap-y-8" amount={0.1}>
                     {members.map((m) => (
-                      <MemberCard key={m.name} m={{ ...m, team: group.team }} onOpen={setSelected} />
+                      <MemberCard key={m.name} m={{ ...m, team: group.team }} onOpen={() => openMember(group, m)} />
                     ))}
                   </Reveal>
                 )}
@@ -176,7 +187,7 @@ export function Execom() {
         </div>
       </div>
 
-      <MemberDetail member={selected} open={!!selected} onClose={() => setSelected(null)} />
+      <MemberDetail data={selected} open={!!selected} onClose={() => setSelected(null)} />
     </section>
   )
 }

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
-  Contact2, ImageUp, ChevronDown, Save, Inbox, Images,
+  Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
@@ -18,9 +18,17 @@ import * as svc from '../services/firestore'
 import { avatarDataUri } from '../lib/avatar'
 import { cropToPoster } from '../lib/imagePrep'
 import { formatDate } from '../lib/format'
+import { registrationStatus, hasRegWindow } from '../lib/eventClock'
 import { cn } from '../lib/cn'
 
 const statusCycle = ['open', 'coming-soon', 'closed']
+
+// Format a Date as the value a <input type="datetime-local"> expects, in the
+// admin's own local time (toISOString would shift it to UTC).
+const toLocalInput = (d) => {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
 
 export default function Admin() {
   const { user, loading, loginAsAdmin, loginAsEditor, logout, isLive } = useAuth()
@@ -124,14 +132,19 @@ export default function Admin() {
       status: 'coming-soon',
       fee: 0,
       deadline: new Date(Date.now() + 6048e5).toISOString().slice(0, 10),
+      // Registration window drives the Open/Coming Soon/Closed badge on its own.
+      regOpens: toLocalInput(new Date()),
+      regCloses: toLocalInput(new Date(Date.now() + 12096e5)),
       speakers: [],
+      external: false,
+      externalUrl: '',
     })
 
   const stats = [
     { label: 'Total Events', value: events.length, icon: CalendarDays, tone: 'blue' },
     { label: 'Total Registrations', value: regRows.length, icon: Ticket, tone: 'green' },
     { label: 'Unread Messages', value: unreadMsgs, icon: Inbox, tone: 'amber' },
-    { label: 'Open Events', value: events.filter((e) => e.status === 'open').length, icon: TrendingUp, tone: 'blue' },
+    { label: 'Open Events', value: events.filter((e) => registrationStatus(e) === 'open').length, icon: TrendingUp, tone: 'blue' },
   ]
 
   return (
@@ -251,10 +264,28 @@ function EventEditor({ event, onSave }) {
     shortDescription: event.shortDescription,
     description: event.description || '',
     fee: event.fee || 0,
-    deadline: event.deadline || ''
+    deadline: event.deadline || '',
+    regOpens: event.regOpens || '',
+    regCloses: event.regCloses || '',
+    external: !!event.external,
+    externalUrl: event.externalUrl || '',
   })
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const fileRef = useRef(null)
   const set = (k) => (e) => setDraft((d) => ({ ...d, [k]: e.target.value }))
+  const isExternal = draft.external
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await onSave(draft)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   async function uploadPoster(e) {
     const file = e.target.files?.[0]
@@ -277,6 +308,45 @@ function EventEditor({ event, onSave }) {
         Event name
         <input className={cn(inputCls, 'mt-1')} value={draft.name} onChange={set('name')} />
       </label>
+
+      {/* Internal (register on this site) vs external (redirect elsewhere) */}
+      <div className="sm:col-span-2">
+        <span className="text-xs font-medium text-neutral-500">Event type</span>
+        <div className="mt-1 inline-flex rounded-lg border border-neutral-200 bg-white p-0.5 dark:border-neutral-700 dark:bg-neutral-800">
+          {[
+            { key: false, label: 'Internal (register here)' },
+            { key: true, label: 'External (redirect)' },
+          ].map((opt) => (
+            <button
+              key={String(opt.key)}
+              type="button"
+              onClick={() => setDraft((d) => ({ ...d, external: opt.key }))}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                isExternal === opt.key
+                  ? 'bg-acm-600 text-white'
+                  : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200',
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isExternal && (
+        <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
+          Event website URL (users are redirected here to register)
+          <input
+            type="url"
+            placeholder="https://external-site.com/event"
+            className={cn(inputCls, 'mt-1')}
+            value={draft.externalUrl}
+            onChange={set('externalUrl')}
+          />
+        </label>
+      )}
+
       <label className="text-xs font-medium text-neutral-500">
         Date
         <input type="date" className={cn(inputCls, 'mt-1')} value={draft.date} onChange={set('date')} />
@@ -289,14 +359,33 @@ function EventEditor({ event, onSave }) {
         Venue
         <input className={cn(inputCls, 'mt-1')} value={draft.venue} onChange={set('venue')} />
       </label>
-      <label className="text-xs font-medium text-neutral-500">
-        Registration Fee (₹)
-        <input type="number" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="Enter Registration Fee"  />
-      </label>
-      <label className="text-xs font-medium text-neutral-500">
-        Registration Deadline
-        <input type="date" className={cn(inputCls, 'mt-1')} value={draft.deadline} onChange={set('deadline')} />
-      </label>
+      {!isExternal && (
+        <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
+          Registration Fee (₹)
+          <input type="number" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="Enter Registration Fee"  />
+        </label>
+      )}
+
+      {/* Status window drives the Open/Coming Soon/Closed badge for both
+          internal and external events, so nobody has to flip it by hand. */}
+      <div className="rounded-lg border border-neutral-200 bg-white p-3 sm:col-span-2 dark:border-neutral-700 dark:bg-neutral-800/40">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-600 dark:text-neutral-300">
+          <Clock className="h-3.5 w-3.5 text-acm-500" /> {isExternal ? 'Open / close window' : 'Registration window'} — the status badge updates automatically
+        </div>
+        <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-medium text-neutral-500">
+            Opens
+            <input type="datetime-local" className={cn(inputCls, 'mt-1')} value={draft.regOpens} onChange={set('regOpens')} />
+          </label>
+          <label className="text-xs font-medium text-neutral-500">
+            Closes
+            <input type="datetime-local" className={cn(inputCls, 'mt-1')} value={draft.regCloses} onChange={set('regCloses')} />
+          </label>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
+          Before <strong>Opens</strong> → Coming Soon · between the two → {isExternal ? 'Open' : 'Registration Open'} · after <strong>Closes</strong> → Closed. Leave both blank to set the status manually instead.
+        </p>
+      </div>
       <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
         Card blurb (short description)
         <input className={cn(inputCls, 'mt-1')} value={draft.shortDescription} onChange={set('shortDescription')} />
@@ -310,11 +399,25 @@ function EventEditor({ event, onSave }) {
         <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
           <ImageUp className="h-4 w-4" /> Upload poster
         </Button>
-        <Button size="sm" onClick={() => onSave(draft)}>
-          <Save className="h-4 w-4" /> Save details
+        <Button size="sm" onClick={handleSave} disabled={saving}>
+          <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save details'}
         </Button>
         <span className="text-xs text-neutral-400">Countdown & LIVE badge come from date + time automatically.</span>
       </div>
+
+      {/* Saved confirmation card */}
+      <AnimatePresence>
+        {saved && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-700 sm:col-span-2 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" /> Event saved — changes are live.
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -328,7 +431,10 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
         <Button size="sm" onClick={onAdd}><Plus className="h-4 w-4" /> New event</Button>
       </div>
       <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
-        {events.map((e) => (
+        {events.map((e) => {
+          const status = registrationStatus(e)
+          const auto = hasRegWindow(e)
+          return (
           <div key={e.id}>
             <div className="flex flex-wrap items-center gap-4 p-4">
               <img src={e.poster} alt="" className="h-12 w-12 rounded-lg object-cover" />
@@ -336,9 +442,16 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
                 <p className="truncate text-sm font-medium">{e.name}</p>
                 <p className="text-xs text-neutral-400">{formatDate(e.date)} · {e.time} · {e.venue}</p>
               </div>
-              <button onClick={() => onCycle(e)} title="Click to change status" className="transition-transform hover:scale-105">
-                <Badge tone={statusMeta[e.status].tone} dot={e.status === 'open'}>{statusMeta[e.status].label}</Badge>
-              </button>
+              {auto ? (
+                <span className="inline-flex items-center gap-1.5" title="Status is automatic from the registration window">
+                  <Badge tone={statusMeta[status].tone} dot={status === 'open'}>{statusMeta[status].label}</Badge>
+                  <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:bg-neutral-800">Auto</span>
+                </span>
+              ) : (
+                <button onClick={() => onCycle(e)} title="Click to change status" className="transition-transform hover:scale-105">
+                  <Badge tone={statusMeta[status].tone} dot={status === 'open'}>{statusMeta[status].label}</Badge>
+                </button>
+              )}
               <button
                 onClick={() => setOpenId(openId === e.id ? null : e.id)}
                 aria-label="Edit event"
@@ -356,7 +469,8 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
             </div>
             {openId === e.id && <EventEditor key={e.id} event={e} onSave={(patch) => onSave(e.id, patch)} />}
           </div>
-        ))}
+          )
+        })}
       </div>
       <p className="border-t border-neutral-100 p-4 text-xs text-neutral-400 dark:border-neutral-800">
         Tip: click a status badge to cycle Open → Coming Soon → Closed. Expand a row to edit details or upload a poster.

@@ -1,9 +1,10 @@
-import { CalendarDays, Clock, MapPin, Wallet, Timer, CheckCircle2 } from 'lucide-react'
+import { CalendarDays, Clock, MapPin, Wallet, Timer, CheckCircle2, ExternalLink, ArrowUpRight } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { statusMeta } from '../../data/mock'
-import { formatDateLong } from '../../lib/format'
+import { registrationStatus } from '../../lib/eventClock'
+import { formatDateLong, formatDateTime, normalizeUrl } from '../../lib/format'
 
 function Fact({ icon: Icon, label, value }) {
   return (
@@ -21,8 +22,13 @@ function Fact({ icon: Icon, label, value }) {
 
 export function EventDetailsModal({ event, open, onClose, onRegister, registered }) {
   if (!event) return null
-  const meta = statusMeta[event.status]
-  const canRegister = event.status === 'open' && !registered
+  const status = registrationStatus(event)
+  const meta = statusMeta[status]
+  const isExternal = !!event.external
+  const externalHref = normalizeUrl(event.externalUrl)
+  const canRegister = status === 'open' && !registered
+  // Prefer the registration window's close time; fall back to the legacy deadline.
+  const deadlineLabel = event.regCloses ? formatDateTime(event.regCloses) : formatDateLong(event.deadline)
 
   return (
     <Modal open={open} onClose={onClose} size="xl">
@@ -32,7 +38,7 @@ export function EventDetailsModal({ event, open, onClose, onRegister, registered
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-6">
           <div>
-            <Badge tone={meta.tone} dot={event.status === 'open'} className="mb-3 bg-white/90 dark:bg-neutral-900/90">
+            <Badge tone={meta.tone} dot={status === 'open'} className="mb-3 bg-white/90 dark:bg-neutral-900/90">
               {meta.label}
             </Badge>
             <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{event.name}</h2>
@@ -46,7 +52,7 @@ export function EventDetailsModal({ event, open, onClose, onRegister, registered
           <Fact icon={CalendarDays} label="Date" value={formatDateLong(event.date)} />
           <Fact icon={Clock} label="Time" value={event.time} />
           <Fact icon={MapPin} label="Venue" value={event.venue} />
-          <Fact icon={Wallet} label="Fee" value={event.fee ? `₹${event.fee}` : 'Free'} />
+          {!isExternal && <Fact icon={Wallet} label="Fee" value={event.fee ? `₹${event.fee}` : 'Free'} />}
         </div>
 
         {/* Description */}
@@ -75,30 +81,64 @@ export function EventDetailsModal({ event, open, onClose, onRegister, registered
           </section>
         )}
 
-        {/* Registration meta */}
-        <section className="mt-8 flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 text-sm dark:border-neutral-800 dark:bg-neutral-900/50">
-          <span className="inline-flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
-            <Timer className="h-4 w-4" /> Registration deadline: <strong className="text-neutral-800 dark:text-neutral-200">{formatDateLong(event.deadline)}</strong>
-          </span>
-        </section>
+        {/* Registration meta — internal events only */}
+        {!isExternal && deadlineLabel && (
+          <section className="mt-8 flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 text-sm dark:border-neutral-800 dark:bg-neutral-900/50">
+            <span className="inline-flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
+              <Timer className="h-4 w-4" /> Registration closes: <strong className="text-neutral-800 dark:text-neutral-200">{deadlineLabel}</strong>
+            </span>
+          </section>
+        )}
+
+        {/* External events are hosted elsewhere — send people straight there */}
+        {isExternal && (
+          <section className="mt-8 flex flex-col items-center gap-4 rounded-2xl border border-acm-200 bg-acm-50/60 p-8 text-center dark:border-acm-500/25 dark:bg-acm-500/5">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-acm-600 shadow-sm dark:bg-neutral-900 dark:text-acm-400">
+              <ExternalLink className="h-5 w-5" />
+            </span>
+            <div>
+              <h3 className="text-lg font-bold tracking-tight">This event is hosted on another website</h3>
+              <p className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400">
+                Registration and full details are managed externally. Head over to take part.
+              </p>
+            </div>
+            <a
+              href={externalHref || undefined}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-acm-600 to-acm-500 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-acm-600/30 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-acm-600/40 active:translate-y-0"
+            >
+              Go to event website
+              <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+            </a>
+          </section>
+        )}
       </div>
 
       {/* Sticky action bar */}
-      <div className="sticky bottom-0 flex items-center justify-between gap-4 border-t border-neutral-200 bg-white/90 px-6 py-4 backdrop-blur sm:px-8 dark:border-neutral-800 dark:bg-neutral-950/90">
-        <div className="text-sm">
-          <div className="font-semibold">{event.fee ? `₹${event.fee}` : 'Free entry'}</div>
-          <div className="text-xs text-neutral-500 dark:text-neutral-400">{meta.label}</div>
+      {isExternal ? (
+        <div className="sticky bottom-0 flex items-center justify-center border-t border-neutral-200 bg-white/90 px-6 py-4 backdrop-blur sm:px-8 dark:border-neutral-800 dark:bg-neutral-950/90">
+          <Button as="a" href={externalHref || undefined} target="_blank" rel="noreferrer noopener" size="lg">
+            <ExternalLink className="h-4 w-4" /> Go to event website
+          </Button>
         </div>
-        {registered ? (
-          <Button variant="outline" disabled className="!opacity-100">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Registered
-          </Button>
-        ) : (
-          <Button disabled={!canRegister} onClick={() => onRegister?.(event)}>
-            {event.status === 'open' ? 'Register Now' : meta.label}
-          </Button>
-        )}
-      </div>
+      ) : (
+        <div className="sticky bottom-0 flex items-center justify-between gap-4 border-t border-neutral-200 bg-white/90 px-6 py-4 backdrop-blur sm:px-8 dark:border-neutral-800 dark:bg-neutral-950/90">
+          <div className="text-sm">
+            <div className="font-semibold">{event.fee ? `₹${event.fee}` : 'Free entry'}</div>
+            <div className="text-xs text-neutral-500 dark:text-neutral-400">{meta.label}</div>
+          </div>
+          {registered ? (
+            <Button variant="outline" disabled className="!opacity-100">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Registered
+            </Button>
+          ) : (
+            <Button disabled={!canRegister} onClick={() => onRegister?.(event)}>
+              {status === 'open' ? 'Register Now' : meta.label}
+            </Button>
+          )}
+        </div>
+      )}
     </Modal>
   )
 }

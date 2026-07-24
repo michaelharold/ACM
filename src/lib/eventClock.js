@@ -19,6 +19,26 @@ export function eventStart(event) {
 
 const pad = (n) => String(n).padStart(2, '0')
 
+// Registration state derived from the registration window (start → end date/time)
+// set on the event. When both ends are set, the badge on the events page flips
+// automatically: Coming Soon before it opens → Open during → Closed after.
+// If no window is configured the manually-set event.status is used as a fallback,
+// so older events keep working exactly as before.
+export function registrationStatus(event, now = Date.now()) {
+  const opens = event?.regOpens ? new Date(event.regOpens).getTime() : null
+  const closes = event?.regCloses ? new Date(event.regCloses).getTime() : null
+  const hasWindow = !Number.isNaN(opens) && opens != null || (!Number.isNaN(closes) && closes != null)
+  if (!hasWindow) return event?.status || 'coming-soon'
+  if (opens != null && !Number.isNaN(opens) && now < opens) return 'coming-soon'
+  if (closes != null && !Number.isNaN(closes) && now > closes) return 'closed'
+  return 'open'
+}
+
+// True when the event carries an automatic registration window.
+export function hasRegWindow(event) {
+  return !!(event?.regOpens || event?.regCloses)
+}
+
 // Ticking clock for an event card: countdown until start, live flag afterwards.
 export function useEventClock(event) {
   const [now, setNow] = useState(() => Date.now())

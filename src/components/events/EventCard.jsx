@@ -1,14 +1,16 @@
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, ArrowUpRight, Timer, Radio } from 'lucide-react'
+import { CalendarDays, MapPin, ArrowUpRight, Timer, Radio, ExternalLink } from 'lucide-react'
 import { Badge } from '../ui/Badge'
 import { fadeUp } from '../ui/Reveal'
 import { statusMeta } from '../../data/mock'
-import { useEventClock } from '../../lib/eventClock'
+import { useEventClock, registrationStatus } from '../../lib/eventClock'
 import { formatDate } from '../../lib/format'
 
 export function EventCard({ event, onOpen }) {
-  const meta = statusMeta[event.status]
   const { isLive, countdown } = useEventClock(event)
+  // Recomputed on every clock tick, so the badge flips Open/Closed on its own.
+  const status = registrationStatus(event)
+  const meta = statusMeta[status]
 
   return (
     <motion.button
@@ -34,7 +36,7 @@ export function EventCard({ event, onOpen }) {
           className="pointer-events-none absolute inset-y-0 -left-3/4 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-0 transition-all duration-700 ease-out group-hover:left-[120%] group-hover:opacity-100"
         />
         <div className="absolute left-3 top-3">
-          <Badge tone={meta.tone} dot={event.status === 'open'} className="backdrop-blur bg-white/90 dark:bg-neutral-900/90">
+          <Badge tone={meta.tone} dot={status === 'open'} className="backdrop-blur bg-white/90 dark:bg-neutral-900/90">
             {meta.label}
           </Badge>
         </div>
@@ -55,7 +57,7 @@ export function EventCard({ event, onOpen }) {
         )}
 
         {/* Countdown until start */}
-        {!isLive && countdown && event.status !== 'closed' && (
+        {!isLive && countdown && status !== 'closed' && (
           <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur">
             <Timer className="h-3 w-3 text-acm-300" /> Starts in {countdown}
           </span>
@@ -77,6 +79,11 @@ export function EventCard({ event, onOpen }) {
           <span className="inline-flex items-center gap-1.5">
             <MapPin className="h-3.5 w-3.5" /> {event.venue}
           </span>
+          {event.external && (
+            <span className="inline-flex items-center gap-1.5 font-medium text-acm-600 dark:text-acm-400">
+              <ExternalLink className="h-3.5 w-3.5" /> External event
+            </span>
+          )}
           {isLive && (
             <span className="inline-flex items-center gap-1.5 font-semibold text-red-600 dark:text-red-500">
               <Radio className="h-3.5 w-3.5" /> Happening now

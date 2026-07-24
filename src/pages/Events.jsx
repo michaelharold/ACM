@@ -11,6 +11,7 @@ import { BrandBackdrop } from '../components/sections/BrandBackdrop'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
+import { registrationStatus } from '../lib/eventClock'
 import { cn } from '../lib/cn'
 
 const filters = [
@@ -30,7 +31,7 @@ export default function Events() {
   const { isRegistered, register } = useRegistrations()
 
   const list = useMemo(
-    () => (filter === 'all' ? events : events.filter((e) => e.status === filter)),
+    () => (filter === 'all' ? events : events.filter((e) => registrationStatus(e) === filter)),
     [filter, events],
   )
 

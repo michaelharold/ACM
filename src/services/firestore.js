@@ -24,7 +24,8 @@ const stripId = ({ id, ...rest }) => rest
 export async function fetchEvents() {
   if (!isFirebaseConfigured) return mock.events
   const snap = await getDocs(collection(db, 'events'))
-  return snap.empty ? mock.events : map(snap)
+  // Live site shows only what's actually been added — no stock placeholders.
+  return snap.empty ? [] : map(snap)
 }
 
 export async function createEvent(data) {
@@ -57,7 +58,12 @@ export async function fetchExecomGroups() {
   return snap.empty ? mock.execomGroups : map(snap)
 }
 
-const teamSlug = (team) => team.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+const teamSlug = (team) =>
+  (team || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+
+// Never let a team resolve to an empty/invalid document id — an unnamed team
+// would otherwise make setDoc throw and block the whole save.
+const execomDocId = (g, i) => g.id || teamSlug(g.team) || `team-${i + 1}`
 
 export async function saveExecomGroups(groups) {
   if (!isFirebaseConfigured) {
@@ -65,7 +71,7 @@ export async function saveExecomGroups(groups) {
     return
   }
   await Promise.all(
-    groups.map((g, i) => setDoc(doc(db, 'execomGroups', g.id || teamSlug(g.team)), { ...stripId(g), order: i })),
+    groups.map((g, i) => setDoc(doc(db, 'execomGroups', execomDocId(g, i)), { ...stripId(g), order: i })),
   )
 }
 
@@ -108,7 +114,7 @@ export async function updateUserProfile(uid, patch) {
 export async function fetchTestimonials() {
   if (!isFirebaseConfigured) return mock.testimonials
   const snap = await getDocs(collection(db, 'testimonials'))
-  return snap.empty ? mock.testimonials : map(snap)
+  return snap.empty ? [] : map(snap)
 }
 
 export async function createTestimonial(data) {
@@ -164,9 +170,9 @@ const writeGallery = (rows) => {
 }
 
 export async function fetchGallery() {
-  if (!isFirebaseConfigured) return [...readGallery(), ...mock.gallery]
+  if (!isFirebaseConfigured) return readGallery()
   const snap = await getDocs(collection(db, 'gallery'))
-  return snap.empty ? mock.gallery : map(snap)
+  return snap.empty ? [] : map(snap)
 }
 
 export async function createGalleryImage({ image, caption }) {
@@ -186,6 +192,16 @@ export async function deleteGalleryImage(id) {
     return
   }
   await deleteDoc(doc(db, 'gallery', id))
+}
+
+// Edit an image's caption (title). Blank caption = no title shown on the site.
+export async function updateGalleryImage(id, patch) {
+  const clean = { caption: patch.caption ?? '' }
+  if (!isFirebaseConfigured) {
+    writeGallery(readGallery().map((g) => (g.id === id ? { ...g, ...clean } : g)))
+    return
+  }
+  await updateDoc(doc(db, 'gallery', id), clean)
 }
 
 // ── Contact messages ─────────────────────────────────────────

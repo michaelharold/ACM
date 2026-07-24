@@ -88,12 +88,17 @@ export function ExecomPanel() {
       setDirty(false)
       setStatus({ ok: true, msg: 'Saved — changes are live on the site.' })
     } catch (err) {
+      const m = err?.message || ''
+      // Only call it a size problem when the error actually is one — an
+      // invalid-argument can just as easily be a bad field, so don't guess.
+      const isSize = /longer than|1048487|exceeds|too large|maximum/i.test(m)
       setStatus({
         ok: false,
-        msg:
-          err?.code === 'invalid-argument' || /longer than|1048487|exceeds/i.test(err?.message || '')
-            ? 'A team is too large to save — try removing or re-uploading its largest photos.'
-            : err?.message || 'Could not save. Your changes are still here; try again.',
+        msg: isSize
+          ? 'A team is too large to save — try removing or re-uploading its largest photos.'
+          : err?.code === 'permission-denied'
+            ? 'You don’t have permission to edit the Execom — ask an admin to grant access.'
+            : m || 'Could not save. Your changes are still here; try again.',
       })
     } finally {
       setSaving(false)

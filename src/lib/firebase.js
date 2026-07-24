@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { initializeFirestore } from 'firebase/firestore'
 
 // Config is read from Vite env vars (see .env.example). If they're absent,
 // the whole app transparently falls back to the in-memory mock layer, so
@@ -24,7 +24,10 @@ let googleProvider = null
 if (isFirebaseConfigured) {
   app = initializeApp(cfg)
   auth = getAuth(app)
-  db = getFirestore(app)
+  // ignoreUndefinedProperties: a single `undefined` field (e.g. an optional
+  // photo/bio left unset) otherwise makes setDoc throw `invalid-argument`, which
+  // the admin UI used to surface as a misleading "team too large" error.
+  db = initializeFirestore(app, { ignoreUndefinedProperties: true })
   googleProvider = new GoogleAuthProvider()
   googleProvider.setCustomParameters({ prompt: 'select_account' })
 } else if (import.meta.env.DEV) {

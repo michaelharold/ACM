@@ -23,37 +23,32 @@ const defaultContent = () => ({
 })
 
 export function DataProvider({ children }) {
-  const [events, setEvents] = useState(mock.events)
+  // Public content starts empty so the live site never flashes stock
+  // placeholders before Firestore answers — only real, uploaded data ever shows.
+  // Execom keeps its seeded roster as a first paint since it's real members.
+  const [events, setEvents] = useState(isFirebaseConfigured ? [] : mock.events)
   const [execomGroups, setExecomGroups] = useState(mock.execomGroups)
-  const [testimonials, setTestimonials] = useState(mock.testimonials)
-  const [gallery, setGallery] = useState(mock.gallery)
+  const [testimonials, setTestimonials] = useState(isFirebaseConfigured ? [] : mock.testimonials)
+  const [gallery, setGallery] = useState([])
   const [content, setContent] = useState(defaultContent)
   const [loaded, setLoaded] = useState(!isFirebaseConfigured)
 
   useEffect(() => {
     let alive = true
-    ;(async () => {
-      try {
-        const [ev, ex, ts, sc, gal] = await Promise.all([
-          svc.fetchEvents(),
-          svc.fetchExecomGroups(),
-          svc.fetchTestimonials(),
-          svc.fetchSiteContent(),
-          svc.fetchGallery(),
-        ])
-        if (!alive) return
-        setEvents(ev)
-        setExecomGroups(ex)
-        setTestimonials(ts)
-        if (gal?.length) setGallery(gal)
-        if (sc) setContent((c) => ({ ...c, ...sc }))
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[ACM] Firestore fetch failed, using mock data.', err)
-      } finally {
-        if (alive) setLoaded(true)
-      }
-    })()
+    // Each source loads and paints independently, so a slow gallery query no
+    // longer holds up events (and vice-versa) — sections fill in as they arrive.
+    const set = (fn) => (v) => { if (alive) fn(v) }
+    const jobs = [
+      svc.fetchEvents().then(set(setEvents)),
+      svc.fetchExecomGroups().then(set(setExecomGroups)),
+      svc.fetchTestimonials().then(set(setTestimonials)),
+      svc.fetchGallery().then(set(setGallery)),
+      svc.fetchSiteContent().then((sc) => { if (alive && sc) setContent((c) => ({ ...c, ...sc })) }),
+    ].map((p) => p.catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn('[ACM] Firestore fetch failed for one source.', err)
+    }))
+    Promise.allSettled(jobs).then(() => { if (alive) setLoaded(true) })
     return () => {
       alive = false
     }
@@ -95,6 +90,10 @@ export function DataProvider({ children }) {
     await svc.deleteGalleryImage(id)
     setGallery((p) => p.filter((g) => g.id !== id))
   }
+  async function updateGalleryImage(id, patch) {
+    setGallery((p) => p.map((g) => (g.id === id ? { ...g, ...patch } : g)))
+    await svc.updateGalleryImage(id, patch)
+  }
 
   // ── Testimonial mutators (admin) ───────────────────────────
   async function addTestimonial(data) {
@@ -118,6 +117,7 @@ export function DataProvider({ children }) {
         loaded,
         addGalleryImages,
         removeGalleryImage,
+        updateGalleryImage,
         updateContent,
         updateExecom,
         addEvent,

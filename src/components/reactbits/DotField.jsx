@@ -57,12 +57,10 @@ const DotField = memo(({
       canvas.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      sizeRef.current = {
-        w,
-        h,
-        offsetX: rect.left + window.scrollX,
-        offsetY: rect.top + window.scrollY,
-      };
+      // Page-relative offset of the field. It's invariant to scrolling (rect.top
+      // falls exactly as scrollY rises), so we compute it once here and on
+      // layout changes — never per pointer move — and the cursor maps for free.
+      sizeRef.current = { w, h, offsetX: rect.left + window.scrollX, offsetY: rect.top + window.scrollY };
 
       buildDots(w, h);
     }
@@ -85,8 +83,12 @@ const DotField = memo(({
         }
       }
       dotsRef.current = dots;
+      drawTail = 90; // repaint for a beat after any (re)build so the grid shows
     }
 
+    // Map the cursor using the cached page-relative offset — no getBoundingClientRect
+    // here, so moving the mouse never forces a layout (that per-move reflow scaled
+    // with page height and made a tall Execom page stutter on every mouse move).
     function onMouseMove(e) {
       const s = sizeRef.current;
       mouseRef.current.x = e.pageX - s.offsetX;
@@ -107,6 +109,12 @@ const DotField = memo(({
     const speedInterval = setInterval(updateMouseSpeed, 20);
 
     let frameCount = 0;
+    // How many more frames to keep repainting. It's topped up whenever the cursor
+    // is engaging the field; once it hits zero the field has eased back to a
+    // static grid and we stop clearing/redrawing entirely — the last painted
+    // frame simply stays on the canvas. That makes scrolling past the section
+    // free instead of forcing a ~2000-dot canvas repaint on every frame.
+    let drawTail = 90;
 
     function tick() {
       frameCount++;
@@ -129,6 +137,15 @@ const DotField = memo(({
         glowEl.setAttribute('cy', m.y);
         glowEl.style.opacity = glowOpacity.current;
       }
+
+      // Keep painting while anything is moving (cursor engaged or glow fading),
+      // then coast through the settle tail and stop until the next interaction.
+      if (eng > 0.002 || glowOpacity.current > 0.01) drawTail = 90;
+      if (drawTail <= 0) {
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      drawTail--;
 
       ctx.clearRect(0, 0, w, h);
 
@@ -211,19 +228,13 @@ const DotField = memo(({
     rafRef.current = requestAnimationFrame(tick);
 
     // The section this sits in grows as content loads, and it also moves down
-    // the page as sections above it resize. Upstream only handles window
-    // resize, which leaves the dot grid mis-sized and the cursor offset stale.
+    // the page as sections above it resize. A ResizeObserver keeps the grid sized
+    // to its container without polling layout on every scroll frame.
     let ro;
     if ('ResizeObserver' in window) {
       ro = new ResizeObserver(resize);
       ro.observe(canvas.parentElement);
     }
-    const onScroll = () => {
-      const rect = canvas.parentElement.getBoundingClientRect();
-      sizeRef.current.offsetX = rect.left + window.scrollX;
-      sizeRef.current.offsetY = rect.top + window.scrollY;
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
 
     rebuildRef.current = () => {
       const { w, h } = sizeRef.current;
@@ -235,7 +246,6 @@ const DotField = memo(({
       clearInterval(speedInterval);
       clearTimeout(resizeTimer);
       ro?.disconnect();
-      window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', onMouseMove);
     };

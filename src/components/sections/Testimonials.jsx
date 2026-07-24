@@ -24,10 +24,13 @@ export function Testimonials() {
   )
 
   useEffect(() => {
-    if (paused) return
+    if (paused || count === 0) return
     const t = setInterval(() => setState(([i]) => [(i + 1) % count, 1]), 5500)
     return () => clearInterval(t)
   }, [paused, count])
+
+  // Nothing added yet — hide the section rather than render an empty carousel.
+  if (count === 0) return null
 
   return (
     <section

@@ -88,13 +88,14 @@ export function Hero() {
             transition={{ duration: 1.25, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
             className="relative"
           >
-            {/* Glow blooms outward as the mark lands, then settles */}
+            {/* Glow eases in behind the mark and holds — no bright flash that
+                reads as a background flickering on and then vanishing. */}
             <motion.span
               aria-hidden
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: [0, 0.9, 0.45], scale: [0.5, 1.4, 1.15] }}
-              transition={{ duration: 2, ease: 'easeOut', delay: 0.2 }}
-              className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-acm-500/35 blur-[64px]"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 0.4, scale: 1.1 }}
+              transition={{ duration: 1.4, ease: 'easeOut', delay: 0.2 }}
+              className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-acm-500/30 blur-[64px]"
             />
             <img
               src="/acm-logo.png"
