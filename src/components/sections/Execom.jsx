@@ -76,33 +76,51 @@ function LeadRow({ group, onOpen }) {
   const Icon = iconMap[group.icon]
   const m = group.members[0]
   return (
-    <motion.button
-      type="button"
-      onClick={() => onOpen?.({ ...m, team: group.team })}
+    <motion.div
       initial={{ opacity: 0, y: 14 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      whileHover={{ y: -3 }}
       transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-      className="group mx-auto flex w-full max-w-md items-center gap-5 rounded-2xl border border-neutral-200 bg-white p-5 text-left transition-colors hover:border-acm-400/60 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-acm-500/50"
+      className="mx-auto w-64 sm:w-72"
     >
-      {m.photo ? (
-        <img src={m.photo} alt="" className="h-20 w-20 shrink-0 rounded-2xl object-cover" />
-      ) : (
-        <Avatar name={m.name} size="lg" />
-      )}
-      <div className="text-left">
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-acm-600 dark:text-acm-400">
-          {Icon && <Icon className="h-3.5 w-3.5" />} {group.team}
-        </span>
-        <h4 className="mt-1 text-lg font-bold tracking-tight">{m.name}</h4>
-      </div>
-    </motion.button>
+      <button
+        type="button"
+        onClick={() => onOpen?.({ ...m, team: group.team })}
+        aria-label={`View ${m.name}'s profile`}
+        className="block w-full cursor-pointer rounded-[15px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acm-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+      >
+        <TiltedCard
+          imageSrc={m.photo || avatarDataUri(m.name)}
+          altText={m.name}
+          captionText={`${m.name} · ${group.team}`}
+          containerHeight="260px"
+          containerWidth="100%"
+          imageHeight="260px"
+          imageWidth="100%"
+          rotateAmplitude={12}
+          scaleOnHover={1.07}
+          showMobileWarning={false}
+          showTooltip
+          displayOverlayContent
+          overlayContent={
+            <div className="flex h-full w-full flex-col justify-end rounded-[15px] bg-gradient-to-t from-black/65 via-black/10 to-transparent p-4 text-left">
+              <span className="mb-1.5 inline-flex w-fit items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-acm-700">
+                {Icon && <Icon className="h-3 w-3" />} {group.team}
+              </span>
+              <h4 className="text-sm font-semibold leading-tight tracking-tight text-white">{m.name}</h4>
+            </div>
+          }
+        />
+      </button>
+    </motion.div>
   )
 }
 
 export function Execom() {
   const { execomGroups } = useData()
+ 
+  console.log(execomGroups)
+
   const [selected, setSelected] = useState(null)
 
   // Open the member browser on the whole team, focused on the clicked person, so
@@ -113,25 +131,29 @@ export function Execom() {
   }
 
   return (
-    <section id="execom" className="relative scroll-mt-24 overflow-hidden py-24 sm:py-28">
+    <section id="execom" className="relative scroll-mt-24 py-24 sm:py-28">
       {/* Dot field — the grid bulges away from the cursor and settles back.
           Bounded to one viewport tall (not the full section): a long roster made
           the section ~7000px, which inflated this canvas to ~40 MP and made the
           whole page stutter on scroll (Safari especially). The mask fades it out
           below the heading, so a top-anchored band reads the same. */}
-      <LazyBackdrop className="pointer-events-none absolute inset-x-0 top-0 h-[100svh] [mask-image:radial-gradient(110%_70%_at_50%_40%,#000_35%,transparent_80%)]">
-        <DotField
-          dotRadius={2.5}
-          dotSpacing={30}
-          bulgeStrength={94}
-          glowRadius={400}
-          sparkle
-          waveAmplitude={3}
-          cursorRadius={550}
-          gradientFrom="#0c29e8"
-          gradientTo="#0b109c"
-        />
-      </LazyBackdrop>
+      <div className="pointer-events-none absolute inset-0">
+  <div className="sticky top-0 h-[100svh] [mask-image:radial-gradient(110%_70%_at_50%_40%,#000_35%,transparent_100%)]">
+    <LazyBackdrop className="h-full w-full">
+      <DotField
+        dotRadius={2.5}
+        dotSpacing={30}
+        bulgeStrength={94}
+        glowRadius={400}
+        sparkle
+        waveAmplitude={3}
+        cursorRadius={550}
+        gradientFrom="#0c29e8"
+        gradientTo="#0b109c"
+      />
+    </LazyBackdrop>
+  </div>
+</div>
 
       <div className="section-shell relative">
         <SectionHeading

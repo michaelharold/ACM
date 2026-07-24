@@ -71,10 +71,34 @@ export const goals = [
 // → Junior Representative. `lead` marks a standalone leadership role.
 export const execomGroups = [
   {
+    team: 'Chair',
+    icon: 'Award',
+    lead: true,
+    members: [{ name: 'Harisankar S', role: 'Chair' }],
+  },
+  {
+    team: 'Vice Chair',
+    icon: 'Award',
+    lead: true,
+    members: [{ name: 'Arathi V', role: 'Vice Chair' }],
+  },
+  {
+    team: 'Treasurer',
+    icon: 'Award',
+    lead: true,
+    members: [{ name: 'Sachit Jayaganesh', role: 'Treasurer' }],
+  },
+  {
     team: 'Secretary',
     icon: 'Award',
     lead: true,
     members: [{ name: 'Sivanandana J P', role: 'Secretary' }],
+  },
+  {
+    team: 'Junior Representative',
+    icon: 'Star',
+    lead: true,
+    members: [{ name: 'Fathima Husna U', role: 'Junior Representative' }],
   },
   {
     team: 'Program Team',
@@ -151,12 +175,6 @@ export const execomGroups = [
       { name: 'Asmin Shahal', role: 'Member' },
       { name: 'Mohammed Nihal', role: 'Member' },
     ],
-  },
-  {
-    team: 'Junior Representative',
-    icon: 'Star',
-    lead: true,
-    members: [{ name: 'Fathima Husna U', role: 'Junior Representative' }],
   },
 ]
 

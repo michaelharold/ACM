@@ -57,12 +57,30 @@ const DotField = memo(({
       canvas.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Page-relative offset of the field. It's invariant to scrolling (rect.top
-      // falls exactly as scrollY rises), so we compute it once here and on
-      // layout changes — never per pointer move — and the cursor maps for free.
+      // Page-relative offset of the field. Normally invariant to scrolling
+      // (rect.top falls exactly as scrollY rises), so this is cheap to
+      // compute here and on layout changes. BUT: inside a `position: sticky`
+      // ancestor, rect.top stops changing once the element sticks, so this
+      // cached value alone goes stale during a sticky scroll — see the
+      // scroll listener below, which keeps it correct in that case.
       sizeRef.current = { w, h, offsetX: rect.left + window.scrollX, offsetY: rect.top + window.scrollY };
 
       buildDots(w, h);
+    }
+
+    // ADDED: recompute just the offset (not a full resize/rebuild) on scroll,
+    // so the cursor mapping stays correct once the canvas sits inside a
+    // `position: sticky` ancestor (rect.top freezes at 0 while scrollY keeps
+    // climbing, which the doResize-only cache can't account for). This is a
+    // single getBoundingClientRect() per scroll event — same cost class as a
+    // resize, and far cheaper than doing it per mousemove.
+    function updateOffsetOnScroll() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      sizeRef.current = {
+        ...sizeRef.current,
+        offsetX: rect.left + window.scrollX,
+        offsetY: rect.top + window.scrollY,
+      };
     }
 
     function buildDots(w, h) {
@@ -225,6 +243,7 @@ const DotField = memo(({
     doResize();
     window.addEventListener('resize', resize);
     window.addEventListener('mousemove', onMouseMove, { passive: true });
+    window.addEventListener('scroll', updateOffsetOnScroll, { passive: true }); // ADDED
     rafRef.current = requestAnimationFrame(tick);
 
     // The section this sits in grows as content loads, and it also moves down
@@ -248,6 +267,7 @@ const DotField = memo(({
       ro?.disconnect();
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('scroll', updateOffsetOnScroll); // ADDED
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
