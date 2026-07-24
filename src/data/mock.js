@@ -120,8 +120,8 @@ export const execomGroups = [
     members: [
       { name: 'Michael Harold Sony', role: 'Head' },
       { name: 'Adithya Kiran', role: 'Head' },
-      { name: 'Sreehari R', role: 'Member' },
       { name: 'Sruthi Mariam Shaji', role: 'Member' },
+      { name: 'Sreehari R' , role: 'Member' },
     ],
   },
   {

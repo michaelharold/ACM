@@ -14,6 +14,17 @@ import { avatarDataUri } from '../lib/avatar'
 import { formatDate } from '../lib/format'
 
 const years = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Alumni']
+const departments = [
+  'Computer Science & Engineering',
+  'Computer Science & Engineering (AI)',
+  'Electronics & Communication Engineering',
+  'Electrical & Electronics Engineering',
+  'Electrical & Computer Engineering',
+  'Mechanical Engineering',
+  'Civil Engineering',
+  'Chemical Engineering',
+  'Architecture',
+]
 
 export default function Dashboard() {
   const { user, loading, logout, saveProfile } = useAuth()
@@ -121,12 +132,12 @@ export default function Dashboard() {
             {editing ? (
               <form onSubmit={handleSave} className="mt-6 grid gap-4">
                 <Input label="Full name" name="name" defaultValue={user.name || ''} required />
-                <Input
-                  label="Department"
-                  name="department"
-                  defaultValue={user.department || ''}
-                  placeholder="Computer Science & Engineering"
-                />
+                <Select label="Department" name="department" defaultValue={user.department || ''}>
+                  <option value="">Select department</option>
+                  {departments.map((dept) => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </Select>
                 <Select label="Year" name="year" defaultValue={user.year || ''}>
                   <option value="">Select year</option>
                   {years.map((y) => (
