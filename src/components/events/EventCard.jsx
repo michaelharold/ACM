@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { CalendarDays, MapPin, ArrowUpRight, Timer, Radio, ExternalLink } from 'lucide-react'
 import { Badge } from '../ui/Badge'
+import { PosterImage } from './PosterImage'
 import { fadeUp } from '../ui/Reveal'
 import { statusMeta } from '../../data/mock'
 import { useEventClock, registrationStatus } from '../../lib/eventClock'
@@ -22,20 +23,15 @@ export function EventCard({ event, onOpen }) {
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
       className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left shadow-transparent transition-[border-color,box-shadow] duration-300 hover:border-acm-300 hover:shadow-lg hover:shadow-acm-600/5 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-acm-500/40"
     >
-      {/* Poster */}
-      <div className="relative aspect-[16/10] overflow-hidden bg-neutral-100 dark:bg-neutral-800">
-        <img
-          src={event.poster}
-          alt={event.name}
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+      {/* Poster — shown in full (uncropped) so portrait / story posters aren't
+          chopped; a blurred fill covers any letterbox area. */}
+      <PosterImage src={event.poster} alt={event.name} className="aspect-[4/5]">
         {/* Diagonal sheen sweeping across the poster on hover */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 -left-3/4 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-0 transition-all duration-700 ease-out group-hover:left-[120%] group-hover:opacity-100"
+          className="pointer-events-none absolute inset-y-0 -left-3/4 z-20 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-0 transition-all duration-700 ease-out group-hover:left-[120%] group-hover:opacity-100"
         />
-        <div className="absolute left-3 top-3">
+        <div className="absolute left-3 top-3 z-20">
           <Badge tone={meta.tone} dot={status === 'open'} className="backdrop-blur bg-white/90 dark:bg-neutral-900/90">
             {meta.label}
           </Badge>
@@ -46,7 +42,7 @@ export function EventCard({ event, onOpen }) {
           <motion.span
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-lg shadow-red-600/40"
+            className="absolute right-3 top-3 z-20 inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-lg shadow-red-600/40"
           >
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
@@ -58,11 +54,11 @@ export function EventCard({ event, onOpen }) {
 
         {/* Countdown until start */}
         {!isLive && countdown && status !== 'closed' && (
-          <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur">
+          <span className="absolute bottom-3 left-3 z-20 inline-flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur">
             <Timer className="h-3 w-3 text-acm-300" /> Starts in {countdown}
           </span>
         )}
-      </div>
+      </PosterImage>
 
       {/* Body */}
       <div className="flex flex-1 flex-col p-5">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X } from 'lucide-react'
+import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Input, Select } from '../components/ui/Input'
@@ -12,19 +12,8 @@ import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
 import { avatarDataUri } from '../lib/avatar'
 import { formatDate } from '../lib/format'
-
-const years = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Alumni']
-const departments = [
-  'Computer Science & Engineering',
-  'Computer Science & Engineering (AI)',
-  'Electronics & Communication Engineering',
-  'Electrical & Electronics Engineering',
-  'Electrical & Computer Engineering',
-  'Mechanical Engineering',
-  'Civil Engineering',
-  'Chemical Engineering',
-  'Architecture',
-]
+import { departments, years } from '../lib/orgData'
+import { fetchMembership } from '../services/firestore'
 
 export default function Dashboard() {
   const { user, loading, logout, saveProfile } = useAuth()
@@ -34,10 +23,20 @@ export default function Dashboard() {
   const [selected, setSelected] = useState(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [membership, setMembership] = useState(null)
 
   useEffect(() => {
     if (!loading && !user) navigate('/auth', { replace: true, state: { from: '/dashboard' } })
   }, [user, loading, navigate])
+
+  // The Membership ID is assigned by an admin on the member's application; show
+  // it here once it lands.
+  useEffect(() => {
+    if (!user) return
+    let alive = true
+    fetchMembership(user.id).then((m) => alive && setMembership(m)).catch(() => {})
+    return () => { alive = false }
+  }, [user])
 
   if (loading)
     return (
@@ -61,7 +60,6 @@ export default function Dashboard() {
         name: data.name.trim() || displayName,
         department: data.department.trim(),
         year: data.year,
-        acmMember: data.acmMember === 'on',
       })
       setEditing(false)
     } finally {
@@ -144,15 +142,6 @@ export default function Dashboard() {
                     <option key={y} value={y}>{y}</option>
                   ))}
                 </Select>
-                <label className="flex items-center gap-2.5 text-sm text-neutral-600 dark:text-neutral-300">
-                  <input
-                    type="checkbox"
-                    name="acmMember"
-                    defaultChecked={!!user.acmMember}
-                    className="h-4 w-4 rounded border-neutral-300 text-acm-600 focus:ring-acm-500/30 dark:border-neutral-700 dark:bg-neutral-900"
-                  />
-                  I'm a paid ACM member
-                </label>
                 <div className="mt-1 flex gap-2">
                   <Button type="submit" size="sm" disabled={saving} className="flex-1">
                     <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save'}
@@ -175,7 +164,33 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </dl>
-                <Button variant="outline" size="sm" className="mt-6 w-full" onClick={() => setEditing(true)}>
+
+                {/* Membership status — ID appears once an admin assigns it */}
+                <div className="mt-5 rounded-xl border border-neutral-200 p-3.5 dark:border-neutral-800">
+                  {user.acmMember || membership ? (
+                    <div className="flex items-start gap-2.5">
+                      <Fingerprint className="mt-0.5 h-4 w-4 shrink-0 text-acm-500" />
+                      <div className="min-w-0 text-sm">
+                        <div className="font-semibold">ACM Membership ID</div>
+                        <div className="text-neutral-500 dark:text-neutral-400">
+                          {membership?.membershipId?.trim() ? membership.membershipId : 'Will be updated soon.'}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm">
+                      <div className="font-semibold">Not a member yet</div>
+                      <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                        Join the chapter to unlock member-only events.
+                      </p>
+                      <Button as={Link} to="/membership" size="sm" className="mt-3 w-full">
+                        <BadgeCheck className="h-4 w-4" /> Join ACM
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <Button variant="outline" size="sm" className="mt-4 w-full" onClick={() => setEditing(true)}>
                   <Pencil className="h-4 w-4" /> Edit profile
                 </Button>
               </>

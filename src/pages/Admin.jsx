@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
-  Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock,
+  Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
 import { ExecomPanel } from '../components/admin/ExecomPanel'
+import { MembershipPanel } from '../components/admin/MembershipPanel'
+import { downloadCsv } from '../lib/csv'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { useAuth } from '../context/AuthContext'
@@ -16,7 +18,7 @@ import { useData } from '../context/DataContext'
 import { participants as seedParticipants, statusMeta } from '../data/mock'
 import * as svc from '../services/firestore'
 import { avatarDataUri } from '../lib/avatar'
-import { cropToPoster } from '../lib/imagePrep'
+import { fitPoster } from '../lib/imagePrep'
 import { formatDate } from '../lib/format'
 import { registrationStatus, hasRegWindow } from '../lib/eventClock'
 import { cn } from '../lib/cn'
@@ -50,6 +52,7 @@ export default function Admin() {
     { key: 'execom', label: 'Execom', icon: Contact2, show: can('execom') },
     { key: 'content', label: 'Site Content', icon: SlidersHorizontal, show: can('content') },
     { key: 'gallery', label: 'Gallery', icon: Images, show: can('content') },
+    { key: 'membership', label: 'Membership', icon: Fingerprint, show: can('membership') },
     { key: 'messages', label: 'Messages', icon: Inbox, show: isAdmin },
     { key: 'registrations', label: 'Registrations', icon: Users, show: isAdmin },
     { key: 'access', label: 'Access', icon: KeyRound, show: isAdmin },
@@ -66,6 +69,8 @@ export default function Admin() {
           name: r.userName || '—',
           email: r.userEmail || '—',
           event: r.eventName || '—',
+          eventId: r.eventId || '',
+          department: r.department || '—',
           college: r.college || '—',
           acmMember: !!r.acmMember,
           status: r.status || 'Confirmed',
@@ -200,8 +205,9 @@ export default function Admin() {
             {tab === 'execom' && can('execom') && <ExecomPanel />}
             {tab === 'content' && can('content') && <SiteContentPanel />}
             {tab === 'gallery' && can('content') && <GalleryPanel />}
+            {tab === 'membership' && can('membership') && <MembershipPanel canEdit={can('membership')} />}
             {tab === 'messages' && isAdmin && <MessagesPanel adminName={user.name} />}
-            {tab === 'registrations' && isAdmin && <RegistrationsPanel rows={regRows} />}
+            {tab === 'registrations' && isAdmin && <RegistrationsPanel rows={regRows} events={events} />}
             {tab === 'access' && isAdmin && <AccessPanel isLive={isLive} />}
           </div>
         </div>
@@ -290,11 +296,11 @@ function EventEditor({ event, onSave }) {
   async function uploadPoster(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    // Cropped and recompressed first — a raw phone photo is megabytes once
-    // base64-encoded and would push the event document past Firestore's 1 MB
-    // cap, so the save would fail and the poster would vanish on reload.
+    // Resized (not cropped) and recompressed first — the full poster is kept at
+    // any aspect ratio, and a raw phone photo is megabytes once base64-encoded,
+    // which would push the event document past Firestore's 1 MB cap.
     try {
-      onSave({ poster: await cropToPoster(file) })
+      onSave({ poster: await fitPoster(file) })
     } catch {
       /* not a readable image — leave the existing poster in place */
     } finally {
@@ -666,6 +672,7 @@ const grantKeys = [
   { key: 'events', label: 'Events' },
   { key: 'execom', label: 'Execom' },
   { key: 'content', label: 'Site Content' },
+  { key: 'membership', label: 'Membership' },
 ]
 
 const demoUsers = [
@@ -743,32 +750,101 @@ function AccessPanel({ isLive }) {
   )
 }
 
-function RegistrationsPanel({ rows }) {
+function RegistrationsPanel({ rows, events = [] }) {
+  const [dept, setDept] = useState('all')
+  const [eventFilter, setEventFilter] = useState('all')
+  const [member, setMember] = useState('all') // all | member | non-member
+
+  // Events actually present in the roster, for the dropdown.
+  const eventOptions = useMemo(() => {
+    const seen = new Map()
+    rows.forEach((r) => { if (r.event) seen.set(r.eventId || r.event, r.event) })
+    events.forEach((e) => { if (!seen.has(e.id)) seen.set(e.id, e.name) })
+    return [...seen.entries()].map(([id, name]) => ({ id, name }))
+  }, [rows, events])
+
+  const deptOptions = useMemo(
+    () => [...new Set(rows.map((r) => r.department).filter((d) => d && d !== '—'))].sort(),
+    [rows],
+  )
+
+  const filtered = useMemo(() => rows.filter((r) => {
+    if (dept !== 'all' && r.department !== dept) return false
+    if (eventFilter !== 'all' && (r.eventId || r.event) !== eventFilter) return false
+    if (member === 'member' && !r.acmMember) return false
+    if (member === 'non-member' && r.acmMember) return false
+    return true
+  }), [rows, dept, eventFilter, member])
+
+  function exportCsv() {
+    downloadCsv('event-registrations', filtered, [
+      { label: 'Name', value: (r) => r.name },
+      { label: 'Email', value: (r) => r.email },
+      { label: 'Event', value: (r) => r.event },
+      { label: 'Department', value: (r) => r.department },
+      { label: 'College', value: (r) => r.college },
+      { label: 'ACM Member', value: (r) => (r.acmMember ? 'Yes' : 'No') },
+      { label: 'Status', value: (r) => r.status },
+    ])
+  }
+
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="border-b border-neutral-100 p-5 dark:border-neutral-800">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 p-5 dark:border-neutral-800">
         <h3 className="font-semibold tracking-tight">Registration roster</h3>
+        <Button size="sm" variant="outline" onClick={exportCsv} disabled={!filtered.length}>
+          <Download className="h-4 w-4" /> Export CSV
+        </Button>
       </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 p-4 dark:border-neutral-800">
+        <select className={cn(inputCls, 'max-w-[200px]')} value={eventFilter} onChange={(e) => setEventFilter(e.target.value)}>
+          <option value="all">All events</option>
+          {eventOptions.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+        </select>
+        <select className={cn(inputCls, 'max-w-[220px]')} value={dept} onChange={(e) => setDept(e.target.value)}>
+          <option value="all">All departments</option>
+          {deptOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <div className="inline-flex rounded-lg border border-neutral-200 bg-white p-0.5 dark:border-neutral-700 dark:bg-neutral-800">
+          {[
+            { k: 'all', label: 'All' },
+            { k: 'member', label: 'ACM members' },
+            { k: 'non-member', label: 'Non-members' },
+          ].map((o) => (
+            <button
+              key={o.k}
+              onClick={() => setMember(o.k)}
+              className={cn('rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                member === o.k ? 'bg-acm-600 text-white' : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200')}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-sm">
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="text-xs uppercase tracking-wide text-neutral-400">
             <tr className="border-b border-neutral-100 dark:border-neutral-800">
               <th className="px-5 py-3 font-medium">Participant</th>
               <th className="px-5 py-3 font-medium">Event</th>
-              <th className="px-5 py-3 font-medium">College</th>
+              <th className="px-5 py-3 font-medium">Department</th>
               <th className="px-5 py-3 font-medium">ACM</th>
               <th className="px-5 py-3 font-medium">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-            {rows.map((p) => (
+            {filtered.map((p) => (
               <tr key={p.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40">
                 <td className="px-5 py-3">
                   <div className="font-medium">{p.name}</div>
                   <div className="text-xs text-neutral-400">{p.email}</div>
                 </td>
                 <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.event}</td>
-                <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.college}</td>
+                <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.department}</td>
                 <td className="px-5 py-3">
                   {p.acmMember ? <Badge tone="blue">Member</Badge> : <span className="text-neutral-400">—</span>}
                 </td>
@@ -781,8 +857,7 @@ function RegistrationsPanel({ rows }) {
         </table>
       </div>
       <div className="flex items-center justify-between border-t border-neutral-100 p-4 dark:border-neutral-800">
-        <span className="text-xs text-neutral-400">{rows.length} registrations</span>
-        <Button size="sm" variant="outline" disabled>Export CSV <ArrowRight className="h-4 w-4" /></Button>
+        <span className="text-xs text-neutral-400">{filtered.length} of {rows.length} registrations</span>
       </div>
     </motion.div>
   )

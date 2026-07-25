@@ -72,5 +72,29 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
+
+    // ACM memberships — one document per user (id == uid). The member fills and
+    // reads their own application; admins (or holders of the 'membership' grant)
+    // read every application and assign the membershipId. Critically, a member
+    // can NEVER set or change their own membershipId — it must stay '' on create
+    // and unchanged on any self-update, so a member can't mint their own id.
+    match /memberships/{uid} {
+      allow read: if isSignedIn()
+        && (request.auth.uid == uid || isAdmin() || hasPerm('membership'));
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.membershipId == '';
+      allow update: if isAdmin() || hasPerm('membership')
+        || (request.auth.uid == uid
+            && request.resource.data.membershipId == resource.data.membershipId);
+      allow delete: if isAdmin();
+    }
+
+    // Throwaway probe docs used only to test that writes succeed before a user
+    // begins a registration. A user may only touch their own probe.
+    match /probes/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
   }
 }

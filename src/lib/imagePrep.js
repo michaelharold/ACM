@@ -72,6 +72,33 @@ export const cropToPortrait = (file) => prepareImage(file, { width: 480, height:
 // Event posters — one per event document, so they can afford the card budget.
 export const cropToPoster = (file) => prepareImage(file, { width: 800, height: 560, maxBytes: 300 * 1024 })
 
+// Scale an image down to fit inside a box WITHOUT cropping — the whole picture is
+// kept, aspect ratio intact. Used for event posters, which come in any ratio
+// (Instagram-story 9:16, square, landscape) and must be shown in full.
+export async function fitWithin(file, { maxW = 900, maxH = 1350, maxBytes = 300 * 1024 } = {}) {
+  if (!file.type.startsWith('image/')) throw new Error(`${file.name} is not an image.`)
+  const img = await loadImage(file)
+  const scale = Math.min(1, maxW / img.width, maxH / img.height)
+  const w = Math.max(1, Math.round(img.width * scale))
+  const h = Math.max(1, Math.round(img.height * scale))
+
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(img, 0, 0, w, h)
+
+  for (const q of [0.82, 0.7, 0.58, 0.45, 0.34]) {
+    const url = canvas.toDataURL('image/jpeg', q)
+    if (url.length * 0.75 <= maxBytes) return url
+  }
+  return canvas.toDataURL('image/jpeg', 0.3)
+}
+
+// Full event poster, uncropped, sized to live inside a Firestore document.
+export const fitPoster = (file) => fitWithin(file, { maxW: 900, maxH: 1350, maxBytes: 300 * 1024 })
+
 // Deterministic-per-load shuffle so the strip looks fresh on every visit
 // without reordering mid-session (which would fight the marquee animation).
 export function shuffle(list) {

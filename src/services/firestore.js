@@ -70,9 +70,16 @@ export async function saveExecomGroups(groups) {
     localStorage.setItem('acm-execom', JSON.stringify(groups))
     return
   }
-  await Promise.all(
-    groups.map((g, i) => setDoc(doc(db, 'execomGroups', execomDocId(g, i)), { ...stripId(g), order: i })),
-  )
+  // Write every current team, AND delete any team document that no longer
+  // exists in the panel — otherwise a deleted team keeps living in Firestore
+  // and reappears on the next reload. (Members deleted inside a team already
+  // sync, because setDoc overwrites the whole team document.)
+  const keepIds = new Set(groups.map((g, i) => execomDocId(g, i)))
+  const existing = await getDocs(collection(db, 'execomGroups'))
+  await Promise.all([
+    ...groups.map((g, i) => setDoc(doc(db, 'execomGroups', execomDocId(g, i)), { ...stripId(g), order: i })),
+    ...existing.docs.filter((d) => !keepIds.has(d.id)).map((d) => deleteDoc(d.ref)),
+  ])
 }
 
 // ── Site content (announcements, stats, editable copy) ───────
@@ -295,6 +302,68 @@ export async function sendReply({ messageId, to, subject, body, fromName }) {
 async function getMessageReplies(id) {
   const snap = await getDoc(doc(db, 'messages', id))
   return snap.exists() ? snap.data().replies || [] : []
+}
+
+// ── ACM memberships ──────────────────────────────────────────
+// One document per user (keyed by uid). The applicant fills their own details;
+// the membershipId is assigned later by an admin and is never writable by the
+// member themselves (enforced in firestore.rules).
+const MEMBER_KEY = (uid) => `acm-membership-${uid}`
+
+export async function fetchMembership(uid) {
+  if (!uid) return null
+  if (!isFirebaseConfigured) return readLocal(MEMBER_KEY(uid))
+  const snap = await getDoc(doc(db, 'memberships', uid))
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null
+}
+
+export async function createMembership(uid, data) {
+  const clean = {
+    userId: uid,
+    firstName: data.firstName || '',
+    middleName: data.middleName || '',
+    lastName: data.lastName || '',
+    email: data.email || '',
+    phone: data.phone || '',
+    department: data.department || '',
+    className: data.className || '',
+    paymentStatus: data.paymentStatus || 'pending',
+    membershipId: '', // admin-assigned only
+  }
+  if (!isFirebaseConfigured) {
+    const rec = { id: uid, ...clean, createdAt: new Date().toISOString() }
+    try { localStorage.setItem(MEMBER_KEY(uid), JSON.stringify(rec)) } catch { /* quota */ }
+    return rec
+  }
+  await setDoc(doc(db, 'memberships', uid), { ...clean, createdAt: serverTimestamp() })
+  return { id: uid, ...clean }
+}
+
+// Admin/membership-editor list of every application.
+export async function fetchAllMemberships() {
+  if (!isFirebaseConfigured) return null
+  const snap = await getDocs(collection(db, 'memberships'))
+  return map(snap)
+}
+
+export async function updateMembership(uid, patch) {
+  if (!isFirebaseConfigured) {
+    const cur = readLocal(MEMBER_KEY(uid)) || { id: uid }
+    localStorage.setItem(MEMBER_KEY(uid), JSON.stringify({ ...cur, ...patch }))
+    return
+  }
+  await updateDoc(doc(db, 'memberships', uid), patch)
+}
+
+// Pre-flight check before a user starts filling the form: confirm the backend
+// is actually accepting writes for them (quota exhausted, billing disabled or a
+// rules problem would all surface here). Writes then deletes a tiny probe doc.
+export async function probeWritable(uid) {
+  if (!isFirebaseConfigured || !uid) return true
+  const ref = doc(db, 'probes', uid)
+  await setDoc(ref, { at: serverTimestamp() })
+  await deleteDoc(ref).catch(() => {}) // cleanup best-effort; the write is what matters
+  return true
 }
 
 // Seed helper reused by the seed script signature (documents live in mock).

@@ -155,7 +155,7 @@ export function Hero() {
             baseColor="#1634b8"
             intensity={1}
             proximity={220}
-            onClick={() => navigate('/auth')}
+            onClick={() => navigate('/membership')}
           >
             <span className="inline-flex items-center gap-2">
               Join ACM <ArrowRight className="h-4 w-4" />

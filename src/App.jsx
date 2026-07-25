@@ -11,6 +11,7 @@ import Events from './pages/Events'
 import Execom from './pages/Execom'
 import Contact from './pages/Contact'
 import Dashboard from './pages/Dashboard'
+import Membership from './pages/Membership'
 import Admin from './pages/Admin'
 import NotFound from './pages/NotFound'
 
@@ -68,6 +69,7 @@ export default function App() {
             <Route path="/execom" element={<Execom />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/membership" element={<Membership />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

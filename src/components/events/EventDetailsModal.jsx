@@ -2,6 +2,7 @@ import { CalendarDays, Clock, MapPin, Wallet, Timer, CheckCircle2, ExternalLink,
 import { Modal } from '../ui/Modal'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
+import { PosterImage } from './PosterImage'
 import { statusMeta } from '../../data/mock'
 import { registrationStatus } from '../../lib/eventClock'
 import { formatDateLong, formatDateTime, normalizeUrl } from '../../lib/format'
@@ -32,11 +33,10 @@ export function EventDetailsModal({ event, open, onClose, onRegister, registered
 
   return (
     <Modal open={open} onClose={onClose} size="xl">
-      {/* Banner */}
-      <div className="relative aspect-[16/7] w-full overflow-hidden">
-        <img src={event.poster} alt={event.name} className="h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-6">
+      {/* Banner — full poster (uncropped), blurred fill behind for any ratio */}
+      <PosterImage src={event.poster} alt={event.name} className="h-[54vh] max-h-[540px] w-full">
+        <div className="absolute inset-0 z-20 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between gap-4 p-6">
           <div>
             <Badge tone={meta.tone} dot={status === 'open'} className="mb-3 bg-white/90 dark:bg-neutral-900/90">
               {meta.label}
@@ -44,7 +44,7 @@ export function EventDetailsModal({ event, open, onClose, onRegister, registered
             <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{event.name}</h2>
           </div>
         </div>
-      </div>
+      </PosterImage>
 
       <div className="p-6 sm:p-8">
         {/* Facts */}

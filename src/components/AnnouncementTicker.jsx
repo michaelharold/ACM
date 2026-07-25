@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Megaphone } from 'lucide-react'
 import { useData } from '../context/DataContext'
 
@@ -6,8 +7,22 @@ import { useData } from '../context/DataContext'
 export function AnnouncementTicker() {
   const { content } = useData()
   const announcements = content.announcements?.length ? content.announcements : []
+
+  // The marquee scrolls the track by exactly -50%, so each half must be at
+  // least as wide as the viewport or a blank gap opens at the wrap point. With
+  // only one or two announcements the plain doubled set is too short — repeat it
+  // until a half fills the screen, then double that for the seamless loop.
+  // (AVG is deliberately a low per-item estimate so we over-fill, never under.)
+  const items = useMemo(() => {
+    if (!announcements.length) return []
+    const AVG = 200
+    const viewport = typeof window === 'undefined' ? 1920 : window.innerWidth
+    const reps = Math.max(1, Math.ceil((viewport + AVG) / (announcements.length * AVG)))
+    const half = Array.from({ length: reps }, () => announcements).flat()
+    return [...half, ...half]
+  }, [announcements])
+
   if (!announcements.length) return null
-  const items = [...announcements, ...announcements]
   return (
     <div className="marquee-paused relative overflow-hidden border-y border-neutral-200 bg-neutral-50/80 py-3 dark:border-neutral-800 dark:bg-neutral-900/50">
       <div style={{ '--marquee-duration': '36s' }} className="marquee-track flex w-max items-center gap-10 pr-10">
