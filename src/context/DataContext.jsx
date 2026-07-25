@@ -61,8 +61,10 @@ export function DataProvider({ children }) {
     return created
   }
   async function editEvent(id, patch) {
-    await svc.updateEvent(id, patch)
-    setEvents((p) => p.map((e) => (e.id === id ? { ...e, ...patch } : e)))
+    // updateEvent returns the applied patch with the poster resolved to its
+    // Storage URL (when a new one was uploaded), so state matches the document.
+    const applied = await svc.updateEvent(id, patch)
+    setEvents((p) => p.map((e) => (e.id === id ? { ...e, ...(applied || patch) } : e)))
   }
   async function removeEvent(id) {
     await svc.deleteEvent(id)
@@ -76,8 +78,10 @@ export function DataProvider({ children }) {
     await svc.saveSiteContent(next)
   }
   async function updateExecom(groups) {
-    setExecomGroups(groups)
-    await svc.saveExecomGroups(groups)
+    setExecomGroups(groups) // paint immediately with the local (base64) photos
+    // Reconcile with the saved roster, whose new portraits are now Storage URLs.
+    const hosted = await svc.saveExecomGroups(groups)
+    if (hosted) setExecomGroups(hosted)
   }
 
   // ── Gallery mutators (admin) ───────────────────────────────

@@ -108,14 +108,14 @@ export function MembershipPanel({ canEdit = true }) {
         </Button>
       </div>
 
-      {/* Filters */}
+      {/* Filters — one consistent-height row that wraps gracefully */}
       <div className="flex flex-wrap items-center gap-2">
-        <select className={cn(inputCls, 'max-w-[240px]')} value={dept} onChange={(e) => setDept(e.target.value)}>
+        <select className={cn(inputCls, 'h-10 w-full py-0 sm:w-auto sm:min-w-[190px]')} value={dept} onChange={(e) => setDept(e.target.value)}>
           <option value="all">All departments</option>
           {departments.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
-        <input className={cn(inputCls, 'max-w-[130px]')} placeholder="Class e.g. R5B" value={klass} onChange={(e) => setKlass(e.target.value)} />
-        <div className="inline-flex rounded-lg border border-neutral-200 bg-white p-0.5 dark:border-neutral-700 dark:bg-neutral-800">
+        <input className={cn(inputCls, 'h-10 w-full py-0 sm:w-[130px]')} placeholder="Class e.g. R5B" value={klass} onChange={(e) => setKlass(e.target.value)} />
+        <div className="inline-flex h-10 shrink-0 items-center rounded-lg border border-neutral-200 bg-white p-1 dark:border-neutral-700 dark:bg-neutral-800">
           {[
             { k: 'all', label: 'All' },
             { k: 'assigned', label: 'Assigned ID' },
@@ -131,9 +131,9 @@ export function MembershipPanel({ canEdit = true }) {
             </button>
           ))}
         </div>
-        <div className="relative ml-auto">
+        <div className="relative w-full sm:w-60">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-          <input className={cn(inputCls, 'w-52 pl-9')} placeholder="Search name / email" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className={cn(inputCls, 'h-10 w-full py-0 pl-9')} placeholder="Search name / email" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
       </div>
 

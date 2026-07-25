@@ -1,0 +1,54 @@
+rules_version = '2';
+
+// Cloud Storage rules for site imagery. Mirrors the Firestore model: anyone may
+// read (images are public on the site), but only admins or holders of the
+// matching editor grant may upload — and only real images under 2 MB.
+//
+// The admin/grant checks read the caller's Firestore profile via the
+// cross-service `firestore.get`/`firestore.exists` functions, so a single
+// source of truth (users/{uid}.role and .permissions) governs both databases.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function hasPerm(key) {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('permissions', {}).get(key, false) == true;
+    }
+
+    function isImageUnder2MB() {
+      return request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /posters/{file} {
+      allow read: if true;
+      allow write: if (isAdmin() || hasPerm('events')) && isImageUnder2MB();
+    }
+
+    match /gallery/{file} {
+      allow read: if true;
+      allow write: if (isAdmin() || hasPerm('content')) && isImageUnder2MB();
+    }
+
+    match /execom/{file} {
+      allow read: if true;
+      allow write: if (isAdmin() || hasPerm('execom')) && isImageUnder2MB();
+    }
+
+    // Everything else is locked down.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

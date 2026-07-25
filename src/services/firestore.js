@@ -13,6 +13,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { db, isFirebaseConfigured } from '../lib/firebase'
+import { uploadImage, deleteImage } from '../lib/storage'
 import * as mock from '../data/mock'
 
 // Every function works in both modes: it hits Firestore when configured,
@@ -30,16 +31,29 @@ export async function fetchEvents() {
 
 export async function createEvent(data) {
   if (!isFirebaseConfigured) return { id: `ev_${Date.now()}`, ...data }
-  const ref = await addDoc(collection(db, 'events'), { ...stripId(data), createdAt: serverTimestamp() })
-  return { id: ref.id, ...data }
+  // A freshly-uploaded poster arrives as a base64 data URI; move it to Storage
+  // and keep only the URL in the document. Falls back to the data URI if
+  // Storage is unavailable, so the event still saves either way.
+  const poster = await uploadImage('posters', data.poster)
+  const ref = await addDoc(collection(db, 'events'), { ...stripId({ ...data, poster }), createdAt: serverTimestamp() })
+  return { id: ref.id, ...data, poster }
 }
 
 export async function updateEvent(id, patch) {
-  if (isFirebaseConfigured) await updateDoc(doc(db, 'events', id), patch)
+  if (!isFirebaseConfigured) return patch
+  const next = { ...patch }
+  if ('poster' in next) next.poster = await uploadImage('posters', next.poster)
+  await updateDoc(doc(db, 'events', id), next)
+  return next
 }
 
 export async function deleteEvent(id) {
-  if (isFirebaseConfigured) await deleteDoc(doc(db, 'events', id))
+  if (!isFirebaseConfigured) return
+  // Remove the poster from Storage too, so deleting an event doesn't orphan its
+  // file in the bucket.
+  const snap = await getDoc(doc(db, 'events', id))
+  if (snap.exists()) await deleteImage(snap.data().poster)
+  await deleteDoc(doc(db, 'events', id))
 }
 
 // ── Execom ───────────────────────────────────────────────────
@@ -68,18 +82,29 @@ const execomDocId = (g, i) => g.id || teamSlug(g.team) || `team-${i + 1}`
 export async function saveExecomGroups(groups) {
   if (!isFirebaseConfigured) {
     localStorage.setItem('acm-execom', JSON.stringify(groups))
-    return
+    return groups
   }
   // Write every current team, AND delete any team document that no longer
   // exists in the panel — otherwise a deleted team keeps living in Firestore
   // and reappears on the next reload. (Members deleted inside a team already
   // sync, because setDoc overwrites the whole team document.)
-  const keepIds = new Set(groups.map((g, i) => execomDocId(g, i)))
+  // Move any freshly-added member portraits (base64) to Storage; portraits that
+  // are already hosted URLs pass straight through, so re-saving doesn't
+  // re-upload the whole roster.
+  const hosted = await Promise.all(groups.map(async (g) => ({
+    ...g,
+    members: await Promise.all((g.members || []).map(async (m) => ({
+      ...m,
+      photo: await uploadImage('execom', m.photo),
+    }))),
+  })))
+  const keepIds = new Set(hosted.map((g, i) => execomDocId(g, i)))
   const existing = await getDocs(collection(db, 'execomGroups'))
   await Promise.all([
-    ...groups.map((g, i) => setDoc(doc(db, 'execomGroups', execomDocId(g, i)), { ...stripId(g), order: i })),
+    ...hosted.map((g, i) => setDoc(doc(db, 'execomGroups', execomDocId(g, i)), { ...stripId(g), order: i })),
     ...existing.docs.filter((d) => !keepIds.has(d.id)).map((d) => deleteDoc(d.ref)),
   ])
+  return hosted
 }
 
 // ── Site content (announcements, stats, editable copy) ───────
@@ -189,6 +214,7 @@ export async function createGalleryImage({ image, caption }) {
     writeGallery([local, ...readGallery()])
     return local
   }
+  data.image = await uploadImage('gallery', image)
   const ref = await addDoc(collection(db, 'gallery'), { ...data, createdAt: serverTimestamp() })
   return { id: ref.id, ...data }
 }
@@ -198,6 +224,8 @@ export async function deleteGalleryImage(id) {
     writeGallery(readGallery().filter((g) => g.id !== id))
     return
   }
+  const snap = await getDoc(doc(db, 'gallery', id))
+  if (snap.exists()) await deleteImage(snap.data().image)
   await deleteDoc(doc(db, 'gallery', id))
 }
 
