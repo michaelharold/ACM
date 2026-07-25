@@ -45,10 +45,13 @@ export default async function handler(req, res) {
     }
 
     if (!(amount > 0)) return send(res, 400, { error: 'This item has no fee to pay.' })
+    // Razorpay's minimum order is 100 paise (₹1).
+    const paise = Math.round(amount * 100)
+    if (paise < 100) return send(res, 400, { error: 'The amount must be at least ₹1.' })
 
     const { keyId, secret } = await keysForAccount(accountId)
     const order = await razorpayWith(keyId, secret).orders.create({
-      amount: Math.round(amount * 100), // paise
+      amount: paise,
       currency: 'INR',
       receipt: `${type}_${refId}`.slice(0, 40),
       notes: { type, refId, uid, accountId: accountId || 'default' },
