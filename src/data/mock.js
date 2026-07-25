@@ -52,17 +52,17 @@ export const goals = [
   {
     key: 'Vision',
     icon: 'Eye',
-    text: 'To be the launchpad where every TKMCE student discovers and masters the craft of computing.',
+    text: 'ACM will continue to be the premiere global computing society.To be the launchpad where every TKMCE student discovers and masters the craft of computing.',
   },
   {
     key: 'Mission',
     icon: 'Target',
-    text: 'Deliver high-signal events, mentorship and open-source culture that make world-class skills accessible on campus.',
+    text: 'ACM is a global scientific and educational organization dedicated to advancing the art, science, engineering, and application of computing, serving both professional and public interests by fostering the open exchange of information and by promoting the highest professional and ethical standards.Deliver high-signal events, mentorship and open-source culture that make world-class skills accessible on campus.',
   },
   {
     key: 'Values',
     icon: 'Gem',
-    text: 'Curiosity over credentials, collaboration over competition, and shipping over talking.',
+    text: '• Technical Excellence • Education and Technical Advancemen • Ethical Computing and Technology for Positive Impact• Diversity, Equity, and InclusionCuriosity over credentials, collaboration over competition, and shipping over talking.',
   },
 ]
 
