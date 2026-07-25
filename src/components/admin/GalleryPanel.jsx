@@ -4,6 +4,8 @@ import { ImagePlus, Trash2, Loader2, AlertCircle, Shuffle, Images, Check, Pencil
 import { Button } from '../ui/Button'
 import { useData } from '../../context/DataContext'
 import { cropToCard } from '../../lib/imagePrep'
+import { StorageMeter } from './StorageMeter'
+import { GALLERY_MAX_IMAGES } from '../../lib/storageBudget'
 
 export function GalleryPanel() {
   const { gallery, addGalleryImages, removeGalleryImage, updateGalleryImage } = useData()
@@ -14,12 +16,27 @@ export function GalleryPanel() {
   const inputRef = useRef(null)
 
   async function handleFiles(fileList) {
-    const files = [...fileList].filter((f) => f.type.startsWith('image/'))
+    let files = [...fileList].filter((f) => f.type.startsWith('image/'))
     if (!files.length) return
+
+    // Hold the line on the free-tier budget: never let the gallery grow past the
+    // cap. If a drop would overflow it, accept what fits and tell them the rest
+    // were skipped rather than silently dropping (or blowing the quota).
+    const remaining = GALLERY_MAX_IMAGES - gallery.length
+    if (remaining <= 0) {
+      setErrors([`Gallery is full (${GALLERY_MAX_IMAGES} images max). Delete some before adding more.`])
+      if (inputRef.current) inputRef.current.value = ''
+      return
+    }
+    let capNote = ''
+    if (files.length > remaining) {
+      capNote = `Only ${remaining} more image${remaining === 1 ? '' : 's'} fit (cap ${GALLERY_MAX_IMAGES}); the rest were skipped.`
+      files = files.slice(0, remaining)
+    }
+
     setBusy(true)
-    setErrors([])
     const prepared = []
-    const failed = []
+    const failed = capNote ? [capNote] : [] // surfaced together with any per-file errors
     for (let i = 0; i < files.length; i++) {
       setProgress(`Cropping ${i + 1} of ${files.length}…`)
       try {
@@ -58,6 +75,9 @@ export function GalleryPanel() {
           Uploads are auto-cropped to the card shape and reshuffled on every visit.
         </p>
       </div>
+
+      {/* Free-tier storage guardrail — warns before the quota is a problem */}
+      <StorageMeter />
 
       {/* Drop zone */}
       <div

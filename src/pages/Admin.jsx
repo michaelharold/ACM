@@ -10,6 +10,7 @@ import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
 import { ExecomPanel } from '../components/admin/ExecomPanel'
 import { MembershipPanel } from '../components/admin/MembershipPanel'
+import { StorageMeter } from '../components/admin/StorageMeter'
 import { downloadCsv } from '../lib/csv'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -240,6 +241,8 @@ function Overview({ stats, events }) {
           </div>
         ))}
       </div>
+
+      <StorageMeter />
 
       <div className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Upcoming events</h3>
