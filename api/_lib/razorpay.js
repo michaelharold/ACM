@@ -1,14 +1,12 @@
-// Razorpay client + signature checks. The key SECRET lives only in the server
-// environment; it is used to create orders and to prove that a payment callback
-// (or webhook) genuinely came from Razorpay and was not forged by a client.
+// Razorpay client factory + signature checks. Secrets are supplied by the
+// caller (resolved per payment account from the server env — see accounts.js);
+// they are never hard-coded or read from Firestore.
 import Razorpay from 'razorpay'
 import crypto from 'node:crypto'
 
-export function razorpay() {
-  const key_id = process.env.RAZORPAY_KEY_ID
-  const key_secret = process.env.RAZORPAY_KEY_SECRET
-  if (!key_id || !key_secret) throw new Error('Razorpay keys are not set')
-  return new Razorpay({ key_id, key_secret })
+export function razorpayWith(keyId, keySecret) {
+  if (!keyId || !keySecret) throw new Error('Razorpay keys are not set')
+  return new Razorpay({ key_id: keyId, key_secret: keySecret })
 }
 
 function safeEqual(a, b) {
@@ -18,12 +16,24 @@ function safeEqual(a, b) {
 }
 
 // Checkout callback signature: HMAC_SHA256("<order_id>|<payment_id>", secret).
-// If this doesn't match, the payment result cannot be trusted and must be
-// rejected — this is the whole security guarantee of the flow.
-export function isValidPaymentSignature({ orderId, paymentId, signature }) {
+// A mismatch means the result can't be trusted and must be rejected — this is
+// the whole security guarantee of the client flow.
+export function isValidPaymentSignature({ orderId, paymentId, signature, secret }) {
   const expected = crypto
-    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
+    .createHmac('sha256', secret || '')
     .update(`${orderId}|${paymentId}`)
     .digest('hex')
   return safeEqual(expected, signature || '')
+}
+
+// Webhook signature: HMAC_SHA256(rawBody, webhookSecret). Returns true if the
+// body verifies against ANY of the provided secrets (one per configured
+// account), so a single endpoint can serve every account.
+export function webhookSignatureMatches(rawBody, signature, secrets = []) {
+  for (const secret of secrets) {
+    if (!secret) continue
+    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
+    if (safeEqual(expected, signature || '')) return true
+  }
+  return false
 }

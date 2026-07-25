@@ -91,6 +91,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Payment account profiles — the NON-SECRET half of a Razorpay account
+    // (label, keyId, description, active). The key SECRET is never stored here;
+    // it lives only in the server environment. Admins manage these; event and
+    // membership editors read them to assign an account. keyId is public (it's
+    // shipped to the browser by Razorpay checkout anyway), so exposing it is safe.
+    match /paymentAccounts/{id} {
+      allow read: if isAdmin() || hasPerm('events') || hasPerm('membership');
+      allow write: if isAdmin();
+    }
+
     // Throwaway probe docs used only to test that writes succeed before a user
     // begins a registration. A user may only touch their own probe.
     match /probes/{uid} {

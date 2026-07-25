@@ -18,6 +18,13 @@ const appliedOn = (m) => {
   return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 }
 const hasId = (m) => !!(m.membershipId && m.membershipId.trim())
+// Firestore Timestamp or ISO string → readable date+time (blank if unset).
+const fmtWhen = (c) => {
+  const d = typeof c === 'string' ? new Date(c) : c?.toDate?.()
+  return d && !Number.isNaN(d.getTime())
+    ? d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : ''
+}
 
 export function MembershipPanel({ canEdit = true }) {
   const [rows, setRows] = useState([])
@@ -85,6 +92,8 @@ export function MembershipPanel({ canEdit = true }) {
       { label: 'Department', value: (m) => m.department || '' },
       { label: 'Class', value: (m) => m.className || '' },
       { label: 'Payment', value: (m) => (m.paymentStatus === 'paid' ? 'Paid' : 'Pending') },
+      { label: 'Payment ID', value: (m) => m.razorpayPaymentId || '' },
+      { label: 'Paid at', value: (m) => fmtWhen(m.paidAt) },
       { label: 'Membership ID', value: (m) => m.membershipId || '' },
       { label: 'Applied on', value: appliedOn },
     ])
@@ -175,6 +184,12 @@ export function MembershipPanel({ canEdit = true }) {
                     <Badge tone={m.paymentStatus === 'paid' ? 'green' : 'amber'} dot={m.paymentStatus === 'paid'}>
                       {m.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
                     </Badge>
+                    {m.razorpayPaymentId && (
+                      <div className="mt-1 text-[11px] leading-tight text-neutral-400">
+                        <code>{m.razorpayPaymentId}</code>
+                        {fmtWhen(m.paidAt) && <div>{fmtWhen(m.paidAt)}</div>}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {canEdit ? (

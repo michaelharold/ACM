@@ -394,5 +394,56 @@ export async function probeWritable(uid) {
   return true
 }
 
+// ── Payment accounts (admin) ─────────────────────────────────
+// A "payment account profile" is the NON-SECRET half of a Razorpay account:
+// { label, keyId, description, active }. The matching key SECRET is never stored
+// here — it lives only in the server env (RAZORPAY_KEYS), keyed by keyId. Events
+// and membership reference an account by its document id.
+const PAY_ACCT_KEY = 'acm-payment-accounts'
+const readAccts = () => {
+  try { return JSON.parse(localStorage.getItem(PAY_ACCT_KEY) || '[]') } catch { return [] }
+}
+const writeAccts = (rows) => {
+  try { localStorage.setItem(PAY_ACCT_KEY, JSON.stringify(rows)) } catch { /* quota */ }
+}
+
+export async function fetchPaymentAccounts() {
+  if (!isFirebaseConfigured) return readAccts()
+  const snap = await getDocs(collection(db, 'paymentAccounts'))
+  return map(snap)
+}
+
+export async function createPaymentAccount(data) {
+  const clean = {
+    label: data.label || 'Untitled account',
+    keyId: (data.keyId || '').trim(),
+    description: data.description || '',
+    active: data.active !== false,
+  }
+  if (!isFirebaseConfigured) {
+    const rec = { id: `pa_${Date.now()}`, ...clean }
+    writeAccts([rec, ...readAccts()])
+    return rec
+  }
+  const ref = await addDoc(collection(db, 'paymentAccounts'), { ...clean, createdAt: serverTimestamp() })
+  return { id: ref.id, ...clean }
+}
+
+export async function updatePaymentAccount(id, patch) {
+  if (!isFirebaseConfigured) {
+    writeAccts(readAccts().map((a) => (a.id === id ? { ...a, ...patch } : a)))
+    return
+  }
+  await updateDoc(doc(db, 'paymentAccounts', id), patch)
+}
+
+export async function deletePaymentAccount(id) {
+  if (!isFirebaseConfigured) {
+    writeAccts(readAccts().filter((a) => a.id !== id))
+    return
+  }
+  await deleteDoc(doc(db, 'paymentAccounts', id))
+}
+
 // Seed helper reused by the seed script signature (documents live in mock).
 export { setDoc, doc }

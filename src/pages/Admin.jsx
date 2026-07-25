@@ -4,12 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
-  Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download,
+  Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
 import { ExecomPanel } from '../components/admin/ExecomPanel'
 import { MembershipPanel } from '../components/admin/MembershipPanel'
+import { PaymentsPanel } from '../components/admin/PaymentsPanel'
 import { StorageMeter } from '../components/admin/StorageMeter'
 import { downloadCsv } from '../lib/csv'
 import { Button } from '../components/ui/Button'
@@ -33,6 +34,21 @@ const toLocalInput = (d) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+// Firestore Timestamp or ISO string → short readable date+time (blank if unset).
+const fmtDateTime = (c) => {
+  const d = typeof c === 'string' ? new Date(c) : c?.toDate?.()
+  return d && !Number.isNaN(d.getTime())
+    ? d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : ''
+}
+
+const paymentLabel = (r) => {
+  const s = (r.paymentStatus || '').toLowerCase()
+  if (s === 'paid') return 'Paid'
+  if (s === 'pending') return 'Pending'
+  return 'Free' // 'free', 'n/a', or unset (older/mock rows)
+}
+
 export default function Admin() {
   const { user, loading, loginAsAdmin, loginAsEditor, logout, isLive } = useAuth()
   const { events, addEvent, editEvent, removeEvent } = useData()
@@ -54,6 +70,7 @@ export default function Admin() {
     { key: 'content', label: 'Site Content', icon: SlidersHorizontal, show: can('content') },
     { key: 'gallery', label: 'Gallery', icon: Images, show: can('content') },
     { key: 'membership', label: 'Membership', icon: Fingerprint, show: can('membership') },
+    { key: 'payments', label: 'Payments', icon: Wallet, show: isAdmin },
     { key: 'messages', label: 'Messages', icon: Inbox, show: isAdmin },
     { key: 'registrations', label: 'Registrations', icon: Users, show: isAdmin },
     { key: 'access', label: 'Access', icon: KeyRound, show: isAdmin },
@@ -75,6 +92,9 @@ export default function Admin() {
           college: r.college || '—',
           acmMember: !!r.acmMember,
           status: r.status || 'Confirmed',
+          paymentStatus: r.paymentStatus || '',
+          paymentId: r.razorpayPaymentId || '',
+          paidAt: r.paidAt || null,
         })),
       )
     })()
@@ -207,6 +227,7 @@ export default function Admin() {
             {tab === 'content' && can('content') && <SiteContentPanel />}
             {tab === 'gallery' && can('content') && <GalleryPanel />}
             {tab === 'membership' && can('membership') && <MembershipPanel canEdit={can('membership')} />}
+            {tab === 'payments' && isAdmin && <PaymentsPanel />}
             {tab === 'messages' && isAdmin && <MessagesPanel adminName={user.name} />}
             {tab === 'registrations' && isAdmin && <RegistrationsPanel rows={regRows} events={events} />}
             {tab === 'access' && isAdmin && <AccessPanel isLive={isLive} />}
@@ -273,6 +294,7 @@ function EventEditor({ event, onSave }) {
     shortDescription: event.shortDescription,
     description: event.description || '',
     fee: event.fee || 0,
+    paymentAccountId: event.paymentAccountId || '',
     deadline: event.deadline || '',
     regOpens: event.regOpens || '',
     regCloses: event.regCloses || '',
@@ -281,7 +303,14 @@ function EventEditor({ event, onSave }) {
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [accounts, setAccounts] = useState([])
   const fileRef = useRef(null)
+
+  useEffect(() => {
+    let alive = true
+    svc.fetchPaymentAccounts().then((l) => alive && setAccounts((l || []).filter((a) => a.active !== false))).catch(() => {})
+    return () => { alive = false }
+  }, [])
   const set = (k) => (e) => setDraft((d) => ({ ...d, [k]: e.target.value }))
   const isExternal = draft.external
 
@@ -369,9 +398,18 @@ function EventEditor({ event, onSave }) {
         <input className={cn(inputCls, 'mt-1')} value={draft.venue} onChange={set('venue')} />
       </label>
       {!isExternal && (
-        <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
+        <label className="text-xs font-medium text-neutral-500">
           Registration Fee (₹)
           <input type="number" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="Enter Registration Fee"  />
+        </label>
+      )}
+      {!isExternal && Number(draft.fee) > 0 && (
+        <label className="text-xs font-medium text-neutral-500">
+          Credit payment to
+          <select className={cn(inputCls, 'mt-1')} value={draft.paymentAccountId} onChange={set('paymentAccountId')}>
+            <option value="">Default account</option>
+            {accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+          </select>
         </label>
       )}
 
@@ -610,24 +648,6 @@ function SiteContentPanel() {
           />
         </div>
 
-        {/* Membership */}
-        <div>
-          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Membership</h4>
-          <label className="mt-2 block max-w-[240px]">
-            <span className="mb-1.5 block text-xs text-neutral-400">Membership fee (₹) — set 0 for free</span>
-            <input
-              type="number"
-              min="0"
-              className={inputCls}
-              value={draft.membershipFee ?? 0}
-              onChange={(e) => mark({ ...draft, membershipFee: Math.max(0, Number(e.target.value) || 0) })}
-            />
-          </label>
-          <p className="mt-1.5 text-xs text-neutral-400">
-            Charged securely via Razorpay when a member joins (only when payments are configured on the server).
-          </p>
-        </div>
-
         {/* Stats */}
         <div>
           <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Chapter statistics</h4>
@@ -806,6 +826,9 @@ function RegistrationsPanel({ rows, events = [] }) {
       { label: 'College', value: (r) => r.college },
       { label: 'ACM Member', value: (r) => (r.acmMember ? 'Yes' : 'No') },
       { label: 'Status', value: (r) => r.status },
+      { label: 'Payment', value: (r) => paymentLabel(r) },
+      { label: 'Payment ID', value: (r) => r.paymentId || '' },
+      { label: 'Paid at', value: (r) => fmtDateTime(r.paidAt) },
     ])
   }
 
@@ -847,7 +870,7 @@ function RegistrationsPanel({ rows, events = [] }) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="w-full min-w-[860px] text-left text-sm">
           <thead className="text-xs uppercase tracking-wide text-neutral-400">
             <tr className="border-b border-neutral-100 dark:border-neutral-800">
               <th className="px-5 py-3 font-medium">Participant</th>
@@ -855,6 +878,7 @@ function RegistrationsPanel({ rows, events = [] }) {
               <th className="px-5 py-3 font-medium">Department</th>
               <th className="px-5 py-3 font-medium">ACM</th>
               <th className="px-5 py-3 font-medium">Status</th>
+              <th className="px-5 py-3 font-medium">Payment</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
@@ -871,6 +895,23 @@ function RegistrationsPanel({ rows, events = [] }) {
                 </td>
                 <td className="px-5 py-3">
                   <Badge tone={p.status === 'Confirmed' ? 'green' : 'amber'} dot={p.status === 'Confirmed'}>{p.status}</Badge>
+                </td>
+                <td className="px-5 py-3">
+                  {(p.paymentStatus || '').toLowerCase() === 'paid' ? (
+                    <div>
+                      <Badge tone="green" dot>Paid</Badge>
+                      {p.paymentId && (
+                        <div className="mt-1 text-[11px] leading-tight text-neutral-400">
+                          <code>{p.paymentId}</code>
+                          {fmtDateTime(p.paidAt) && <div>{fmtDateTime(p.paidAt)}</div>}
+                        </div>
+                      )}
+                    </div>
+                  ) : (p.paymentStatus || '').toLowerCase() === 'pending' ? (
+                    <Badge tone="amber">Pending</Badge>
+                  ) : (
+                    <span className="text-neutral-400">Free</span>
+                  )}
                 </td>
               </tr>
             ))}

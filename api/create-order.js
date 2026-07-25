@@ -1,11 +1,13 @@
 // POST /api/create-order  →  { orderId, amount, currency, keyId, description }
 //
-// Creates a Razorpay order for an event registration or a membership. The
-// amount is ALWAYS derived server-side from authoritative Firestore data (the
-// event's fee, or the configured membership fee) — never taken from the request
-// body — so a tampered client cannot change what it is charged.
+// Creates a Razorpay order for an event registration or a membership. Two things
+// are ALWAYS decided server-side, never trusted from the client:
+//   • the amount — read from the event's fee / the configured membership fee
+//   • which Razorpay account receives it — the event's or membership's assigned
+//     account, resolved to a key pair held only in the server env.
 import { adminDb } from './_lib/firebaseAdmin.js'
-import { razorpay } from './_lib/razorpay.js'
+import { razorpayWith } from './_lib/razorpay.js'
+import { keysForAccount, accountIdFor } from './_lib/accounts.js'
 import { getBody, requireUser, send } from './_lib/http.js'
 
 export default async function handler(req, res) {
@@ -19,6 +21,7 @@ export default async function handler(req, res) {
     const db = adminDb()
     let amount = 0 // rupees
     let description = ''
+    let accountId = null
 
     if (type === 'event') {
       const reg = await db.collection('registrations').doc(refId).get()
@@ -27,30 +30,32 @@ export default async function handler(req, res) {
       const ev = await db.collection('events').doc(reg.get('eventId')).get()
       amount = Number(ev.get('fee')) || 0
       description = `Registration — ${ev.get('name') || 'Event'}`
+      accountId = await accountIdFor('event', { event: ev })
     } else {
       const mem = await db.collection('memberships').doc(refId).get()
       if (!mem.exists) return send(res, 404, { error: 'Membership not found' })
-      // Membership documents are keyed by uid, so the owner is refId itself.
       if (refId !== uid && mem.get('userId') !== uid) return send(res, 403, { error: 'Not your membership' })
       const sc = await db.collection('siteContent').doc('main').get()
       amount = Number(sc.get('membershipFee')) || 0
       description = 'ACM TKMCE Membership'
+      accountId = await accountIdFor('membership')
     }
 
     if (!(amount > 0)) return send(res, 400, { error: 'This item has no fee to pay.' })
 
-    const order = await razorpay().orders.create({
+    const { keyId, secret } = await keysForAccount(accountId)
+    const order = await razorpayWith(keyId, secret).orders.create({
       amount: Math.round(amount * 100), // paise
       currency: 'INR',
       receipt: `${type}_${refId}`.slice(0, 40),
-      notes: { type, refId, uid },
+      notes: { type, refId, uid, accountId: accountId || 'default' },
     })
 
     return send(res, 200, {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      keyId: process.env.RAZORPAY_KEY_ID,
+      keyId,
       description,
     })
   } catch (err) {
