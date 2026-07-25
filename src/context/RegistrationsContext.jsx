@@ -32,7 +32,7 @@ export function RegistrationsProvider({ children }) {
   const isRegistered = (eventId) => regs.some((r) => r.eventId === eventId)
 
   async function register(event, form = {}) {
-    if (!event || isRegistered(event.id)) return
+    if (!event || isRegistered(event.id)) return null
     const regDoc = {
       userId: user?.id || 'u_local',
       userName: form.name || user?.name || '',
@@ -46,14 +46,23 @@ export function RegistrationsProvider({ children }) {
       membershipId: form.membershipId || '',
       date: new Date().toISOString().slice(0, 10),
       status: 'Confirmed',
-      paymentStatus: event.fee ? 'Pending' : 'N/A',
+      // Paid events start 'pending' and flip to 'paid' once the server verifies
+      // the Razorpay payment; free events are simply 'free'.
+      paymentStatus: event.fee ? 'pending' : 'free',
     }
     const created = await svc.createRegistration(regDoc)
     setRegs((prev) => [...prev, created])
+    return created
+  }
+
+  // Reflect a server-verified payment in local state (the server is the source
+  // of truth; this just avoids a refetch).
+  function markRegistrationPaid(id) {
+    setRegs((prev) => prev.map((r) => (r.id === id ? { ...r, paymentStatus: 'paid' } : r)))
   }
 
   return (
-    <RegistrationsContext.Provider value={{ regs, isRegistered, register }}>
+    <RegistrationsContext.Provider value={{ regs, isRegistered, register, markRegistrationPaid }}>
       {children}
     </RegistrationsContext.Provider>
   )

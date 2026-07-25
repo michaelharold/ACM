@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Input, Select } from '../ui/Input'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useAuth } from '../../context/AuthContext'
 import { formatDate } from '../../lib/format'
+import { payFor, isPaymentConfigured } from '../../lib/payments'
 import { cn } from '../../lib/cn'
 
 const steps = ['Your details', 'Eligibility', 'Confirm']
@@ -17,10 +18,12 @@ const slide = {
   exit: (d) => ({ opacity: 0, x: d > 0 ? -40 : 40 }),
 }
 
-export function RegistrationDrawer({ event, open, onClose, onComplete }) {
+export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid }) {
   const { user } = useAuth()
   const [[step, dir], setStep] = useState([0, 0])
   const [done, setDone] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [payError, setPayError] = useState('')
   const [form, setForm] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -45,9 +48,31 @@ export function RegistrationDrawer({ event, open, onClose, onComplete }) {
 
   if (!event) return null
 
-  function submit() {
-    onComplete?.(event, form)
-    setDone(true)
+  const paid = event.fee > 0 && isPaymentConfigured
+
+  async function submit() {
+    setPayError('')
+    setSubmitting(true)
+    try {
+      // Record the registration first (as 'pending' when there's a fee), then
+      // collect payment. The server flips it to 'paid' only after verifying.
+      const created = await onComplete?.(event, form)
+      if (paid && created?.id) {
+        await payFor({
+          type: 'event',
+          refId: created.id,
+          prefill: { name: form.name, email: form.email, contact: form.phone },
+        })
+        onPaid?.(created.id)
+      }
+      setDone(true)
+    } catch (err) {
+      // Payment cancelled/failed — the registration stays 'pending' and the
+      // member can retry from their dashboard or the admin can follow up.
+      setPayError(err?.message || 'Could not complete the payment.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   function handleClose() {
@@ -56,6 +81,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete }) {
     setTimeout(() => {
       setStep([0, 0])
       setDone(false)
+      setPayError('')
     }, 250)
   }
 
@@ -161,7 +187,11 @@ export function RegistrationDrawer({ event, open, onClose, onComplete }) {
                         <span className="font-semibold">{event.fee ? `₹${event.fee}` : 'Free'}</span>
                       </div>
                       {event.fee > 0 && (
-                        <p className="mt-2 text-xs text-neutral-400">Payment is collected on-site / via UPI (demo — not processed here).</p>
+                        <p className="mt-2 text-xs text-neutral-400">
+                          {isPaymentConfigured
+                            ? 'Paid securely via Razorpay when you submit.'
+                            : 'Payment is collected separately by the organisers.'}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -190,9 +220,15 @@ export function RegistrationDrawer({ event, open, onClose, onComplete }) {
             </AnimatePresence>
           </div>
 
+          {payError && (
+            <p className="mt-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {payError}
+            </p>
+          )}
+
           {/* Footer nav */}
           <div className="mt-6 flex items-center justify-between gap-3">
-            <Button variant="ghost" size="sm" onClick={() => (step === 0 ? handleClose() : go(step - 1))}>
+            <Button variant="ghost" size="sm" disabled={submitting} onClick={() => (step === 0 ? handleClose() : go(step - 1))}>
               <ArrowLeft className="h-4 w-4" /> {step === 0 ? 'Cancel' : 'Back'}
             </Button>
             {step < 2 ? (
@@ -200,8 +236,14 @@ export function RegistrationDrawer({ event, open, onClose, onComplete }) {
                 Continue <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
-              <Button disabled={!stepValid} onClick={submit}>
-                <CheckCircle2 className="h-4 w-4" /> Submit registration
+              <Button disabled={!stepValid || submitting} onClick={submit}>
+                {submitting ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> {paid ? 'Processing…' : 'Submitting…'}</>
+                ) : paid ? (
+                  <><CreditCard className="h-4 w-4" /> Pay ₹{event.fee} & register</>
+                ) : (
+                  <><CheckCircle2 className="h-4 w-4" /> Submit registration</>
+                )}
               </Button>
             )}
           </div>

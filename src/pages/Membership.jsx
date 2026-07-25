@@ -6,15 +6,20 @@ import { SectionHeading } from '../components/SectionHeading'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
 import { useAuth } from '../context/AuthContext'
+import { useData } from '../context/DataContext'
 import { departments } from '../lib/orgData'
 import { fetchMembership, createMembership, probeWritable } from '../services/firestore'
+import { payFor, isPaymentConfigured } from '../lib/payments'
 import { avatarDataUri } from '../lib/avatar'
 
 const fullName = (m) => [m.firstName, m.middleName, m.lastName].filter(Boolean).join(' ')
 
 export default function Membership() {
   const { user, loading, saveProfile } = useAuth()
+  const { content } = useData()
   const navigate = useNavigate()
+  const membershipFee = Number(content?.membershipFee) || 0
+  const chargesFee = membershipFee > 0 && isPaymentConfigured
 
   // phase: 'loading' | 'form' | 'status' | 'blocked'
   const [phase, setPhase] = useState('loading')
@@ -55,8 +60,9 @@ export default function Membership() {
     const f = Object.fromEntries(new FormData(e.currentTarget))
     setError('')
     setSubmitting(true)
+    let created
     try {
-      const created = await createMembership(user.id, {
+      created = await createMembership(user.id, {
         firstName: f.firstName.trim(),
         middleName: f.middleName.trim(),
         lastName: f.lastName.trim(),
@@ -66,15 +72,41 @@ export default function Membership() {
         className: f.className.trim(),
         paymentStatus: 'pending',
       })
-      // Recorded as a member straight away; the paid step is collected later.
       await saveProfile({ acmMember: true })
-      setMembership(created)
-      setPhase('status')
     } catch {
       setPhase('blocked')
-    } finally {
       setSubmitting(false)
+      return
     }
+    // Collect the fee if one is configured. A cancel/failure here does NOT lose
+    // the application — it stays recorded as 'pending' and can be paid later
+    // from the status screen (the server flips it to 'paid' once verified).
+    if (chargesFee) {
+      try {
+        await payFor({
+          type: 'membership',
+          refId: user.id,
+          prefill: { name: fullName(created) || user.name, email: created.email || user.email, contact: created.phone },
+        })
+        created = { ...created, paymentStatus: 'paid' }
+      } catch (err) {
+        setError(err?.message || 'Payment was not completed — you can pay from the next screen.')
+      }
+    }
+    setMembership(created)
+    setPhase('status')
+    setSubmitting(false)
+  }
+
+  // Retry payment from the status screen when an application is still unpaid.
+  async function handlePayNow() {
+    setError('')
+    await payFor({
+      type: 'membership',
+      refId: user.id,
+      prefill: { name: fullName(membership) || user.name, email: membership.email || user.email, contact: membership.phone },
+    })
+    setMembership((m) => ({ ...m, paymentStatus: 'paid' }))
   }
 
   if (loading || phase === 'loading' || !user) {
@@ -97,16 +129,18 @@ export default function Membership() {
         {phase === 'blocked' && <Blocked />}
 
         {phase === 'form' && (
-          <MembershipForm user={user} onSubmit={handleSubmit} submitting={submitting} error={error} />
+          <MembershipForm user={user} onSubmit={handleSubmit} submitting={submitting} error={error} fee={membershipFee} chargesFee={chargesFee} />
         )}
 
-        {phase === 'status' && membership && <StatusCard membership={membership} user={user} />}
+        {phase === 'status' && membership && (
+          <StatusCard membership={membership} user={user} chargesFee={chargesFee} fee={membershipFee} onPay={handlePayNow} error={error} />
+        )}
       </div>
     </div>
   )
 }
 
-function MembershipForm({ user, onSubmit, submitting }) {
+function MembershipForm({ user, onSubmit, submitting, error, fee, chargesFee }) {
   return (
     <motion.form
       initial={{ opacity: 0, y: 14 }}
@@ -135,22 +169,45 @@ function MembershipForm({ user, onSubmit, submitting }) {
         <Input label="Class" name="className" placeholder="e.g. R5B" />
       </div>
 
+      {error && (
+        <p className="mt-5 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}
+        </p>
+      )}
+
       <div className="mt-7 flex flex-col gap-3 border-t border-neutral-200 pt-6 dark:border-neutral-800">
         <Button type="submit" size="lg" disabled={submitting} className="w-full sm:w-auto">
           {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-          {submitting ? 'Recording…' : 'Proceed to Pay'}
+          {submitting ? 'Processing…' : chargesFee ? `Proceed to Pay ₹${fee}` : 'Submit application'}
         </Button>
         <p className="inline-flex items-center gap-1.5 text-xs text-neutral-400">
           <ShieldCheck className="h-3.5 w-3.5" />
-          Payment is collected together with your event registrations — your details are saved now, and your Membership ID follows once it's confirmed.
+          {chargesFee
+            ? 'Paid securely via Razorpay. Your Membership ID is assigned by the team once your payment is confirmed.'
+            : 'Your details are saved now; your Membership ID follows once it’s confirmed.'}
         </p>
       </div>
     </motion.form>
   )
 }
 
-function StatusCard({ membership, user }) {
+function StatusCard({ membership, user, chargesFee, fee, onPay, error }) {
+  const [paying, setPaying] = useState(false)
+  const [payErr, setPayErr] = useState('')
+  const isPaid = membership.paymentStatus === 'paid'
   const assigned = membership.membershipId && membership.membershipId.trim()
+
+  async function pay() {
+    setPayErr('')
+    setPaying(true)
+    try {
+      await onPay()
+    } catch (e) {
+      setPayErr(e?.message || 'Payment was not completed.')
+    } finally {
+      setPaying(false)
+    }
+  }
   const rows = [
     { label: 'Name', value: fullName(membership) || user.name },
     { label: 'Email', value: membership.email || user.email },
@@ -183,6 +240,27 @@ function StatusCard({ membership, user }) {
           </div>
         ))}
       </dl>
+
+      {chargesFee && !isPaid && (
+        <div className="m-6 mt-0 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/25 dark:bg-amber-500/10">
+          <div className="flex items-center gap-3">
+            <CreditCard className="h-5 w-5 shrink-0 text-amber-500" />
+            <div className="min-w-0 flex-1 text-sm">
+              <div className="font-semibold">Membership fee pending</div>
+              <div className="text-neutral-500 dark:text-neutral-400">Complete your ₹{fee} payment to finish joining.</div>
+            </div>
+            <Button size="sm" onClick={pay} disabled={paying}>
+              {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+              {paying ? 'Processing…' : `Pay ₹${fee}`}
+            </Button>
+          </div>
+          {(payErr || error) && (
+            <p className="mt-2.5 flex items-start gap-2 text-xs text-rose-700 dark:text-rose-300">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {payErr || error}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="m-6 mt-0 flex items-center gap-3 rounded-xl border border-acm-200 bg-acm-50/60 p-4 dark:border-acm-500/25 dark:bg-acm-500/5">
         <Fingerprint className="h-5 w-5 shrink-0 text-acm-500" />

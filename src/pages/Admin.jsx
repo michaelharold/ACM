@@ -610,6 +610,24 @@ function SiteContentPanel() {
           />
         </div>
 
+        {/* Membership */}
+        <div>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Membership</h4>
+          <label className="mt-2 block max-w-[240px]">
+            <span className="mb-1.5 block text-xs text-neutral-400">Membership fee (₹) — set 0 for free</span>
+            <input
+              type="number"
+              min="0"
+              className={inputCls}
+              value={draft.membershipFee ?? 0}
+              onChange={(e) => mark({ ...draft, membershipFee: Math.max(0, Number(e.target.value) || 0) })}
+            />
+          </label>
+          <p className="mt-1.5 text-xs text-neutral-400">
+            Charged securely via Razorpay when a member joins (only when payments are configured on the server).
+          </p>
+        </div>
+
         {/* Stats */}
         <div>
           <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Chapter statistics</h4>
