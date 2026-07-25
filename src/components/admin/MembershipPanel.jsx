@@ -91,7 +91,7 @@ export function MembershipPanel({ canEdit = true }) {
       { label: 'Phone', value: (m) => m.phone || '' },
       { label: 'Department', value: (m) => m.department || '' },
       { label: 'Class', value: (m) => m.className || '' },
-      { label: 'Payment', value: (m) => (m.paymentStatus === 'paid' ? 'Paid' : 'Pending') },
+      { label: 'Payment', value: (m) => (m.paymentStatus === 'paid' ? 'Paid' : m.paymentStatus === 'free' ? 'Free' : 'Pending') },
       { label: 'Payment ID', value: (m) => m.razorpayPaymentId || '' },
       { label: 'Paid at', value: (m) => fmtWhen(m.paidAt) },
       { label: 'Membership ID', value: (m) => m.membershipId || '' },
@@ -181,9 +181,13 @@ export function MembershipPanel({ canEdit = true }) {
                     <div className="text-xs text-neutral-400">{m.className || '—'} · {appliedOn(m)}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge tone={m.paymentStatus === 'paid' ? 'green' : 'amber'} dot={m.paymentStatus === 'paid'}>
-                      {m.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
-                    </Badge>
+                    {m.paymentStatus === 'paid' ? (
+                      <Badge tone="green" dot>Paid</Badge>
+                    ) : m.paymentStatus === 'free' ? (
+                      <Badge tone="neutral">Free</Badge>
+                    ) : (
+                      <Badge tone="amber">Pending</Badge>
+                    )}
                     {m.razorpayPaymentId && (
                       <div className="mt-1 text-[11px] leading-tight text-neutral-400">
                         <code>{m.razorpayPaymentId}</code>

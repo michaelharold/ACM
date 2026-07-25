@@ -317,7 +317,9 @@ function EventEditor({ event, onSave }) {
   async function handleSave() {
     setSaving(true)
     try {
-      await onSave(draft)
+      // A fee can never be negative — clamp it so a stray "-" can't be saved
+      // (and never reaches Razorpay as a negative amount).
+      await onSave({ ...draft, fee: Math.max(0, Number(draft.fee) || 0) })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } finally {
@@ -400,7 +402,7 @@ function EventEditor({ event, onSave }) {
       {!isExternal && (
         <label className="text-xs font-medium text-neutral-500">
           Registration Fee (₹)
-          <input type="number" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="Enter Registration Fee"  />
+          <input type="number" min="0" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="Enter Registration Fee"  />
         </label>
       )}
       {!isExternal && Number(draft.fee) > 0 && (

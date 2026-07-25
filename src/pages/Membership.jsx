@@ -70,7 +70,9 @@ export default function Membership() {
         phone: f.phone.trim(),
         department: f.department,
         className: f.className.trim(),
-        paymentStatus: 'pending',
+        // Only 'pending' when a fee will actually be collected online — otherwise
+        // there's nothing to pay, so it's 'free' (avoids a misleading "Pending").
+        paymentStatus: chargesFee ? 'pending' : 'free',
       })
       await saveProfile({ acmMember: true })
     } catch {
@@ -214,7 +216,9 @@ function StatusCard({ membership, user, chargesFee, fee, onPay, error }) {
     { label: 'Phone', value: membership.phone || '—' },
     { label: 'Department', value: membership.department || '—' },
     { label: 'Class', value: membership.className || '—' },
-    { label: 'Payment', value: membership.paymentStatus === 'paid' ? 'Paid' : 'Pending' },
+    // Show a real payment state: Paid if paid, Pending only when a fee is
+    // actually collectable right now, otherwise there's no charge → Free.
+    { label: 'Payment', value: isPaid ? 'Paid' : chargesFee ? 'Pending' : 'Free' },
   ]
   return (
     <motion.div
