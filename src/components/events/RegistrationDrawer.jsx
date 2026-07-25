@@ -24,6 +24,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
   const [done, setDone] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [payError, setPayError] = useState('')
+  const [pendingConfirm, setPendingConfirm] = useState(false)
   const [form, setForm] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -53,22 +54,33 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
   async function submit() {
     setPayError('')
     setSubmitting(true)
+
+    // 1) Save the registration FIRST. If this write fails (backend/quota/rules
+    // trouble), stop here and say so clearly — we must never take a payment for
+    // a registration that didn't persist.
+    let created
     try {
-      // Record the registration first (as 'pending' when there's a fee), then
-      // collect payment. The server flips it to 'paid' only after verifying.
-      const created = await onComplete?.(event, form)
+      created = await onComplete?.(event, form)
+    } catch {
+      setPayError('We couldn’t save your registration — the service may be temporarily unavailable. Please try again in a moment, or reach us from the Contact page.')
+      setSubmitting(false)
+      return
+    }
+
+    // 2) Collect payment if there's a fee. A cancel/failure leaves the record
+    // 'pending'; a capture we couldn't confirm is treated as "received".
+    try {
       if (paid && created?.id) {
-        await payFor({
+        const result = await payFor({
           type: 'event',
           refId: created.id,
           prefill: { name: form.name, email: form.email, contact: form.phone },
         })
-        onPaid?.(created.id)
+        if (result.status === 'paid') onPaid?.(created.id)
+        else if (result.status === 'pending_confirmation') setPendingConfirm(true)
       }
       setDone(true)
     } catch (err) {
-      // Payment cancelled/failed — the registration stays 'pending' and the
-      // member can retry from their dashboard or the admin can follow up.
       setPayError(err?.message || 'Could not complete the payment.')
     } finally {
       setSubmitting(false)
@@ -82,6 +94,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
       setStep([0, 0])
       setDone(false)
       setPayError('')
+      setPendingConfirm(false)
     }, 250)
   }
 
@@ -97,9 +110,15 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
           >
             <PartyPopper className="h-8 w-8" />
           </motion.div>
-          <h3 className="mt-6 text-xl font-bold tracking-tight">You're registered!</h3>
+          <h3 className="mt-6 text-xl font-bold tracking-tight">
+            {pendingConfirm ? 'Payment received' : "You're registered!"}
+          </h3>
           <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
-            A confirmation for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> has been recorded.
+            {pendingConfirm ? (
+              <>Your payment for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> went through — we’re just confirming it, and your registration will update to paid shortly.</>
+            ) : (
+              <>A confirmation for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> has been recorded.</>
+            )}
           </p>
           <div className="mt-6 rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 text-left text-sm dark:border-neutral-800 dark:bg-neutral-900/50">
             <Row label="Event" value={event.name} />

@@ -27,6 +27,8 @@ export default async function handler(req, res) {
       const reg = await db.collection('registrations').doc(refId).get()
       if (!reg.exists) return send(res, 404, { error: 'Registration not found' })
       if (reg.get('userId') !== uid) return send(res, 403, { error: 'Not your registration' })
+      // Idempotency: never open a second charge for something already paid.
+      if (reg.get('paymentStatus') === 'paid') return send(res, 200, { alreadyPaid: true })
       const ev = await db.collection('events').doc(reg.get('eventId')).get()
       amount = Number(ev.get('fee')) || 0
       description = `Registration — ${ev.get('name') || 'Event'}`
@@ -35,6 +37,7 @@ export default async function handler(req, res) {
       const mem = await db.collection('memberships').doc(refId).get()
       if (!mem.exists) return send(res, 404, { error: 'Membership not found' })
       if (refId !== uid && mem.get('userId') !== uid) return send(res, 403, { error: 'Not your membership' })
+      if (mem.get('paymentStatus') === 'paid') return send(res, 200, { alreadyPaid: true })
       const sc = await db.collection('siteContent').doc('main').get()
       amount = Number(sc.get('membershipFee')) || 0
       description = 'ACM TKMCE Membership'

@@ -25,6 +25,8 @@ export default async function handler(req, res) {
     const snap = await ref.get()
     if (!snap.exists) return send(res, 404, { error: 'Record not found' })
     if (refId !== uid && snap.get('userId') !== uid) return send(res, 403, { error: 'Not yours' })
+    // Already settled (e.g. the webhook won the race) — nothing more to do.
+    if (snap.get('paymentStatus') === 'paid') return send(res, 200, { ok: true })
 
     // Resolve the same account the order was created against, and verify with
     // that account's secret.

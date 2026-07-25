@@ -26,6 +26,7 @@ export default function Membership() {
   const [membership, setMembership] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [confirming, setConfirming] = useState(false) // captured but not yet verified
 
   // Signed-out visitors are sent to sign in, then bounced straight back here.
   useEffect(() => {
@@ -85,12 +86,13 @@ export default function Membership() {
     // from the status screen (the server flips it to 'paid' once verified).
     if (chargesFee) {
       try {
-        await payFor({
+        const result = await payFor({
           type: 'membership',
           refId: user.id,
           prefill: { name: fullName(created) || user.name, email: created.email || user.email, contact: created.phone },
         })
-        created = { ...created, paymentStatus: 'paid' }
+        if (result.status === 'paid') created = { ...created, paymentStatus: 'paid' }
+        else if (result.status === 'pending_confirmation') setConfirming(true) // money taken, webhook finalises
       } catch (err) {
         setError(err?.message || 'Payment was not completed — you can pay from the next screen.')
       }
@@ -101,14 +103,17 @@ export default function Membership() {
   }
 
   // Retry payment from the status screen when an application is still unpaid.
+  // Returns the result so the status card can reflect a "confirming" outcome.
   async function handlePayNow() {
     setError('')
-    await payFor({
+    const result = await payFor({
       type: 'membership',
       refId: user.id,
       prefill: { name: fullName(membership) || user.name, email: membership.email || user.email, contact: membership.phone },
     })
-    setMembership((m) => ({ ...m, paymentStatus: 'paid' }))
+    if (result.status === 'paid') setMembership((m) => ({ ...m, paymentStatus: 'paid' }))
+    else if (result.status === 'pending_confirmation') setConfirming(true)
+    return result
   }
 
   if (loading || phase === 'loading' || !user) {
@@ -135,7 +140,7 @@ export default function Membership() {
         )}
 
         {phase === 'status' && membership && (
-          <StatusCard membership={membership} user={user} chargesFee={chargesFee} fee={membershipFee} onPay={handlePayNow} error={error} />
+          <StatusCard membership={membership} user={user} chargesFee={chargesFee} fee={membershipFee} onPay={handlePayNow} error={error} confirming={confirming} />
         )}
       </div>
     </div>
@@ -193,7 +198,7 @@ function MembershipForm({ user, onSubmit, submitting, error, fee, chargesFee }) 
   )
 }
 
-function StatusCard({ membership, user, chargesFee, fee, onPay, error }) {
+function StatusCard({ membership, user, chargesFee, fee, onPay, error, confirming }) {
   const [paying, setPaying] = useState(false)
   const [payErr, setPayErr] = useState('')
   const isPaid = membership.paymentStatus === 'paid'
@@ -216,9 +221,10 @@ function StatusCard({ membership, user, chargesFee, fee, onPay, error }) {
     { label: 'Phone', value: membership.phone || '—' },
     { label: 'Department', value: membership.department || '—' },
     { label: 'Class', value: membership.className || '—' },
-    // Show a real payment state: Paid if paid, Pending only when a fee is
-    // actually collectable right now, otherwise there's no charge → Free.
-    { label: 'Payment', value: isPaid ? 'Paid' : chargesFee ? 'Pending' : 'Free' },
+    // Show a real payment state: Paid if paid, Confirming if the money was taken
+    // but not yet verified, Pending only when a fee is actually collectable right
+    // now, otherwise there's no charge → Free.
+    { label: 'Payment', value: isPaid ? 'Paid' : confirming ? 'Confirming…' : chargesFee ? 'Pending' : 'Free' },
   ]
   return (
     <motion.div
@@ -245,7 +251,17 @@ function StatusCard({ membership, user, chargesFee, fee, onPay, error }) {
         ))}
       </dl>
 
-      {chargesFee && !isPaid && (
+      {confirming && !isPaid && (
+        <div className="m-6 mt-0 flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-500/25 dark:bg-blue-500/10">
+          <Loader2 className="h-5 w-5 shrink-0 animate-spin text-blue-500" />
+          <div className="text-sm">
+            <div className="font-semibold">Payment received — confirming</div>
+            <div className="text-neutral-500 dark:text-neutral-400">Your payment went through; this will update to Paid shortly.</div>
+          </div>
+        </div>
+      )}
+
+      {chargesFee && !isPaid && !confirming && (
         <div className="m-6 mt-0 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/25 dark:bg-amber-500/10">
           <div className="flex items-center gap-3">
             <CreditCard className="h-5 w-5 shrink-0 text-amber-500" />

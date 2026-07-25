@@ -43,12 +43,21 @@ async function post(path, payload, token) {
 }
 
 // Runs the full secure payment for an event registration (type 'event', refId =
-// registration id) or a membership (type 'membership', refId = uid). Resolves
-// once the server has VERIFIED and recorded the payment; rejects on cancel or
-// failure. The caller can trust a resolve to mean money actually moved.
+// registration id) or a membership (type 'membership', refId = uid).
+//
+// Resolves with a status the caller can act on:
+//   { status: 'paid' }                       — verified and recorded
+//   { status: 'pending_confirmation', paymentId } — Razorpay CAPTURED the money
+//        but our confirmation call didn't complete; the record stays pending and
+//        the server-side webhook finalises it. Crucially this is NOT a failure —
+//        the user WAS charged, so we must never tell them the payment failed.
+// Rejects only when no money was taken (user cancelled, or the payment failed).
 export async function payFor({ type, refId, prefill = {} }) {
   const token = await idToken()
   const order = await post('/api/create-order', { type, refId }, token)
+  // Already settled server-side (idempotency / webhook won the race) — don't
+  // open checkout again, so the user can't be double-charged.
+  if (order.alreadyPaid) return { status: 'paid' }
   await loadCheckout()
 
   return new Promise((resolve, reject) => {
@@ -62,6 +71,9 @@ export async function payFor({ type, refId, prefill = {} }) {
       prefill: { name: prefill.name || '', email: prefill.email || '', contact: prefill.contact || '' },
       theme: { color: '#1f47f5' },
       handler: async (resp) => {
+        // Reaching here means Razorpay captured the payment. From this point the
+        // money is taken — a verify hiccup must degrade to "confirming", never
+        // to "failed".
         try {
           await post('/api/verify-payment', {
             type,
@@ -70,9 +82,9 @@ export async function payFor({ type, refId, prefill = {} }) {
             razorpay_payment_id: resp.razorpay_payment_id,
             razorpay_signature: resp.razorpay_signature,
           }, token)
-          resolve({ paid: true })
-        } catch (e) {
-          reject(e)
+          resolve({ status: 'paid', paymentId: resp.razorpay_payment_id })
+        } catch {
+          resolve({ status: 'pending_confirmation', paymentId: resp.razorpay_payment_id })
         }
       },
       modal: { ondismiss: () => reject(new Error('Payment was cancelled.')) },
