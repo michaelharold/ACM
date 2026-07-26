@@ -37,8 +37,14 @@ async function post(path, payload, token) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(payload),
   })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.error || 'Payment request failed.')
+  const text = await res.text()
+  let data = {}
+  try { data = text ? JSON.parse(text) : {} } catch { /* non-JSON (crash/HTML) */ }
+  if (!res.ok) {
+    // Surface the status so a server misconfig (500) vs missing route (404) vs
+    // auth (401) is obvious from the message during setup.
+    throw new Error(data.error || `Payment request failed (HTTP ${res.status}).`)
+  }
   return data
 }
 
