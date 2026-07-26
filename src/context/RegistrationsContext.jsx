@@ -65,8 +65,16 @@ export function RegistrationsProvider({ children }) {
     setRegs((prev) => prev.map((r) => (r.id === id ? { ...r, paymentStatus: 'paid' } : r)))
   }
 
+  // Drop an unpaid registration (e.g. its payment was cancelled/failed), so the
+  // user isn't left "registered" without paying and can try again.
+  async function unregister(id) {
+    if (!id) return
+    try { await svc.deleteRegistration(id) } catch { /* best-effort cleanup */ }
+    setRegs((prev) => prev.filter((r) => r.id !== id))
+  }
+
   return (
-    <RegistrationsContext.Provider value={{ regs, isRegistered, register, markRegistrationPaid }}>
+    <RegistrationsContext.Provider value={{ regs, isRegistered, register, markRegistrationPaid, unregister }}>
       {children}
     </RegistrationsContext.Provider>
   )

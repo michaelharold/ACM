@@ -70,7 +70,12 @@ service cloud.firestore {
     match /registrations/{id} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin();
+      // A user may remove their OWN registration only while it's unpaid — this
+      // lets the app clean up a registration whose payment was cancelled/failed,
+      // without ever letting someone delete a paid record.
+      allow delete: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid && resource.data.paymentStatus != 'paid');
     }
 
     // ACM memberships — one document per user (id == uid). The member fills and

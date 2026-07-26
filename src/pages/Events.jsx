@@ -28,7 +28,7 @@ export default function Events() {
   const { eventId } = useParams()
   const { isAuthed } = useAuth()
   const { events, loaded } = useData()
-  const { isRegistered, register, markRegistrationPaid } = useRegistrations()
+  const { isRegistered, register, markRegistrationPaid, unregister } = useRegistrations()
 
   const list = useMemo(
     () => (filter === 'all' ? events : events.filter((e) => registrationStatus(e) === filter)),
@@ -144,6 +144,7 @@ export default function Events() {
         onClose={() => setRegistering(null)}
         onComplete={register}
         onPaid={markRegistrationPaid}
+        onCancelPay={unregister}
       />
     </div>
   )

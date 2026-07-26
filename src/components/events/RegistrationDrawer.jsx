@@ -18,7 +18,7 @@ const slide = {
   exit: (d) => ({ opacity: 0, x: d > 0 ? -40 : 40 }),
 }
 
-export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid }) {
+export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, onCancelPay }) {
   const { user } = useAuth()
   const [[step, dir], setStep] = useState([0, 0])
   const [done, setDone] = useState(false)
@@ -117,6 +117,10 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
       }
       setDone(true)
     } catch (err) {
+      // Payment cancelled/failed (no money taken) → remove the just-created
+      // pending registration so the user isn't shown as "Registered" without
+      // having paid. They can retry from a clean slate.
+      if (paid && created?.id) onCancelPay?.(created.id)
       setPayError(err?.message || 'Could not complete the payment.')
     } finally {
       setSubmitting(false)

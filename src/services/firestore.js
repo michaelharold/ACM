@@ -179,6 +179,13 @@ export async function createRegistration(regDoc) {
   return { id: ref.id, ...regDoc }
 }
 
+// Remove a registration — used to clean up an unpaid one whose payment was
+// cancelled/failed (rules only permit deleting one's own non-paid record).
+export async function deleteRegistration(id) {
+  if (!isFirebaseConfigured || !id) return
+  await deleteDoc(doc(db, 'registrations', id))
+}
+
 // ── Gallery ──────────────────────────────────────────────────
 // One image per document, not an array on a single doc: Firestore caps a
 // document at 1 MB, and inline image data would blow through that after a
