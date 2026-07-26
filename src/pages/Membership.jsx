@@ -236,9 +236,15 @@ function StatusCard({ membership, user, chargesFee, fee, onPay, error, confirmin
         <img src={user.avatar || avatarDataUri(user.name || 'ACM Member')} alt="" className="h-14 w-14 rounded-2xl object-cover" />
         <div className="min-w-0">
           <h3 className="truncate text-lg font-bold tracking-tight">{fullName(membership) || user.name}</h3>
-          <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-acm-500/10 px-2.5 py-1 text-xs font-semibold text-acm-600 dark:text-acm-400">
-            <BadgeCheck className="h-3.5 w-3.5" /> ACM Member
-          </span>
+          {chargesFee && !isPaid && !confirming ? (
+            <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
+              <CreditCard className="h-3.5 w-3.5" /> Payment pending
+            </span>
+          ) : (
+            <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-acm-500/10 px-2.5 py-1 text-xs font-semibold text-acm-600 dark:text-acm-400">
+              <BadgeCheck className="h-3.5 w-3.5" /> ACM Member
+            </span>
+          )}
         </div>
       </div>
 
@@ -287,7 +293,11 @@ function StatusCard({ membership, user, chargesFee, fee, onPay, error, confirmin
         <div className="text-sm">
           <div className="font-semibold">Membership ID</div>
           <div className="text-neutral-500 dark:text-neutral-400">
-            {assigned ? membership.membershipId : 'Will be updated soon.'}
+            {assigned
+              ? membership.membershipId
+              : chargesFee && !isPaid && !confirming
+                ? 'Assigned once your payment is confirmed.'
+                : 'Will be updated soon.'}
           </div>
         </div>
       </div>

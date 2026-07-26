@@ -181,7 +181,11 @@ export default function Dashboard() {
                       <div className="min-w-0 text-sm">
                         <div className="font-semibold">ACM Membership ID</div>
                         <div className="text-neutral-500 dark:text-neutral-400">
-                          {membership?.membershipId?.trim() ? membership.membershipId : 'Will be updated soon.'}
+                          {membership?.membershipId?.trim()
+                            ? membership.membershipId
+                            : membership?.paymentStatus === 'pending'
+                              ? 'Assigned once your payment is confirmed.'
+                              : 'Will be updated soon.'}
                         </div>
                       </div>
                     </div>
