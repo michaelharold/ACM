@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import {
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
@@ -59,6 +61,10 @@ export function AuthProvider({ children }) {
   // Live mode: subscribe to Firebase auth state and hydrate the profile.
   useEffect(() => {
     if (!isFirebaseConfigured) return
+    // Complete any sign-in that used the redirect fallback (Safari/mobile).
+    // onAuthStateChanged below then hydrates the profile; this just settles the
+    // pending redirect and swallows the "no redirect in progress" case.
+    getRedirectResult(auth).catch(() => {})
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
         try {
@@ -98,8 +104,20 @@ export function AuthProvider({ children }) {
 
   async function signInWithGoogle() {
     if (!isFirebaseConfigured) return mockUser({})
-    const res = await signInWithPopup(auth, googleProvider)
-    return ensureProfile(res.user)
+    try {
+      const res = await signInWithPopup(auth, googleProvider)
+      return ensureProfile(res.user)
+    } catch (err) {
+      // Safari and most mobile browsers block the auth popup. Fall back to a
+      // full-page redirect, which no popup blocker can stop — the browser leaves
+      // this page and the session is picked up by getRedirectResult /
+      // onAuthStateChanged when it returns.
+      if (['auth/popup-blocked', 'auth/cancelled-popup-request', 'auth/operation-not-supported-in-this-environment'].includes(err?.code)) {
+        await signInWithRedirect(auth, googleProvider)
+        return null
+      }
+      throw err
+    }
   }
 
   async function signInWithEmail(email, password) {
