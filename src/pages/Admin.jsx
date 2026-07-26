@@ -294,6 +294,7 @@ function EventEditor({ event, onSave }) {
     shortDescription: event.shortDescription,
     description: event.description || '',
     fee: event.fee || 0,
+    acmDiscount: event.acmDiscount || 0,
     paymentAccountId: event.paymentAccountId || '',
     deadline: event.deadline || '',
     regOpens: event.regOpens || '',
@@ -319,7 +320,11 @@ function EventEditor({ event, onSave }) {
     try {
       // A fee can never be negative — clamp it so a stray "-" can't be saved
       // (and never reaches Razorpay as a negative amount).
-      await onSave({ ...draft, fee: Math.max(0, Number(draft.fee) || 0) })
+      await onSave({
+        ...draft,
+        fee: Math.max(0, Number(draft.fee) || 0),
+        acmDiscount: Math.max(0, Number(draft.acmDiscount) || 0),
+      })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } finally {
@@ -403,6 +408,12 @@ function EventEditor({ event, onSave }) {
         <label className="text-xs font-medium text-neutral-500">
           Registration Fee (₹)
           <input type="number" min="0" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="Enter Registration Fee"  />
+        </label>
+      )}
+      {!isExternal && Number(draft.fee) > 0 && (
+        <label className="text-xs font-medium text-neutral-500">
+          ACM member discount (₹ off)
+          <input type="number" min="0" className={cn(inputCls, 'mt-1')} value={draft.acmDiscount} onChange={set('acmDiscount')} placeholder="0 = no discount" />
         </label>
       )}
       {!isExternal && Number(draft.fee) > 0 && (

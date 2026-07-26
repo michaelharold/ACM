@@ -33,6 +33,10 @@ export function RegistrationsProvider({ children }) {
 
   async function register(event, form = {}) {
     if (!event || isRegistered(event.id)) return null
+    // The amount actually collected — the drawer passes this after any member
+    // discount, so a fully-discounted registration is correctly 'free', not a
+    // 'pending' that can never be paid.
+    const chargeAmount = form.chargeAmount != null ? Number(form.chargeAmount) : (Number(event.fee) || 0)
     const regDoc = {
       userId: user?.id || 'u_local',
       userName: form.name || user?.name || '',
@@ -46,9 +50,9 @@ export function RegistrationsProvider({ children }) {
       membershipId: form.membershipId || '',
       date: new Date().toISOString().slice(0, 10),
       status: 'Confirmed',
-      // Paid events start 'pending' and flip to 'paid' once the server verifies
-      // the Razorpay payment; free events are simply 'free'.
-      paymentStatus: event.fee ? 'pending' : 'free',
+      // Paid registrations start 'pending' and flip to 'paid' once the server
+      // verifies the Razorpay payment; nothing-to-pay registrations are 'free'.
+      paymentStatus: chargeAmount > 0 ? 'pending' : 'free',
     }
     const created = await svc.createRegistration(regDoc)
     setRegs((prev) => [...prev, created])

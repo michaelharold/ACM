@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle, ShieldCheck } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Input, Select } from '../ui/Input'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useAuth } from '../../context/AuthContext'
 import { formatDate } from '../../lib/format'
-import { payFor, isPaymentConfigured } from '../../lib/payments'
+import { payFor, validateMembership, isPaymentConfigured } from '../../lib/payments'
 import { cn } from '../../lib/cn'
 
 const steps = ['Your details', 'Eligibility', 'Confirm']
@@ -25,6 +25,10 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
   const [submitting, setSubmitting] = useState(false)
   const [payError, setPayError] = useState('')
   const [pendingConfirm, setPendingConfirm] = useState(false)
+  // ACM membership verification: null until checked; then the server's verdict.
+  const [memberCheck, setMemberCheck] = useState(null)
+  const [verifying, setVerifying] = useState(false)
+  const [verifyErr, setVerifyErr] = useState('')
   const [form, setForm] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -40,16 +44,46 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
   const go = (next) => setStep([next, next > step ? 1 : -1])
 
+  // Membership verification is only possible with the backend deployed. Without
+  // it, the ID stays a free-text, informational field (the old behaviour).
+  const canVerify = isPaymentConfigured
+  // Editing the id (or toggling the checkbox) invalidates any prior verdict.
+  const setMemberId = (e) => { setMemberCheck(null); setVerifyErr(''); setForm((f) => ({ ...f, membershipId: e.target.value })) }
+  const toggleMember = (e) => { setMemberCheck(null); setVerifyErr(''); setForm((f) => ({ ...f, isMember: e.target.checked })) }
+
+  async function verify() {
+    const id = form.membershipId.trim()
+    if (!id) return
+    setVerifying(true)
+    setVerifyErr('')
+    try {
+      const res = await validateMembership({ eventId: event.id, membershipId: id })
+      setMemberCheck(res)
+    } catch (err) {
+      setVerifyErr(err?.message || 'Couldn’t verify right now. Try again.')
+    } finally {
+      setVerifying(false)
+    }
+  }
+
   const stepValid = useMemo(() => {
     if (step === 0) return form.name && form.email && form.phone && form.department && form.year
-    if (step === 1) return !form.isMember || form.membershipId.trim().length > 0
+    if (step === 1) {
+      if (!form.isMember) return true
+      if (!canVerify) return form.membershipId.trim().length > 0 // no backend → old behaviour
+      return memberCheck?.valid === true // must verify a real member (used or not)
+    }
     if (step === 2) return form.agree
     return true
-  }, [step, form])
+  }, [step, form, canVerify, memberCheck])
 
   if (!event) return null
 
-  const paid = event.fee > 0 && isPaymentConfigured
+  // The member discount applies only to a verified, unused id.
+  const discountEligible = !!(memberCheck?.valid && !memberCheck?.alreadyUsed && memberCheck?.discount > 0)
+  const payable = discountEligible ? memberCheck.effectiveFee : (Number(event.fee) || 0)
+  const claimedId = memberCheck?.valid && !memberCheck?.alreadyUsed ? form.membershipId.trim() : ''
+  const paid = payable > 0 && isPaymentConfigured
 
   async function submit() {
     setPayError('')
@@ -60,7 +94,9 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
     // a registration that didn't persist.
     let created
     try {
-      created = await onComplete?.(event, form)
+      // Only a verified, unused id is claimed — the server re-checks it and
+      // applies the discount, so an unverified/used id gets no benefit.
+      created = await onComplete?.(event, { ...form, membershipId: claimedId, isMember: form.isMember, chargeAmount: payable })
     } catch {
       setPayError('We couldn’t save your registration — the service may be temporarily unavailable. Please try again in a moment, or reach us from the Contact page.')
       setSubmitting(false)
@@ -95,6 +131,8 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
       setDone(false)
       setPayError('')
       setPendingConfirm(false)
+      setMemberCheck(null)
+      setVerifyErr('')
     }, 250)
   }
 
@@ -124,7 +162,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
             <Row label="Event" value={event.name} />
             <Row label="Date" value={`${formatDate(event.date)} · ${event.time}`} />
             <Row label="Name" value={form.name} />
-            {form.isMember && <Row label="ACM Member" value={form.membershipId || 'Verified'} />}
+            {claimedId && <Row label="ACM Member" value={claimedId} />}
           </div>
           <Button className="mt-6 w-full" onClick={handleClose}>
             Done
@@ -182,20 +220,53 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
                 {step === 1 && (
                   <div className="grid gap-4">
                     <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
-                      <input type="checkbox" checked={form.isMember} onChange={set('isMember')} className="mt-0.5 h-4 w-4 accent-acm-600" />
+                      <input type="checkbox" checked={form.isMember} onChange={toggleMember} className="mt-0.5 h-4 w-4 accent-acm-600" />
                       <span>
                         <span className="flex items-center gap-2 text-sm font-medium">
                           <BadgeCheck className="h-4 w-4 text-acm-500" /> I'm an ACM member
                         </span>
                         <span className="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">
-                          Verify your membership to unlock discounted or member-only registration.
+                          {event.acmDiscount > 0
+                            ? `Verify your membership ID to get ₹${event.acmDiscount} off.`
+                            : 'Verify your membership ID.'}
                         </span>
                       </span>
                     </label>
                     <AnimatePresence initial={false}>
                       {form.isMember && (
                         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                          <Input label="ACM Membership ID" value={form.membershipId} onChange={set('membershipId')} placeholder="e.g. 1234567" />
+                          <div className="flex items-end gap-2">
+                            <div className="flex-1">
+                              <Input label="ACM Membership ID" value={form.membershipId} onChange={setMemberId} placeholder="e.g. 1234567" />
+                            </div>
+                            {canVerify && (
+                              <Button type="button" variant="outline" onClick={verify} disabled={verifying || !form.membershipId.trim()}>
+                                {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Verify
+                              </Button>
+                            )}
+                          </div>
+
+                          {/* Verdict */}
+                          {verifyErr && (
+                            <p className="mt-2 flex items-start gap-2 text-xs text-rose-600 dark:text-rose-300">
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {verifyErr}
+                            </p>
+                          )}
+                          {memberCheck && !memberCheck.valid && (
+                            <p className="mt-2 flex items-start gap-2 text-xs text-rose-600 dark:text-rose-300">
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> This membership ID wasn’t found. Check it, or uncheck the box to register as a non-member.
+                            </p>
+                          )}
+                          {memberCheck?.valid && memberCheck.alreadyUsed && (
+                            <p className="mt-2 flex items-start gap-2 text-xs text-amber-600 dark:text-amber-300">
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> This ID has already been used for this event, so the member discount won’t apply.
+                            </p>
+                          )}
+                          {discountEligible && (
+                            <p className="mt-2 flex items-start gap-2 text-xs text-emerald-600 dark:text-emerald-300">
+                              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Verified{memberCheck.memberName ? ` — ${memberCheck.memberName}` : ''}. ₹{memberCheck.discount} member discount applied.
+                            </p>
+                          )}
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -203,7 +274,12 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
                     <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 text-sm dark:border-neutral-800 dark:bg-neutral-900/50">
                       <div className="flex items-center justify-between">
                         <span className="text-neutral-500 dark:text-neutral-400">Registration fee</span>
-                        <span className="font-semibold">{event.fee ? `₹${event.fee}` : 'Free'}</span>
+                        <span className="font-semibold">
+                          {discountEligible && (
+                            <span className="mr-2 font-normal text-neutral-400 line-through">₹{event.fee}</span>
+                          )}
+                          {payable > 0 ? `₹${payable}` : 'Free'}
+                        </span>
                       </div>
                       {event.fee > 0 && (
                         <p className="mt-2 text-xs text-neutral-400">
@@ -224,8 +300,8 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
                       <Row label="Name" value={form.name} />
                       <Row label="Email" value={form.email} />
                       <Row label="Department" value={`${form.department} · ${form.year}`} />
-                      <Row label="Membership" value={form.isMember ? (form.membershipId || 'Member') : 'Non-member'} />
-                      <Row label="Fee" value={event.fee ? `₹${event.fee}` : 'Free'} last />
+                      <Row label="Membership" value={claimedId ? `Member · ${claimedId}` : (form.isMember ? 'Member' : 'Non-member')} />
+                      <Row label="Fee" value={payable > 0 ? `₹${payable}${discountEligible ? ` (₹${memberCheck.discount} off)` : ''}` : 'Free'} last />
                     </div>
                     <label className="flex cursor-pointer items-start gap-3 text-sm">
                       <input type="checkbox" checked={form.agree} onChange={set('agree')} className="mt-0.5 h-4 w-4 accent-acm-600" />
@@ -259,7 +335,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid })
                 {submitting ? (
                   <><Loader2 className="h-4 w-4 animate-spin" /> {paid ? 'Processing…' : 'Submitting…'}</>
                 ) : paid ? (
-                  <><CreditCard className="h-4 w-4" /> Pay ₹{event.fee} & register</>
+                  <><CreditCard className="h-4 w-4" /> Pay ₹{payable} & register</>
                 ) : (
                   <><CheckCircle2 className="h-4 w-4" /> Submit registration</>
                 )}

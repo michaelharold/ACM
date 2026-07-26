@@ -24,17 +24,22 @@ export default function Dashboard() {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [membership, setMembership] = useState(null)
+  const [membershipLoaded, setMembershipLoaded] = useState(false)
 
   useEffect(() => {
     if (!loading && !user) navigate('/auth', { replace: true, state: { from: '/dashboard' } })
   }, [user, loading, navigate])
 
-  // The Membership ID is assigned by an admin on the member's application; show
-  // it here once it lands.
+  // The membership document is the single source of truth for member status:
+  // if it's removed (e.g. deleted from the Firebase console) this reflects that
+  // on the next load, instead of trusting a cached flag on the user profile.
   useEffect(() => {
     if (!user) return
     let alive = true
-    fetchMembership(user.id).then((m) => alive && setMembership(m)).catch(() => {})
+    fetchMembership(user.id)
+      .then((m) => { if (alive) setMembership(m) })
+      .catch(() => {})
+      .finally(() => { if (alive) setMembershipLoaded(true) })
     return () => { alive = false }
   }, [user])
 
@@ -119,7 +124,7 @@ export default function Dashboard() {
               <img src={avatar} alt="" className="h-16 w-16 shrink-0 rounded-2xl object-cover" />
               <div className="min-w-0">
                 <h2 className="truncate font-semibold tracking-tight">{displayName}</h2>
-                {user.acmMember && (
+                {membership && (
                   <Badge tone="blue" className="mt-1">
                     <BadgeCheck className="h-3.5 w-3.5" /> ACM Member
                   </Badge>
@@ -165,9 +170,12 @@ export default function Dashboard() {
                   ))}
                 </dl>
 
-                {/* Membership status — ID appears once an admin assigns it */}
+                {/* Membership status — driven by the live membership doc, so it
+                    stays in sync with the backend (incl. console deletions). */}
                 <div className="mt-5 rounded-xl border border-neutral-200 p-3.5 dark:border-neutral-800">
-                  {user.acmMember || membership ? (
+                  {!membershipLoaded ? (
+                    <div className="h-4 w-32 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+                  ) : membership ? (
                     <div className="flex items-start gap-2.5">
                       <Fingerprint className="mt-0.5 h-4 w-4 shrink-0 text-acm-500" />
                       <div className="min-w-0 text-sm">

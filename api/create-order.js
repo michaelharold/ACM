@@ -8,6 +8,7 @@
 import { adminDb } from './_lib/firebaseAdmin.js'
 import { razorpayWith } from './_lib/razorpay.js'
 import { keysForAccount, accountIdFor } from './_lib/accounts.js'
+import { memberAdjustedAmount } from './_lib/membership.js'
 import { getBody, requireUser, send } from './_lib/http.js'
 
 export default async function handler(req, res) {
@@ -30,7 +31,15 @@ export default async function handler(req, res) {
       // Idempotency: never open a second charge for something already paid.
       if (reg.get('paymentStatus') === 'paid') return send(res, 200, { alreadyPaid: true })
       const ev = await db.collection('events').doc(reg.get('eventId')).get()
-      amount = Number(ev.get('fee')) || 0
+      // Amount = event fee, minus the ACM member discount, but ONLY when the
+      // claimed membership id is real AND not already used for this event.
+      const adj = await memberAdjustedAmount({
+        event: ev,
+        membershipId: reg.get('membershipId'),
+        selfUid: uid,
+        selfRegId: refId,
+      })
+      amount = adj.amount
       description = `Registration — ${ev.get('name') || 'Event'}`
       accountId = await accountIdFor('event', { event: ev })
     } else {

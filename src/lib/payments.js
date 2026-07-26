@@ -42,6 +42,15 @@ async function post(path, payload, token) {
   return data
 }
 
+// Checks a claimed ACM membership id against the database for a given event, and
+// returns the price a valid member would pay:
+//   { valid, alreadyUsed, memberName, fee, discount, effectiveFee }
+// Requires the backend (only meaningful when isPaymentConfigured).
+export async function validateMembership({ eventId, membershipId }) {
+  const token = await idToken()
+  return post('/api/validate-membership', { eventId, membershipId }, token)
+}
+
 // Runs the full secure payment for an event registration (type 'event', refId =
 // registration id) or a membership (type 'membership', refId = uid).
 //
