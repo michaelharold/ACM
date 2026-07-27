@@ -25,7 +25,8 @@ import { formatDate, to24h, to12h } from '../lib/format'
 import { registrationStatus, hasRegWindow, eventStart } from '../lib/eventClock'
 import { departments as orgDepartments } from '../lib/orgData'
 import { ComposeMessageModal } from '../components/messages/Thread'
-import { MessageSquare } from 'lucide-react'
+import { MessageSquare, AlertTriangle } from 'lucide-react'
+import { paymentNeedsCheck, countPaymentChecks } from '../lib/paymentHealth'
 import { cn } from '../lib/cn'
 
 const statusCycle = ['open', 'coming-soon', 'closed']
@@ -98,7 +99,9 @@ export default function Admin() {
           status: r.status || 'Confirmed',
           paymentStatus: r.paymentStatus || '',
           paymentId: r.razorpayPaymentId || '',
+          razorpayOrderId: r.razorpayOrderId || '',
           paidAt: r.paidAt || null,
+          createdAt: r.createdAt || null,
         })),
       )
     })()
@@ -170,6 +173,10 @@ export default function Admin() {
       externalUrl: '',
     })
 
+  // Registrations whose payment is stuck 'pending' (possible money-taken-but-
+  // -not-recorded case) — surfaced so an admin reconciles them with Razorpay.
+  const paymentAlerts = countPaymentChecks(regRows)
+
   const stats = [
     { label: 'Total Events', value: events.length, icon: CalendarDays, tone: 'blue' },
     { label: 'Total Registrations', value: regRows.length, icon: Ticket, tone: 'green' },
@@ -217,8 +224,8 @@ export default function Admin() {
                   )}
                   <span className="relative">
                     <t.icon className="h-4 w-4" />
-                    {/* Red unread dot on the Messages tab */}
-                    {t.key === 'messages' && unreadMsgs > 0 && (
+                    {/* Red alert dot: unread messages, or payments needing a check */}
+                    {((t.key === 'messages' && unreadMsgs > 0) || (t.key === 'registrations' && paymentAlerts > 0)) && (
                       <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500 dark:border-neutral-900" />
                     )}
                   </span>
@@ -230,7 +237,7 @@ export default function Admin() {
 
           {/* Panels */}
           <div className="min-w-0">
-            {tab === 'overview' && <Overview stats={stats} events={events} />}
+            {tab === 'overview' && <Overview stats={stats} events={events} paymentAlerts={paymentAlerts} onReviewAlerts={() => setTab('registrations')} />}
             {tab === 'events' && can('events') && (
               <EventsPanel events={events} onAdd={handleAdd} onCycle={cycleStatus} onDelete={removeEvent} onSave={editEvent} />
             )}
@@ -258,10 +265,27 @@ const toneBg = {
 const inputCls =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-acm-400 dark:border-neutral-700 dark:bg-neutral-800'
 
-function Overview({ stats, events }) {
+function Overview({ stats, events, paymentAlerts = 0, onReviewAlerts }) {
   const upcoming = [...events].sort((a, b) => (a.date || '').localeCompare(b.date || '')).slice(0, 4)
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      {paymentAlerts > 0 && (
+        <button
+          onClick={onReviewAlerts}
+          className="flex w-full items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-left transition-colors hover:bg-amber-100/70 dark:border-amber-500/30 dark:bg-amber-500/10 dark:hover:bg-amber-500/15"
+        >
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              {paymentAlerts} payment{paymentAlerts === 1 ? '' : 's'} need{paymentAlerts === 1 ? 's' : ''} a check
+            </p>
+            <p className="mt-0.5 text-xs text-amber-700/80 dark:text-amber-300/80">
+              These registrations are stuck “pending” — a payment may have been taken but not recorded (e.g. the tab was
+              closed mid-checkout). Open Registrations to review and reconcile them against your Razorpay dashboard.
+            </p>
+          </div>
+        </button>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((s) => (
           <div key={s.label} className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
@@ -953,6 +977,8 @@ function RegistrationsPanel({ rows, events = [], adminName }) {
     return true
   }), [rows, dept, eventFilter, member])
 
+  const alerts = filtered.filter((r) => paymentNeedsCheck(r)).length
+
   function exportCsv() {
     downloadCsv('event-registrations', filtered, [
       { label: 'Name', value: (r) => r.name },
@@ -976,6 +1002,17 @@ function RegistrationsPanel({ rows, events = [], adminName }) {
           <Download className="h-4 w-4" /> Export CSV
         </Button>
       </div>
+
+      {alerts > 0 && (
+        <div className="flex items-start gap-3 border-b border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-500/25 dark:bg-amber-500/10">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-amber-800 dark:text-amber-200">
+            <strong>{alerts}</strong> registration{alerts === 1 ? '' : 's'} below {alerts === 1 ? 'is' : 'are'} stuck on a
+            pending payment (marked <span className="font-semibold">Check</span>). A payment may have been taken but not
+            recorded — verify each against your Razorpay dashboard, then mark it paid or remove it there.
+          </p>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 p-4 dark:border-neutral-800">
@@ -1056,7 +1093,14 @@ function RegistrationsPanel({ rows, events = [], adminName }) {
                       )}
                     </div>
                   ) : (p.paymentStatus || '').toLowerCase() === 'pending' ? (
-                    <Badge tone="amber">Pending</Badge>
+                    paymentNeedsCheck(p) ? (
+                      <span className="inline-flex items-center gap-1.5" title="Stuck pending — a payment may have been taken but not recorded. Check Razorpay.">
+                        <Badge tone="red" dot>Check</Badge>
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                      </span>
+                    ) : (
+                      <Badge tone="amber">Pending</Badge>
+                    )
                   ) : (
                     <span className="text-neutral-400">Free</span>
                   )}

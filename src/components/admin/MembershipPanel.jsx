@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Fingerprint, Search, Download, Check, Loader2, AlertCircle, BadgeCheck, MessageSquare } from 'lucide-react'
+import { Fingerprint, Search, Download, Check, Loader2, AlertCircle, BadgeCheck, MessageSquare, AlertTriangle } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { ComposeMessageModal } from '../messages/Thread'
+import { paymentNeedsCheck } from '../../lib/paymentHealth'
 import { departments } from '../../lib/orgData'
 import { downloadCsv } from '../../lib/csv'
 import * as svc from '../../services/firestore'
@@ -73,6 +74,8 @@ export function MembershipPanel({ canEdit = true, adminName }) {
     // Members still waiting for an ID float to the top.
     return out.sort((a, b) => (hasId(a) ? 1 : 0) - (hasId(b) ? 1 : 0))
   }, [rows, dept, klass, assign, q])
+
+  const alerts = filtered.filter((m) => paymentNeedsCheck(m)).length
 
   async function saveId(m) {
     const value = (drafts[m.id] ?? m.membershipId ?? '').trim()
@@ -148,6 +151,17 @@ export function MembershipPanel({ canEdit = true, adminName }) {
         </div>
       </div>
 
+      {alerts > 0 && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-500/25 dark:bg-amber-500/10">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-amber-800 dark:text-amber-200">
+            <strong>{alerts}</strong> membership{alerts === 1 ? '' : 's'} {alerts === 1 ? 'is' : 'are'} stuck on a pending
+            payment (marked <span className="font-semibold">Check</span>). A payment may have been taken but not recorded —
+            verify against your Razorpay dashboard.
+          </p>
+        </div>
+      )}
+
       {loading ? (
         <div className="grid h-40 place-items-center rounded-2xl border border-neutral-200 dark:border-neutral-800">
           <Loader2 className="h-6 w-6 animate-spin text-acm-500" />
@@ -199,6 +213,11 @@ export function MembershipPanel({ canEdit = true, adminName }) {
                       <Badge tone="green" dot>Paid</Badge>
                     ) : m.paymentStatus === 'free' ? (
                       <Badge tone="neutral">Free</Badge>
+                    ) : paymentNeedsCheck(m) ? (
+                      <span className="inline-flex items-center gap-1.5" title="Stuck pending — a payment may have been taken but not recorded. Check Razorpay.">
+                        <Badge tone="red" dot>Check</Badge>
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                      </span>
                     ) : (
                       <Badge tone="amber">Pending</Badge>
                     )}
