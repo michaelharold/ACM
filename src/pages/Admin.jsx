@@ -25,7 +25,7 @@ import { formatDate, to24h, to12h } from '../lib/format'
 import { registrationStatus, hasRegWindow, eventStart } from '../lib/eventClock'
 import { departments as orgDepartments } from '../lib/orgData'
 import { ComposeMessageModal } from '../components/messages/Thread'
-import { MessageSquare, AlertTriangle } from 'lucide-react'
+import { MessageSquare, AlertTriangle, Search } from 'lucide-react'
 import { paymentNeedsCheck, countPaymentChecks } from '../lib/paymentHealth'
 import { cn } from '../lib/cn'
 
@@ -898,6 +898,9 @@ function AccessPanel({ isLive }) {
     return () => { alive = false }
   }, [isLive])
 
+  const [q, setQ] = useState('')
+  const [grant, setGrant] = useState('all') // all | any | none | <grantKey>
+
   function toggle(u, key) {
     const permissions = { ...(u.permissions || {}), [key]: !u.permissions?.[key] }
     const next = rows.map((r) => (r.id === u.id ? { ...r, permissions } : r))
@@ -905,6 +908,20 @@ function AccessPanel({ isLive }) {
     if (isLive) svc.updateUserAccess(u.id, permissions)
     else localStorage.setItem('acm-demo-users', JSON.stringify(next))
   }
+
+  const members = rows.filter((u) => u.role !== 'admin')
+  const list = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return members.filter((u) => {
+      if (needle && ![u.name, u.email].some((f) => (f || '').toLowerCase().includes(needle))) return false
+      const perms = u.permissions || {}
+      const anyGranted = Object.values(perms).some(Boolean)
+      if (grant === 'any' && !anyGranted) return false
+      if (grant === 'none' && anyGranted) return false
+      if (grant !== 'all' && grant !== 'any' && grant !== 'none' && !perms[grant]) return false
+      return true
+    })
+  }, [members, q, grant])
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
@@ -914,6 +931,27 @@ function AccessPanel({ isLive }) {
           Give members (e.g. team heads) permission to edit specific sections. Admins always have full access.
         </p>
       </div>
+
+      {/* Search + filter so a specific member is easy to find */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 p-4 dark:border-neutral-800">
+        <div className="relative min-w-[200px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by name or email"
+            className={cn(inputCls, 'pl-9')}
+          />
+        </div>
+        <select className={cn(inputCls, 'max-w-[200px]')} value={grant} onChange={(e) => setGrant(e.target.value)}>
+          <option value="all">All members</option>
+          <option value="any">Has any access</option>
+          <option value="none">No access yet</option>
+          {grantKeys.map((g) => <option key={g.key} value={g.key}>Can edit: {g.label}</option>)}
+        </select>
+        <span className="text-xs text-neutral-400">{list.length} of {members.length}</span>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="text-xs uppercase tracking-wide text-neutral-400">
@@ -925,7 +963,7 @@ function AccessPanel({ isLive }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-            {rows.filter((u) => u.role !== 'admin').map((u) => (
+            {list.map((u) => (
               <tr key={u.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40">
                 <td className="px-5 py-3">
                   <div className="font-medium">{u.name}</div>
@@ -940,6 +978,11 @@ function AccessPanel({ isLive }) {
             ))}
           </tbody>
         </table>
+        {list.length === 0 && (
+          <p className="p-10 text-center text-sm text-neutral-500">
+            {members.length ? 'No members match your search.' : 'No members yet.'}
+          </p>
+        )}
       </div>
       {!isLive && (
         <p className="border-t border-neutral-100 p-4 text-xs text-neutral-400 dark:border-neutral-800">
