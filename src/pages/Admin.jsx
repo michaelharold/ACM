@@ -337,6 +337,9 @@ function EventEditor({ event, onSave }) {
     fee: event.fee || 0,
     acmDiscount: event.acmDiscount || 0,
     maxRegistrations: event.maxRegistrations || '',
+    isGroup: !!event.isGroup,
+    minTeamSize: event.minTeamSize || '',
+    maxTeamSize: event.maxTeamSize || '',
     paymentAccountId: event.paymentAccountId || '',
     deadline: event.deadline || '',
     regOpens: event.regOpens || '',
@@ -376,7 +379,14 @@ function EventEditor({ event, onSave }) {
       if (fee > 0 && disc > fee) return 'The ACM discount can’t be more than the fee.'
       if (d.maxRegistrations !== '' && d.maxRegistrations != null) {
         const cap = Number(d.maxRegistrations)
-        if (!Number.isInteger(cap) || cap < 0) return 'Max registrations must be a whole number of 0 or more.'
+        if (!Number.isInteger(cap) || cap < 0) return `${d.isGroup ? 'Max teams' : 'Max registrations'} must be a whole number of 0 or more.`
+      }
+      if (d.isGroup) {
+        const min = Number(d.minTeamSize)
+        const max = Number(d.maxTeamSize)
+        if (!Number.isInteger(min) || min < 1) return 'Minimum team size must be a whole number of 1 or more.'
+        if (!Number.isInteger(max) || max < 1) return 'Maximum team size must be a whole number of 1 or more.'
+        if (max < min) return 'Maximum team size can’t be less than the minimum.'
       }
     }
     const opens = d.regOpens ? new Date(d.regOpens).getTime() : null
@@ -402,6 +412,9 @@ function EventEditor({ event, onSave }) {
         fee: Math.max(0, Number(draft.fee) || 0),
         acmDiscount: Math.max(0, Number(draft.acmDiscount) || 0),
         maxRegistrations: Math.max(0, Math.floor(Number(draft.maxRegistrations) || 0)),
+        isGroup: !!draft.isGroup,
+        minTeamSize: draft.isGroup ? Math.max(1, Math.floor(Number(draft.minTeamSize) || 1)) : 0,
+        maxTeamSize: draft.isGroup ? Math.max(1, Math.floor(Number(draft.maxTeamSize) || 1)) : 0,
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
@@ -495,7 +508,7 @@ function EventEditor({ event, onSave }) {
       )}
       {!isExternal && (
         <label className="text-xs font-medium text-neutral-500">
-          Max registrations
+          {draft.isGroup ? 'Max teams' : 'Max registrations'}
           <input
             type="number"
             min="0"
@@ -505,8 +518,40 @@ function EventEditor({ event, onSave }) {
             onChange={set('maxRegistrations')}
             placeholder="0 = unlimited"
           />
-          <span className="mt-1 block text-[11px] font-normal text-neutral-400">Registration closes automatically once this many people have registered.</span>
+          <span className="mt-1 block text-[11px] font-normal text-neutral-400">
+            Registration closes automatically once this many {draft.isGroup ? 'teams have' : 'people have'} registered.
+          </span>
         </label>
+      )}
+
+      {/* Group / team event */}
+      {!isExternal && (
+        <div className="sm:col-span-2">
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={draft.isGroup}
+              onChange={(e) => setDraft((d) => ({ ...d, isGroup: e.target.checked }))}
+              className="h-4 w-4 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
+            />
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Group event (register as a team)</span>
+          </label>
+          {draft.isGroup && (
+            <div className="mt-2.5 grid gap-3 rounded-lg border border-neutral-200 bg-white p-3 sm:grid-cols-2 dark:border-neutral-700 dark:bg-neutral-800/40">
+              <label className="text-xs font-medium text-neutral-500">
+                Minimum members per team
+                <input type="number" min="1" step="1" className={cn(inputCls, 'mt-1')} value={draft.minTeamSize} onChange={set('minTeamSize')} placeholder="e.g. 2" />
+              </label>
+              <label className="text-xs font-medium text-neutral-500">
+                Maximum members per team
+                <input type="number" min="1" step="1" className={cn(inputCls, 'mt-1')} value={draft.maxTeamSize} onChange={set('maxTeamSize')} placeholder="e.g. 4" />
+              </label>
+              <p className="text-[11px] font-normal leading-relaxed text-neutral-400 sm:col-span-2">
+                Counts include the person registering. The registrant adds their teammates by their website-registered email during signup.
+              </p>
+            </div>
+          )}
+        </div>
       )}
       {!isExternal && Number(draft.fee) > 0 && (
         <label className="text-xs font-medium text-neutral-500">
