@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare } from 'lucide-react'
+import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Input, Select } from '../components/ui/Input'
@@ -383,6 +383,12 @@ export default function Dashboard() {
                         <div className="mt-1.5 space-y-1 text-xs text-neutral-500 dark:text-neutral-400">
                           <p className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> {formatDate(event.date)}</p>
                           <p className="flex items-center gap-1.5 truncate"><MapPin className="h-3.5 w-3.5 shrink-0" /> {event.venue}</p>
+                          {reg.isTeam && (
+                            <p className="flex items-center gap-1.5 truncate text-acm-600 dark:text-acm-400">
+                              <Users className="h-3.5 w-3.5 shrink-0" /> Team “{reg.teamName || 'Team'}”
+                              {reg.userId && reg.userId !== user.id && reg.userName ? ` · by ${reg.userName}` : ''}
+                            </p>
+                          )}
                         </div>
                         <Badge tone={reg.status === 'Attended' ? 'neutral' : 'green'} dot={reg.status === 'Confirmed'} className="mt-2">
                           {reg.status}

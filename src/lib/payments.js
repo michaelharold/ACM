@@ -57,6 +57,14 @@ export async function validateMembership({ eventId, membershipId }) {
   return post('/api/validate-membership', { eventId, membershipId }, token)
 }
 
+// Registers a TEAM for a group event. The server validates every teammate email
+// against real accounts and creates one registration for the whole team.
+// Resolves with { id, paymentStatus }; rejects with a readable error otherwise.
+export async function registerTeam({ eventId, teamName, teammates }) {
+  const token = await idToken()
+  return post('/api/register-team', { eventId, teamName, teammates }, token)
+}
+
 // Runs the full secure payment for an event registration (type 'event', refId =
 // registration id) or a membership (type 'membership', refId = uid).
 //

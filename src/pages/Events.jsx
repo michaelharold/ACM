@@ -39,7 +39,7 @@ export default function Events() {
   const { eventId } = useParams()
   const { isAuthed, user } = useAuth()
   const { events, loaded } = useData()
-  const { isRegistered, register, markRegistrationPaid, unregister } = useRegistrations()
+  const { isRegistered, register, addTeamRegistration, markRegistrationPaid, unregister } = useRegistrations()
 
   const list = useMemo(() => {
     const now = Date.now()
@@ -202,6 +202,7 @@ export default function Events() {
         open={!!registering}
         onClose={() => setRegistering(null)}
         onComplete={register}
+        onTeamCreated={addTeamRegistration}
         onPaid={markRegistrationPaid}
         onCancelPay={unregister}
       />

@@ -86,7 +86,13 @@ service cloud.firestore {
 
     // Registrations — a user creates & reads their own; admins read all.
     match /registrations/{id} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      // A user reads their own registration, any team they're a member of
+      // (matched via memberUids), or — for admins — all of them.
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid
+        || request.auth.uid in resource.data.get('memberUids', [])
+        || isAdmin()
+      );
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if isAdmin();
       // A user may remove their OWN registration only while it's unpaid — this

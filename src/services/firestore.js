@@ -164,8 +164,15 @@ export async function deleteTestimonial(id) {
 // ── Registrations ────────────────────────────────────────────
 export async function fetchUserRegistrations(uid) {
   if (!isFirebaseConfigured) return mock.registrations
-  const snap = await getDocs(query(collection(db, 'registrations'), where('userId', '==', uid)))
-  return map(snap)
+  // A user's registrations = ones they created (solo or team leader) PLUS any
+  // team they're a member of (matched via the memberUids array). Merge + dedupe.
+  const [own, team] = await Promise.all([
+    getDocs(query(collection(db, 'registrations'), where('userId', '==', uid))),
+    getDocs(query(collection(db, 'registrations'), where('memberUids', 'array-contains', uid))),
+  ])
+  const byId = new Map()
+  ;[...own.docs, ...team.docs].forEach((d) => byId.set(d.id, { id: d.id, ...d.data() }))
+  return [...byId.values()]
 }
 
 // Returns null in mock mode so the admin roster can fall back to mock participants.

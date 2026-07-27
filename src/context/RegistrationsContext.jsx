@@ -72,6 +72,14 @@ export function RegistrationsProvider({ children }) {
     return created
   }
 
+  // Add a team registration that the server just created (group events are
+  // registered through /api/register-team, not the client register() above), so
+  // the leader immediately sees the event as registered without a refetch.
+  function addTeamRegistration(reg) {
+    if (!reg?.id) return
+    setRegs((prev) => (prev.some((r) => r.id === reg.id) ? prev : [...prev, reg]))
+  }
+
   // Reflect a server-verified payment in local state (the server is the source
   // of truth; this just avoids a refetch).
   function markRegistrationPaid(id) {
@@ -90,7 +98,7 @@ export function RegistrationsProvider({ children }) {
   }
 
   return (
-    <RegistrationsContext.Provider value={{ regs, isRegistered, register, markRegistrationPaid, unregister }}>
+    <RegistrationsContext.Provider value={{ regs, isRegistered, register, addTeamRegistration, markRegistrationPaid, unregister }}>
       {children}
     </RegistrationsContext.Provider>
   )

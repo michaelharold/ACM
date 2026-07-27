@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle, ShieldCheck, Users, Plus, Trash2 } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Input, Select } from '../ui/Input'
 import { Button } from '../ui/Button'
@@ -9,10 +9,10 @@ import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { years } from '../../lib/orgData'
 import { formatDate } from '../../lib/format'
-import { payFor, validateMembership, isPaymentConfigured } from '../../lib/payments'
+import { payFor, validateMembership, registerTeam, isPaymentConfigured } from '../../lib/payments'
 import { cn } from '../../lib/cn'
 
-const steps = ['Your details', 'Eligibility', 'Confirm']
+const emailRe = /\S+@\S+\.\S+/
 
 const slide = {
   enter: (d) => ({ opacity: 0, x: d > 0 ? 40 : -40 }),
@@ -20,7 +20,7 @@ const slide = {
   exit: (d) => ({ opacity: 0, x: d > 0 ? -40 : 40 }),
 }
 
-export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, onCancelPay }) {
+export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCreated, onPaid, onCancelPay }) {
   const { user } = useAuth()
   const { departments } = useData()
   const [[step, dir], setStep] = useState([0, 0])
@@ -32,6 +32,8 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
   const [memberCheck, setMemberCheck] = useState(null)
   const [verifying, setVerifying] = useState(false)
   const [verifyErr, setVerifyErr] = useState('')
+  // Team state for group events.
+  const [teammates, setTeammates] = useState([])
   const [form, setForm] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -41,8 +43,17 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
     year: user?.year || '',
     isMember: user?.acmMember || false,
     membershipId: '',
+    teamName: '',
     agree: false,
   })
+
+  const isGroup = !!event?.isGroup
+  const minTeammates = Math.max(0, (Number(event?.minTeamSize) || 1) - 1)
+  const maxTeammates = Math.max(0, (Number(event?.maxTeamSize) || 1) - 1)
+  const addTeammate = () => setTeammates((t) => (t.length < maxTeammates ? [...t, { name: '', email: '' }] : t))
+  const removeTeammate = (i) => setTeammates((t) => t.filter((_, j) => j !== i))
+  const setTeammate = (i, k, v) => setTeammates((t) => t.map((m, j) => (j === i ? { ...m, [k]: v } : m)))
+  const teammates_filled = () => teammates.filter((t) => t.email.trim()).map((t) => ({ name: t.name.trim(), email: t.email.trim() }))
 
   // Re-seed the form from the profile each time the drawer opens for an event,
   // so the autofilled name/email/phone/department/year always match the current
@@ -57,7 +68,10 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
       department: user?.department || '',
       year: user?.year || '',
       isMember: user?.acmMember || false,
+      teamName: '',
     }))
+    // Seed the minimum number of teammate rows for a group event.
+    setTeammates(event?.isGroup ? Array.from({ length: minTeammates }, () => ({ name: '', email: '' })) : [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, event?.id])
 
@@ -89,19 +103,29 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
   const stepValid = useMemo(() => {
     if (step === 0) return form.name && form.email && form.phone && form.department && form.year
     if (step === 1) {
+      if (isGroup) {
+        if (!form.teamName.trim()) return false
+        const filled = teammates.filter((t) => t.email.trim())
+        if (!filled.every((t) => emailRe.test(t.email.trim()))) return false
+        const size = 1 + filled.length
+        const min = Number(event?.minTeamSize) || 1
+        const max = Number(event?.maxTeamSize) || 999
+        return size >= min && size <= max
+      }
       if (!form.isMember) return true
       if (!canVerify) return form.membershipId.trim().length > 0 // no backend → old behaviour
       return memberCheck?.valid === true // must verify a real member (used or not)
     }
     if (step === 2) return form.agree
     return true
-  }, [step, form, canVerify, memberCheck])
+  }, [step, form, canVerify, memberCheck, isGroup, teammates, event])
 
   if (!event) return null
 
-  // The member discount applies only to a verified, unused id.
-  const discountEligible = !!(memberCheck?.valid && !memberCheck?.alreadyUsed && memberCheck?.discount > 0)
-  const payable = discountEligible ? memberCheck.effectiveFee : (Number(event.fee) || 0)
+  // The member discount applies only to a verified, unused id (solo events only;
+  // group events charge a flat team fee).
+  const discountEligible = !isGroup && !!(memberCheck?.valid && !memberCheck?.alreadyUsed && memberCheck?.discount > 0)
+  const payable = isGroup ? (Number(event.fee) || 0) : (discountEligible ? memberCheck.effectiveFee : (Number(event.fee) || 0))
   const claimedId = memberCheck?.valid && !memberCheck?.alreadyUsed ? form.membershipId.trim() : ''
   const paid = payable > 0 && isPaymentConfigured
 
@@ -114,12 +138,25 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
     // a registration that didn't persist.
     let created
     try {
-      // Only a verified, unused id is claimed — the server re-checks it and
-      // applies the discount, so an unverified/used id gets no benefit.
-      created = await onComplete?.(event, { ...form, membershipId: claimedId, isMember: form.isMember, chargeAmount: payable })
+      if (isGroup) {
+        // The server validates every teammate email against real accounts and
+        // creates the whole team as one registration.
+        const teammates = teammates_filled()
+        const res = await registerTeam({ eventId: event.id, teamName: form.teamName.trim(), teammates })
+        created = { id: res.id }
+        onTeamCreated?.({
+          id: res.id, eventId: event.id, eventName: event.name, isTeam: true,
+          teamName: form.teamName.trim(), paymentStatus: res.paymentStatus, userId: user?.id,
+          counted: (Number(event.maxRegistrations) || 0) > 0,
+        })
+      } else {
+        // Only a verified, unused id is claimed — the server re-checks it and
+        // applies the discount, so an unverified/used id gets no benefit.
+        created = await onComplete?.(event, { ...form, membershipId: claimedId, isMember: form.isMember, chargeAmount: payable })
+      }
     } catch (err) {
       // Show the real reason when it's a meaningful one (e.g. "registration is
-      // full"); otherwise fall back to a generic service-unavailable message.
+      // full", an unregistered teammate); otherwise a generic message.
       setPayError(err?.message || 'We couldn’t save your registration — the service may be temporarily unavailable. Please try again in a moment, or reach us from the Contact page.')
       setSubmitting(false)
       return
@@ -188,6 +225,8 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
             <Row label="Event" value={event.name} />
             <Row label="Date" value={`${formatDate(event.date)} · ${event.time}`} />
             <Row label="Name" value={form.name} />
+            {isGroup && <Row label="Team" value={form.teamName || 'Team'} />}
+            {isGroup && <Row label="Members" value={String(1 + teammates_filled().length)} />}
             {claimedId && <Row label="ACM Member" value={claimedId} />}
           </div>
           <Button className="mt-6 w-full" onClick={handleClose}>
@@ -202,7 +241,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
             <h3 className="mt-1 text-lg font-bold tracking-tight">{event.name}</h3>
           </div>
           <div className="mt-5 flex items-center gap-2">
-            {steps.map((s, i) => (
+            {['Your details', isGroup ? 'Your team' : 'Eligibility', 'Confirm'].map((s, i) => (
               <div key={s} className="flex flex-1 flex-col gap-1.5">
                 <div className={cn('h-1 rounded-full transition-colors', i <= step ? 'bg-acm-600' : 'bg-neutral-200 dark:bg-neutral-800')} />
                 <span className={cn('text-[11px]', i === step ? 'font-medium text-neutral-700 dark:text-neutral-300' : 'text-neutral-400')}>{s}</span>
@@ -249,7 +288,62 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
                   </div>
                 )}
 
-                {step === 1 && (
+                {step === 1 && isGroup && (
+                  <div className="grid gap-4">
+                    <Input
+                      label="Team name"
+                      value={form.teamName}
+                      onChange={set('teamName')}
+                      placeholder="Your team's name"
+                    />
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="flex items-center gap-2 text-sm font-medium">
+                          <Users className="h-4 w-4 text-acm-500" /> Teammates
+                        </span>
+                        <span className="text-xs text-neutral-400">
+                          Team of {1 + teammates_filled().length} · {event.minTeamSize}–{event.maxTeamSize} allowed
+                        </span>
+                      </div>
+                      <p className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">
+                        You’re team member 1. Add each teammate by the email they signed up with — they must have a website account.
+                      </p>
+                      <div className="grid gap-2.5">
+                        {teammates.map((t, i) => (
+                          <div key={i} className="flex items-end gap-2">
+                            <div className="grid flex-1 gap-2 sm:grid-cols-2">
+                              <Input placeholder="Teammate name" value={t.name} onChange={(e) => setTeammate(i, 'name', e.target.value)} />
+                              <Input type="email" placeholder="teammate@email.com" value={t.email} onChange={(e) => setTeammate(i, 'email', e.target.value)} />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeTeammate(i)}
+                              disabled={teammates.length <= minTeammates}
+                              aria-label="Remove teammate"
+                              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-neutral-200 text-neutral-400 transition-colors hover:border-rose-300 hover:text-rose-500 disabled:opacity-30 dark:border-neutral-800"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      {teammates.length < maxTeammates && (
+                        <Button type="button" variant="outline" size="sm" className="mt-2.5" onClick={addTeammate}>
+                          <Plus className="h-4 w-4" /> Add teammate
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 text-sm dark:border-neutral-800 dark:bg-neutral-900/50">
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-500 dark:text-neutral-400">Registration fee (per team)</span>
+                        <span className="font-semibold">{payable > 0 ? `₹${payable}` : 'Free'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {step === 1 && !isGroup && (
                   <div className="grid gap-4">
                     <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
                       <input type="checkbox" checked={form.isMember} onChange={toggleMember} className="mt-0.5 h-4 w-4 accent-acm-600" />
@@ -332,8 +426,15 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
                       <Row label="Name" value={form.name} />
                       <Row label="Email" value={form.email} />
                       <Row label="Department" value={`${form.department} · ${form.year}`} />
-                      <Row label="Membership" value={claimedId ? `Member · ${claimedId}` : (form.isMember ? 'Member' : 'Non-member')} />
-                      <Row label="Fee" value={payable > 0 ? `₹${payable}${discountEligible ? ` (₹${memberCheck.discount} off)` : ''}` : 'Free'} last />
+                      {isGroup ? (
+                        <>
+                          <Row label="Team" value={form.teamName || 'Team'} />
+                          <Row label="Members" value={`${1 + teammates_filled().length} (incl. you)`} />
+                        </>
+                      ) : (
+                        <Row label="Membership" value={claimedId ? `Member · ${claimedId}` : (form.isMember ? 'Member' : 'Non-member')} />
+                      )}
+                      <Row label="Fee" value={payable > 0 ? `₹${payable}${isGroup ? ' / team' : ''}${discountEligible ? ` (₹${memberCheck.discount} off)` : ''}` : 'Free'} last />
                     </div>
                     <label className="flex cursor-pointer items-start gap-3 text-sm">
                       <input type="checkbox" checked={form.agree} onChange={set('agree')} className="mt-0.5 h-4 w-4 accent-acm-600" />
