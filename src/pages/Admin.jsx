@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
-  Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet,
+  Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet, AlertCircle,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
@@ -21,8 +21,8 @@ import { participants as seedParticipants, statusMeta } from '../data/mock'
 import * as svc from '../services/firestore'
 import { avatarDataUri } from '../lib/avatar'
 import { fitPoster } from '../lib/imagePrep'
-import { formatDate } from '../lib/format'
-import { registrationStatus, hasRegWindow } from '../lib/eventClock'
+import { formatDate, to24h, to12h } from '../lib/format'
+import { registrationStatus, hasRegWindow, eventStart } from '../lib/eventClock'
 import { departments as orgDepartments } from '../lib/orgData'
 import { cn } from '../lib/cn'
 
@@ -302,6 +302,7 @@ function EventEditor({ event, onSave }) {
     description: event.description || '',
     fee: event.fee || 0,
     acmDiscount: event.acmDiscount || 0,
+    maxRegistrations: event.maxRegistrations || '',
     paymentAccountId: event.paymentAccountId || '',
     deadline: event.deadline || '',
     regOpens: event.regOpens || '',
@@ -311,6 +312,7 @@ function EventEditor({ event, onSave }) {
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [formErr, setFormErr] = useState('')
   const [accounts, setAccounts] = useState([])
   const fileRef = useRef(null)
 
@@ -322,15 +324,50 @@ function EventEditor({ event, onSave }) {
   const set = (k) => (e) => setDraft((d) => ({ ...d, [k]: e.target.value }))
   const isExternal = draft.external
 
+  // Basic sanity checks so a nonsensical event can't be saved (dates in the
+  // past, discount bigger than the fee, window inverted, etc.). Returns the
+  // first problem to show, or '' when everything's fine.
+  function validate(d) {
+    if (!d.name?.trim()) return 'Give the event a name.'
+    if (!d.date) return 'Pick an event date.'
+    const todayStr = new Date().toISOString().slice(0, 10)
+    if (d.date !== event.date && d.date < todayStr) return 'The event date can’t be in the past.'
+    if (d.external) {
+      if (!d.externalUrl?.trim()) return 'An external event needs its registration URL.'
+    } else {
+      const fee = Number(d.fee)
+      if (d.fee !== '' && (Number.isNaN(fee) || fee < 0)) return 'Fee must be a number of ₹0 or more.'
+      const disc = Number(d.acmDiscount)
+      if (d.acmDiscount !== '' && (Number.isNaN(disc) || disc < 0)) return 'Discount must be a number of ₹0 or more.'
+      if (fee > 0 && disc > fee) return 'The ACM discount can’t be more than the fee.'
+      if (d.maxRegistrations !== '' && d.maxRegistrations != null) {
+        const cap = Number(d.maxRegistrations)
+        if (!Number.isInteger(cap) || cap < 0) return 'Max registrations must be a whole number of 0 or more.'
+      }
+    }
+    const opens = d.regOpens ? new Date(d.regOpens).getTime() : null
+    const closes = d.regCloses ? new Date(d.regCloses).getTime() : null
+    if (opens && closes && opens > closes) return 'Registration “Opens” must be before “Closes”.'
+    if (opens && d.date) {
+      const start = eventStart(d).getTime()
+      if (!Number.isNaN(start) && start < opens) return 'The event start time should be after registration opens.'
+    }
+    return ''
+  }
+
   async function handleSave() {
+    const err = validate(draft)
+    if (err) { setFormErr(err); return }
+    setFormErr('')
     setSaving(true)
     try {
-      // A fee can never be negative — clamp it so a stray "-" can't be saved
-      // (and never reaches Razorpay as a negative amount).
+      // Numbers are clamped so a stray "-" or blank can't be saved (and a fee
+      // never reaches Razorpay negative). Max 0 = unlimited.
       await onSave({
         ...draft,
         fee: Math.max(0, Number(draft.fee) || 0),
         acmDiscount: Math.max(0, Number(draft.acmDiscount) || 0),
+        maxRegistrations: Math.max(0, Math.floor(Number(draft.maxRegistrations) || 0)),
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
@@ -404,8 +441,13 @@ function EventEditor({ event, onSave }) {
         <input type="date" className={cn(inputCls, 'mt-1')} value={draft.date} onChange={set('date')} />
       </label>
       <label className="text-xs font-medium text-neutral-500">
-        Time
-        <input className={cn(inputCls, 'mt-1')} placeholder="10:00 AM" value={draft.time} onChange={set('time')} />
+        Start time
+        <input
+          type="time"
+          className={cn(inputCls, 'mt-1')}
+          value={to24h(draft.time)}
+          onChange={(e) => setDraft((d) => ({ ...d, time: to12h(e.target.value) }))}
+        />
       </label>
       <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
         Venue
@@ -415,6 +457,21 @@ function EventEditor({ event, onSave }) {
         <label className="text-xs font-medium text-neutral-500">
           Registration Fee (₹)
           <input type="number" min="0" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="Enter Registration Fee"  />
+        </label>
+      )}
+      {!isExternal && (
+        <label className="text-xs font-medium text-neutral-500">
+          Max registrations
+          <input
+            type="number"
+            min="0"
+            step="1"
+            className={cn(inputCls, 'mt-1')}
+            value={draft.maxRegistrations}
+            onChange={set('maxRegistrations')}
+            placeholder="0 = unlimited"
+          />
+          <span className="mt-1 block text-[11px] font-normal text-neutral-400">Registration closes automatically once this many people have registered.</span>
         </label>
       )}
       {!isExternal && Number(draft.fee) > 0 && (
@@ -471,6 +528,12 @@ function EventEditor({ event, onSave }) {
         </Button>
         <span className="text-xs text-neutral-400">Countdown & LIVE badge come from date + time automatically.</span>
       </div>
+
+      {formErr && (
+        <p className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700 sm:col-span-2 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {formErr}
+        </p>
+      )}
 
       {/* Saved confirmation card */}
       <AnimatePresence>
