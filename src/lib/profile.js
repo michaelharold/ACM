@@ -15,6 +15,7 @@ export function isProfileComplete(user) {
     user.email &&
     user.phone &&
     isValidPhone(user.phone) &&
+    user.phoneVerified &&
     user.department &&
     user.year
   )
@@ -25,6 +26,7 @@ export function missingProfileFields(user) {
   const missing = []
   if (!user?.name) missing.push('name')
   if (!user?.phone || !isValidPhone(user.phone)) missing.push('a valid phone number')
+  else if (!user?.phoneVerified) missing.push('phone verification')
   if (!user?.department) missing.push('department')
   if (!user?.year) missing.push('year of study')
   return missing

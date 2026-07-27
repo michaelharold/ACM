@@ -63,6 +63,7 @@ export default function Membership() {
     let created
     try {
       created = await createMembership(user.id, {
+        googleName: user.googleName || user.name || '',
         firstName: f.firstName.trim(),
         middleName: f.middleName.trim(),
         lastName: f.lastName.trim(),

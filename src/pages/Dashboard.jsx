@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle } from 'lucide-react'
+import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Input, Select } from '../components/ui/Input'
@@ -14,6 +14,7 @@ import { avatarDataUri } from '../lib/avatar'
 import { formatDate } from '../lib/format'
 import { years } from '../lib/orgData'
 import { isValidPhone, isProfileComplete } from '../lib/profile'
+import { isPhoneOtpEnabled, sendPhoneOtp, confirmPhoneOtp, clearRecaptcha } from '../lib/phoneAuth'
 import { fetchMembership } from '../services/firestore'
 
 export default function Dashboard() {
@@ -32,6 +33,50 @@ export default function Dashboard() {
   const [membership, setMembership] = useState(null)
   const [membershipLoaded, setMembershipLoaded] = useState(false)
   const [formErr, setFormErr] = useState('')
+  // Phone verification (controlled, so OTP state and the number stay in sync).
+  const [phoneInput, setPhoneInput] = useState('')
+  const [phoneVerifiedLocal, setPhoneVerifiedLocal] = useState(false)
+  const [otp, setOtp] = useState({ confirmation: null, sent: false, code: '', busy: false, err: '' })
+
+  // Seed the phone editor from the profile whenever the form opens.
+  useEffect(() => {
+    if (!editing) return
+    setPhoneInput(user?.phone || '')
+    setPhoneVerifiedLocal(!!user?.phoneVerified)
+    setOtp({ confirmation: null, sent: false, code: '', busy: false, err: '' })
+    return () => clearRecaptcha()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing])
+
+  // Editing the number always invalidates a prior verification.
+  function onPhoneChange(v) {
+    setPhoneInput(v)
+    setPhoneVerifiedLocal(!!user?.phoneVerified && v.replace(/\D/g, '') === String(user?.phone || '').replace(/\D/g, ''))
+    setOtp((o) => ({ ...o, sent: false, confirmation: null, code: '', err: '' }))
+  }
+
+  async function handleSendOtp() {
+    if (!isValidPhone(phoneInput)) { setOtp((o) => ({ ...o, err: 'Enter a valid 10-digit phone number.' })); return }
+    setOtp((o) => ({ ...o, busy: true, err: '' }))
+    try {
+      const confirmation = await sendPhoneOtp(phoneInput, 'recaptcha-container')
+      setOtp((o) => ({ ...o, confirmation, sent: true, busy: false }))
+    } catch (err) {
+      clearRecaptcha()
+      setOtp((o) => ({ ...o, busy: false, err: err?.message || 'Could not send the code. Try again.' }))
+    }
+  }
+
+  async function handleConfirmOtp() {
+    setOtp((o) => ({ ...o, busy: true, err: '' }))
+    try {
+      await confirmPhoneOtp(otp.confirmation, otp.code.trim())
+      setPhoneVerifiedLocal(true)
+      setOtp((o) => ({ ...o, busy: false, sent: false }))
+    } catch {
+      setOtp((o) => ({ ...o, busy: false, err: 'That code didn’t match. Check it and try again.' }))
+    }
+  }
 
   useEffect(() => {
     if (!loading && !user) navigate('/auth', { replace: true, state: { from: '/dashboard' } })
@@ -66,12 +111,16 @@ export default function Dashboard() {
   async function handleSave(e) {
     e.preventDefault()
     const data = Object.fromEntries(new FormData(e.currentTarget))
-    const phone = String(data.phone || '').replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '')
+    const phone = String(phoneInput || '').replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '')
     if (!isValidPhone(phone)) { setFormErr('Enter a valid 10-digit phone number.'); return }
+    // With OTP on, the number must be verified; with OTP off (free default), a
+    // valid number is accepted as verified so registration isn't blocked.
+    const verified = isPhoneOtpEnabled ? phoneVerifiedLocal : true
+    if (isPhoneOtpEnabled && !verified) { setFormErr('Verify your phone number with the OTP first.'); return }
     if (!data.department?.trim()) { setFormErr('Select your department.'); return }
     if (!data.year) { setFormErr('Select your year.'); return }
     setFormErr('')
-    const next = { name: data.name.trim() || displayName, phone, department: data.department.trim(), year: data.year }
+    const next = { name: data.name.trim() || displayName, phone, phoneVerified: verified, department: data.department.trim(), year: data.year }
     setSaving(true)
     try {
       await saveProfile(next)
@@ -155,7 +204,42 @@ export default function Dashboard() {
                 <Input label="Full name" name="name" defaultValue={user.name || ''} required />
                 {/* Email is fixed to the signed-in Google account — shown read-only. */}
                 <Input label="Email" name="email" type="email" defaultValue={user.email || ''} disabled readOnly className="cursor-not-allowed opacity-70" />
-                <Input label="Phone (10-digit)" name="phone" type="tel" inputMode="numeric" defaultValue={user.phone || ''} placeholder="9876543210" required />
+
+                {/* Phone — 10-digit; verified via OTP when phone auth is enabled. */}
+                <div>
+                  <Input
+                    label="Phone (10-digit)"
+                    type="tel"
+                    inputMode="numeric"
+                    value={phoneInput}
+                    onChange={(e) => onPhoneChange(e.target.value)}
+                    placeholder="9876543210"
+                  />
+                  {isPhoneOtpEnabled && (
+                    <div className="mt-2">
+                      {phoneVerifiedLocal ? (
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Phone verified
+                        </p>
+                      ) : otp.sent ? (
+                        <div className="flex items-end gap-2">
+                          <Input label="Enter OTP" inputMode="numeric" value={otp.code} onChange={(e) => setOtp((o) => ({ ...o, code: e.target.value }))} placeholder="6-digit code" />
+                          <Button type="button" size="sm" onClick={handleConfirmOtp} disabled={otp.busy || !otp.code.trim()}>
+                            {otp.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Verify
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button type="button" size="sm" variant="outline" onClick={handleSendOtp} disabled={otp.busy || !isValidPhone(phoneInput)}>
+                          {otp.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Phone className="h-4 w-4" />} Send OTP
+                        </Button>
+                      )}
+                      {otp.err && <p className="mt-1.5 flex items-start gap-1.5 text-xs text-rose-600 dark:text-rose-300"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {otp.err}</p>}
+                      {/* Invisible reCAPTCHA mount point for Firebase Phone Auth. */}
+                      <div id="recaptcha-container" />
+                    </div>
+                  )}
+                </div>
+
                 <Select label="Department" name="department" defaultValue={user.department || ''}>
                   <option value="">Select department</option>
                   {departments.map((dept) => (

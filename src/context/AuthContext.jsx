@@ -9,7 +9,7 @@ import {
   updateProfile,
   signOut,
 } from 'firebase/auth'
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db, googleProvider, isFirebaseConfigured } from '../lib/firebase'
 import { updateUserProfile } from '../services/firestore'
 
@@ -18,6 +18,9 @@ const AuthContext = createContext(null)
 // Default profile fields for a freshly created user.
 const defaultProfile = (partial = {}) => ({
   name: 'ACM Member',
+  // The real, unchangeable name from the Google account. `name` above is the
+  // editable display name; googleName is what the chapter keeps on record.
+  googleName: '',
   email: '',
   avatar: '',
   phone: '',
@@ -35,10 +38,20 @@ const defaultProfile = (partial = {}) => ({
 async function ensureProfile(fbUser, extra = {}) {
   const ref = doc(db, 'users', fbUser.uid)
   const snap = await getDoc(ref)
-  if (snap.exists()) return { id: fbUser.uid, ...snap.data() }
+  if (snap.exists()) {
+    const data = snap.data()
+    // Backfill the real Google name on older profiles created before we stored
+    // it, so member records always carry the verified account name.
+    if (!data.googleName && fbUser.displayName) {
+      try { await updateDoc(ref, { googleName: fbUser.displayName }) } catch { /* non-critical */ }
+      data.googleName = fbUser.displayName
+    }
+    return { id: fbUser.uid, ...data }
+  }
 
   const profile = defaultProfile({
     name: fbUser.displayName || extra.name || 'ACM Member',
+    googleName: fbUser.displayName || '',
     email: fbUser.email || '',
     avatar: fbUser.photoURL || '',
     ...extra,
