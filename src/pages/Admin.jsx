@@ -248,7 +248,7 @@ const inputCls =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-acm-400 dark:border-neutral-700 dark:bg-neutral-800'
 
 function Overview({ stats, events }) {
-  const upcoming = [...events].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4)
+  const upcoming = [...events].sort((a, b) => (a.date || '').localeCompare(b.date || '')).slice(0, 4)
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -268,16 +268,22 @@ function Overview({ stats, events }) {
       <div className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Upcoming events</h3>
         <div className="mt-4 divide-y divide-neutral-100 dark:divide-neutral-800">
-          {upcoming.map((e) => (
-            <div key={e.id} className="flex items-center gap-4 py-3">
-              <img src={e.poster} alt="" className="h-11 w-11 rounded-lg object-cover" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{e.name}</p>
-                <p className="text-xs text-neutral-400">{formatDate(e.date)} · {e.venue}</p>
+          {upcoming.map((e) => {
+            // Use the SAME live status the events page shows (derived from the
+            // registration window), not the stored e.status — otherwise every
+            // freshly-created event reads its default 'coming-soon' here.
+            const meta = statusMeta[registrationStatus(e)] || statusMeta['coming-soon']
+            return (
+              <div key={e.id} className="flex items-center gap-4 py-3">
+                <img src={e.poster} alt="" className="h-11 w-11 rounded-lg object-cover" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{e.name}</p>
+                  <p className="text-xs text-neutral-400">{formatDate(e.date)} · {e.venue}</p>
+                </div>
+                <Badge tone={meta.tone}>{meta.label}</Badge>
               </div>
-              <Badge tone={statusMeta[e.status].tone}>{statusMeta[e.status].label}</Badge>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </motion.div>

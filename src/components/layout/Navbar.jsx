@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-motion'
-import { LayoutDashboard, LogOut, User as UserIcon, ChevronDown } from 'lucide-react'
+import { LayoutDashboard, LogOut, User as UserIcon, ChevronDown, ShieldCheck, BadgePlus } from 'lucide-react'
 import { Logo } from '../Logo'
 import { SocialLinks } from '../SocialLinks'
 import { Button } from '../ui/Button'
@@ -37,6 +37,10 @@ export function Navbar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user, logout, isAuthed } = useAuth()
+  // Surface the two most-wanted shortcuts right in the bar: an admin/editor can
+  // jump straight to their panel, and a signed-in non-member sees a Join ACM CTA.
+  const isPrivileged = isAuthed && (user?.role === 'admin' || Object.values(user?.permissions || {}).some(Boolean))
+  const isMember = !!user?.acmMember
   const onHome = pathname === '/'
   const { scrollY } = useScroll()
 
@@ -161,6 +165,18 @@ export function Navbar() {
           <SocialLinks className="hidden md:flex" size="sm" />
           <span className="mx-0.5 hidden h-5 w-px bg-neutral-200 md:block dark:bg-neutral-800" />
 
+          {isPrivileged && (
+            <Button as={Link} to="/admin" size="sm" variant="outline" className="hidden md:inline-flex">
+              <ShieldCheck className="h-4 w-4" />
+              {user.role === 'admin' ? 'Admin' : 'Editor'}
+            </Button>
+          )}
+          {isAuthed && !isMember && (
+            <Button as={Link} to="/membership" size="sm" className="hidden md:inline-flex">
+              <BadgePlus className="h-4 w-4" /> Join ACM
+            </Button>
+          )}
+
           {!isAuthed ? (
             <Button as={Link} to="/auth" size="sm" className="hidden sm:inline-flex">
               Login / Sign Up
@@ -280,8 +296,13 @@ export function Navbar() {
                 <MenuItem to="/dashboard" icon={LayoutDashboard} onClick={() => setOpen(false)}>
                   Dashboard
                 </MenuItem>
-                {(user.role === 'admin' || Object.values(user.permissions || {}).some(Boolean)) && (
-                  <MenuItem to="/admin" icon={UserIcon} onClick={() => setOpen(false)}>
+                {!isMember && (
+                  <MenuItem to="/membership" icon={BadgePlus} onClick={() => setOpen(false)}>
+                    Join ACM
+                  </MenuItem>
+                )}
+                {isPrivileged && (
+                  <MenuItem to="/admin" icon={ShieldCheck} onClick={() => setOpen(false)}>
                     {user.role === 'admin' ? 'Admin Panel' : 'Editor Panel'}
                   </MenuItem>
                 )}
