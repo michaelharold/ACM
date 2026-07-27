@@ -12,12 +12,12 @@ import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
 import { avatarDataUri } from '../lib/avatar'
 import { formatDate } from '../lib/format'
-import { departments, years } from '../lib/orgData'
+import { years } from '../lib/orgData'
 import { fetchMembership } from '../services/firestore'
 
 export default function Dashboard() {
   const { user, loading, logout, saveProfile } = useAuth()
-  const { events } = useData()
+  const { events, departments } = useData()
   const { regs } = useRegistrations()
   const navigate = useNavigate()
   const [selected, setSelected] = useState(null)

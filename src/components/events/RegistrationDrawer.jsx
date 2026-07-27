@@ -6,6 +6,8 @@ import { Input, Select } from '../ui/Input'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useAuth } from '../../context/AuthContext'
+import { useData } from '../../context/DataContext'
+import { years } from '../../lib/orgData'
 import { formatDate } from '../../lib/format'
 import { payFor, validateMembership, isPaymentConfigured } from '../../lib/payments'
 import { cn } from '../../lib/cn'
@@ -20,6 +22,7 @@ const slide = {
 
 export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, onCancelPay }) {
   const { user } = useAuth()
+  const { departments } = useData()
   const [[step, dir], setStep] = useState([0, 0])
   const [done, setDone] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -209,13 +212,17 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
                     </div>
                     <Input label="College" value={form.college} onChange={set('college')} />
                     <div className="grid gap-3.5 sm:grid-cols-2">
-                      <Input label="Department" value={form.department} onChange={set('department')} placeholder="e.g. CSE" />
+                      <Select label="Department" value={form.department} onChange={set('department')}>
+                        <option value="">Select…</option>
+                        {departments.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </Select>
                       <Select label="Year of study" value={form.year} onChange={set('year')}>
                         <option value="">Select…</option>
-                        <option>1st Year</option>
-                        <option>2nd Year</option>
-                        <option>3rd Year</option>
-                        <option>4th Year</option>
+                        {years.map((y) => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
                       </Select>
                     </div>
                   </div>

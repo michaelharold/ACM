@@ -7,7 +7,6 @@ import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
-import { departments } from '../lib/orgData'
 import { fetchMembership, createMembership, probeWritable } from '../services/firestore'
 import { payFor, isPaymentConfigured } from '../lib/payments'
 import { avatarDataUri } from '../lib/avatar'
@@ -16,7 +15,7 @@ const fullName = (m) => [m.firstName, m.middleName, m.lastName].filter(Boolean).
 
 export default function Membership() {
   const { user, loading, saveProfile } = useAuth()
-  const { content } = useData()
+  const { content, departments } = useData()
   const navigate = useNavigate()
   const membershipFee = Number(content?.membershipFee) || 0
   const chargesFee = membershipFee > 0 && isPaymentConfigured

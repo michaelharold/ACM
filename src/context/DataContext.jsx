@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import * as mock from '../data/mock'
 import * as svc from '../services/firestore'
 import { isFirebaseConfigured } from '../lib/firebase'
+import { departments as defaultDepartments } from '../lib/orgData'
 
 const DataContext = createContext(null)
 
@@ -32,6 +33,12 @@ export function DataProvider({ children }) {
   const [gallery, setGallery] = useState([])
   const [content, setContent] = useState(defaultContent)
   const [loaded, setLoaded] = useState(!isFirebaseConfigured)
+
+  // The single source of truth for department options across the whole app
+  // (profile, event registration, …). Admin-managed via Site Content; falls
+  // back to the built-in campus list until an admin customises it.
+  const departments =
+    Array.isArray(content.departments) && content.departments.length ? content.departments : defaultDepartments
 
   useEffect(() => {
     let alive = true
@@ -118,6 +125,7 @@ export function DataProvider({ children }) {
         testimonials,
         gallery,
         content,
+        departments,
         loaded,
         addGalleryImages,
         removeGalleryImage,

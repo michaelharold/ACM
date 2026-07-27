@@ -23,6 +23,7 @@ import { avatarDataUri } from '../lib/avatar'
 import { fitPoster } from '../lib/imagePrep'
 import { formatDate } from '../lib/format'
 import { registrationStatus, hasRegWindow } from '../lib/eventClock'
+import { departments as orgDepartments } from '../lib/orgData'
 import { cn } from '../lib/cn'
 
 const statusCycle = ['open', 'coming-soon', 'closed']
@@ -560,6 +561,13 @@ function SiteContentPanel() {
   const addAnn = () => mark({ ...draft, announcements: [...draft.announcements, { id: `a_${Date.now()}`, tag: 'New', text: '' }] })
   const delAnn = (i) => mark({ ...draft, announcements: draft.announcements.filter((_, j) => j !== i) })
 
+  // Departments — the shared dropdown options for profiles and event
+  // registration. Empty until customised, which falls back to the built-in list.
+  const depts = Array.isArray(draft.departments) && draft.departments.length ? draft.departments : orgDepartments
+  const setDept = (i, v) => mark({ ...draft, departments: depts.map((d, j) => (j === i ? v : d)) })
+  const addDept = () => mark({ ...draft, departments: [...depts, ''] })
+  const delDept = (i) => mark({ ...draft, departments: depts.filter((_, j) => j !== i) })
+
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 p-5 dark:border-neutral-800">
@@ -567,7 +575,12 @@ function SiteContentPanel() {
           <h3 className="font-semibold tracking-tight">Site content</h3>
           <p className="mt-1 text-xs text-neutral-400">Edit the front-page copy — headline, vision/mission/values, why-join cards, stats and the ticker. Live on the site, no code.</p>
         </div>
-        <Button size="sm" disabled={!dirty} onClick={() => { updateContent(draft); setDirty(false) }}>
+        <Button size="sm" disabled={!dirty} onClick={() => {
+          // Clean the department list on the way out: trim, drop blanks, de-dupe.
+          const cleaned = [...new Set((draft.departments || []).map((d) => d.trim()).filter(Boolean))]
+          updateContent({ ...draft, departments: cleaned })
+          setDirty(false)
+        }}>
           <Save className="h-4 w-4" /> {dirty ? 'Save changes' : 'Saved'}
         </Button>
       </div>
@@ -665,6 +678,36 @@ function SiteContentPanel() {
             value={draft.established}
             onChange={(e) => mark({ ...draft, established: e.target.value })}
           />
+        </div>
+
+        {/* Departments — shared dropdown options */}
+        <div>
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Departments</h4>
+            <Button size="sm" variant="outline" onClick={addDept}><Plus className="h-4 w-4" /> Add</Button>
+          </div>
+          <p className="mt-1 text-xs text-neutral-400">
+            The options members pick from in their profile and when registering for events. Changes apply everywhere on save.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {depts.map((d, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  className={cn(inputCls, 'flex-1')}
+                  value={d}
+                  placeholder="Department name…"
+                  onChange={(e) => setDept(i, e.target.value)}
+                />
+                <button
+                  onClick={() => delDept(i)}
+                  aria-label="Delete department"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-rose-300 hover:text-rose-500 dark:border-neutral-800"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Stats */}
