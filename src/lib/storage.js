@@ -21,10 +21,23 @@ let storage = null
 if (isFirebaseConfigured && app) {
   try {
     storage = getStorage(app)
+    // Fail FAST when Storage isn't reachable (e.g. not enabled on the Spark
+    // plan). The SDK otherwise retries for its default 10 minutes before giving
+    // up, which made a single save appear to hang forever while it re-uploaded
+    // every inline photo. A few seconds is plenty to reach a working bucket; if
+    // it can't, we fall back to the inline base64 copy immediately.
+    storage.maxUploadRetryTime = 8000
+    storage.maxOperationRetryTime = 8000
   } catch {
     storage = null // no bucket configured — fall back to inline base64
   }
 }
+
+// Resolve to the original data URI if an upload hasn't finished in time, so a
+// stalled Storage request can never block a save. The upload keeps running in
+// the background but we stop waiting on it and keep the inline copy.
+const withTimeout = (promise, ms, fallback) =>
+  Promise.race([promise, new Promise((r) => setTimeout(() => r(fallback), ms))])
 
 // Upload a base64 data URI to `<prefix>/<id>.jpg` and return its download URL.
 // Anything that isn't a fresh data URI (already an https/gs URL, or empty) is
@@ -36,8 +49,10 @@ export async function uploadImage(prefix, dataUri) {
   try {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
     const objRef = ref(storage, `${prefix}/${id}.jpg`)
-    await uploadString(objRef, dataUri, 'data_url')
-    return await getDownloadURL(objRef)
+    const upload = uploadString(objRef, dataUri, 'data_url').then(() => getDownloadURL(objRef))
+    // Never wait more than ~9s: if Storage is slow/unreachable, keep the inline
+    // copy so the surrounding save completes promptly instead of hanging.
+    return await withTimeout(upload, 9000, dataUri)
   } catch {
     return dataUri // Storage unavailable — keep the inline copy, nothing breaks
   }

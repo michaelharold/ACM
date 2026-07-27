@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, Trash2, Save, ImageUp, ChevronUp, ChevronDown, Users, GripVertical, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '../ui/Button'
@@ -30,6 +30,18 @@ export function ExecomPanel() {
   const [open, setOpen] = useState(() => new Set([0]))
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null)
+  // When a team is added we scroll it into view — the new team lands at the
+  // bottom of a long list, so without this you'd stay at the top and think
+  // nothing happened.
+  const teamRefs = useRef({})
+  const [scrollTo, setScrollTo] = useState(null)
+
+  useEffect(() => {
+    if (scrollTo == null) return
+    const el = teamRefs.current[scrollTo]
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setScrollTo(null)
+  }, [scrollTo])
 
   const mark = (next) => {
     setDraft(next)
@@ -45,11 +57,21 @@ export function ExecomPanel() {
   // ── Team level ──────────────────────────────────────────────
   const setTeam = (gi, p) => mark(draft.map((g, i) => (i === gi ? { ...g, ...p } : g)))
   const addTeam = () => {
+    const at = draft.length
     mark([...draft, { team: 'New Team', icon: 'Star', members: [] }])
-    setOpen((s) => new Set([...s, draft.length]))
+    setOpen((s) => new Set([...s, at]))
+    setScrollTo(at) // jump to the freshly added team at the bottom
   }
   const removeTeam = (gi) => mark(draft.filter((_, i) => i !== gi))
   const moveTeam = (gi, dir) => mark(moveItem(draft, gi, gi + dir))
+  // Jump a team straight to a chosen position (1-based) — quicker than clicking
+  // the arrows repeatedly when reordering a long roster.
+  const reorderTeam = (gi, toHuman) => {
+    const to = Math.max(0, Math.min(draft.length - 1, Number(toHuman) - 1))
+    if (Number.isNaN(to) || to === gi) return
+    mark(moveItem(draft, gi, to))
+    setScrollTo(to)
+  }
 
   // ── Member level ────────────────────────────────────────────
   const setMember = (gi, mi, p) =>
@@ -113,7 +135,7 @@ export function ExecomPanel() {
             <Users className="h-4 w-4 text-acm-500" /> Execom
           </h3>
           <p className="mt-1 text-xs text-neutral-400">
-            Add teams and members, write their bios, and drag the arrows to set the order they appear in on the site.
+            Add teams and members, write their bios, and use the arrows or the position number to set the order they appear in on the site.
           </p>
         </div>
         <div className="flex gap-2">
@@ -146,10 +168,10 @@ export function ExecomPanel() {
           const Icon = iconMap[g.icon]
           const isOpen = open.has(gi)
           return (
-            <div key={gi} className="p-4 sm:p-5">
+            <div key={gi} ref={(el) => { teamRefs.current[gi] = el }} className="p-4 sm:p-5">
               {/* Team header — order controls, name, icon */}
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex shrink-0 flex-col">
+                <div className="flex shrink-0 flex-col items-center gap-0.5">
                   <button
                     onClick={() => moveTeam(gi, -1)}
                     disabled={gi === 0}
@@ -158,6 +180,19 @@ export function ExecomPanel() {
                   >
                     <ChevronUp className="h-3.5 w-3.5" />
                   </button>
+                  {/* Type/pick the exact position — faster than the arrows on a
+                      long roster. Shows this team's current number. */}
+                  <select
+                    value={gi + 1}
+                    onChange={(e) => reorderTeam(gi, e.target.value)}
+                    aria-label={`Position of ${g.team || 'team'}`}
+                    title="Set team position"
+                    className="w-11 rounded border border-neutral-200 bg-white px-1 py-0.5 text-center text-xs font-semibold tabular-nums outline-none focus:border-acm-400 dark:border-neutral-700 dark:bg-neutral-800"
+                  >
+                    {draft.map((_, i) => (
+                      <option key={i} value={i + 1}>{i + 1}</option>
+                    ))}
+                  </select>
                   <button
                     onClick={() => moveTeam(gi, 1)}
                     disabled={gi === draft.length - 1}
