@@ -1,13 +1,15 @@
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, ArrowUpRight, Timer, Radio, ExternalLink } from 'lucide-react'
+import { CalendarDays, MapPin, ArrowUpRight, Timer, Radio, ExternalLink, CheckCircle2 } from 'lucide-react'
 import { Badge } from '../ui/Badge'
 import { PosterImage } from './PosterImage'
 import { fadeUp } from '../ui/Reveal'
 import { statusMeta } from '../../data/mock'
 import { useEventClock, registrationStatus } from '../../lib/eventClock'
 import { formatDate } from '../../lib/format'
+import { cn } from '../../lib/cn'
 
-export function EventCard({ event, onOpen }) {
+// `registered` shows a Registered mark; `muted` greys out an event that's over.
+export function EventCard({ event, onOpen, registered = false, muted = false }) {
   const { isLive, countdown } = useEventClock(event)
   // Recomputed on every clock tick, so the badge flips Open/Closed on its own.
   const status = registrationStatus(event)
@@ -21,7 +23,12 @@ export function EventCard({ event, onOpen }) {
       whileHover={{ y: -6 }}
       whileTap={{ scale: 0.985 }}
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left shadow-transparent transition-[border-color,box-shadow] duration-300 hover:border-acm-300 hover:shadow-lg hover:shadow-acm-600/5 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-acm-500/40"
+      className={cn(
+        'group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left shadow-transparent transition-[border-color,box-shadow] duration-300 hover:border-acm-300 hover:shadow-lg hover:shadow-acm-600/5 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-acm-500/40',
+        // An event that's over is shown in black & white and slightly faded, so
+        // the eye lands on what's still live first.
+        muted && 'opacity-60 grayscale transition-[filter,opacity] hover:opacity-100 hover:grayscale-0',
+      )}
     >
       {/* Poster — shown in full (uncropped) so portrait / story posters aren't
           chopped; a blurred fill covers any letterbox area. */}
@@ -36,6 +43,13 @@ export function EventCard({ event, onOpen }) {
             {meta.label}
           </Badge>
         </div>
+
+        {/* Registered mark — top-right, unless the LIVE badge is there */}
+        {registered && !isLive && (
+          <span className="absolute right-3 top-3 z-20 inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-lg shadow-emerald-600/40">
+            <CheckCircle2 className="h-3 w-3" /> Registered
+          </span>
+        )}
 
         {/* LIVE NOW — red badge in the top-right once the event has started */}
         {isLive && (

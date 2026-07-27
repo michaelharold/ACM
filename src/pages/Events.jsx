@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import { CalendarClock } from 'lucide-react'
 import { SectionHeading } from '../components/SectionHeading'
-import { Reveal } from '../components/ui/Reveal'
+import { stagger } from '../components/ui/Reveal'
 import { EventCard } from '../components/events/EventCard'
 import { EventDetailsModal } from '../components/events/EventDetailsModal'
 import { RegistrationDrawer } from '../components/events/RegistrationDrawer'
@@ -11,15 +12,24 @@ import { BrandBackdrop } from '../components/sections/BrandBackdrop'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
-import { registrationStatus } from '../lib/eventClock'
+import { registrationStatus, eventStart, LIVE_WINDOW_MS } from '../lib/eventClock'
 import { cn } from '../lib/cn'
 
 const filters = [
   { key: 'all', label: 'All' },
+  { key: 'latest', label: 'Latest' },
   { key: 'open', label: 'Registration Open' },
+  { key: 'ongoing', label: 'Ongoing' },
   { key: 'coming-soon', label: 'Coming Soon' },
+  { key: 'registered', label: 'Registered' },
   { key: 'closed', label: 'Closed' },
+  { key: 'past', label: 'Past' },
 ]
+
+// Time helpers shared by the filters and the ordering below.
+const startMs = (e) => eventStart(e).getTime()
+const isEnded = (e, now) => now > startMs(e) + LIVE_WINDOW_MS
+const isLiveNow = (e, now) => now >= startMs(e) && now <= startMs(e) + LIVE_WINDOW_MS
 
 export default function Events() {
   const [filter, setFilter] = useState('all')
@@ -30,10 +40,37 @@ export default function Events() {
   const { events, loaded } = useData()
   const { isRegistered, register, markRegistrationPaid, unregister } = useRegistrations()
 
-  const list = useMemo(
-    () => (filter === 'all' ? events : events.filter((e) => registrationStatus(e) === filter)),
-    [filter, events],
-  )
+  const list = useMemo(() => {
+    const now = Date.now()
+    // Filter first.
+    const match = (e) => {
+      const status = registrationStatus(e)
+      switch (filter) {
+        case 'latest': return !isEnded(e, now)
+        case 'open': return status === 'open' && !isEnded(e, now)
+        case 'ongoing': return isLiveNow(e, now)
+        case 'coming-soon': return status === 'coming-soon' && !isEnded(e, now)
+        case 'registered': return isRegistered(e.id)
+        case 'closed': return status === 'closed' && !isEnded(e, now)
+        case 'past': return isEnded(e, now)
+        default: return true // 'all'
+      }
+    }
+    // Then order. Live/registerable-and-unregistered events stay on top; the
+    // registered ones sink a little, closed further, and finished events drop to
+    // the bottom (shown in B&W). Within a group, the latest event comes first.
+    const rank = (e) => {
+      if (isEnded(e, now)) return 3
+      if (isRegistered(e.id)) return 1
+      if (registrationStatus(e) === 'closed') return 2
+      return 0
+    }
+    return events
+      .filter(match)
+      .sort((a, b) => rank(a) - rank(b) || startMs(b) - startMs(a))
+  }, [filter, events, isRegistered])
+
+  const now = Date.now()
 
   // The open event is derived from the URL, so /events/:id is shareable and the
   // back button closes the details view.
@@ -116,12 +153,26 @@ export default function Events() {
               ))}
             </div>
 
-            {/* Grid */}
-            <Reveal key={filter} className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" amount={0.05}>
+            {/* Grid — animates on mount (not on scroll) so events painted after
+                the async Firestore load are never left stuck invisible until the
+                next interaction. */}
+            <motion.div
+              key={filter}
+              variants={stagger}
+              initial="hidden"
+              animate="show"
+              className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+            >
               {list.map((event) => (
-                <EventCard key={event.id} event={event} onOpen={(e) => navigate(`/events/${e.id}`)} />
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  onOpen={(e) => navigate(`/events/${e.id}`)}
+                  registered={isRegistered(event.id)}
+                  muted={isEnded(event, now)}
+                />
               ))}
-            </Reveal>
+            </motion.div>
 
             {list.length === 0 && (
               <p className="mt-16 text-center text-sm text-neutral-500">No events in this category yet.</p>
