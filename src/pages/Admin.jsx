@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -96,6 +96,10 @@ export default function Admin() {
           department: r.department || '—',
           college: r.college || '—',
           acmMember: !!r.acmMember,
+          isTeam: !!r.isTeam,
+          teamName: r.teamName || '',
+          members: r.members || [],
+          teamSize: r.teamSize || (r.members ? r.members.length : 1),
           status: r.status || 'Confirmed',
           paymentStatus: r.paymentStatus || '',
           paymentId: r.razorpayPaymentId || '',
@@ -1077,26 +1081,156 @@ function RegistrationsPanel({ rows, events = [], adminName }) {
 
   const alerts = filtered.filter((r) => paymentNeedsCheck(r)).length
 
-  function exportCsv() {
-    downloadCsv('event-registrations', filtered, [
-      { label: 'Name', value: (r) => r.name },
-      { label: 'Email', value: (r) => r.email },
-      { label: 'Event', value: (r) => r.event },
-      { label: 'Department', value: (r) => r.department },
-      { label: 'College', value: (r) => r.college },
-      { label: 'ACM Member', value: (r) => (r.acmMember ? 'Yes' : 'No') },
-      { label: 'Status', value: (r) => r.status },
-      { label: 'Payment', value: (r) => paymentLabel(r) },
-      { label: 'Payment ID', value: (r) => r.paymentId || '' },
-      { label: 'Paid at', value: (r) => fmtDateTime(r.paidAt) },
-    ])
-  }
+  // Team member rows expand to show every member's email + phone.
+  const [expanded, setExpanded] = useState(() => new Set())
+  const toggleExpand = (id) => setExpanded((s) => {
+    const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n
+  })
+
+  // With no filter applied, group the roster by event; each group exports on its own.
+  const grouped = eventFilter === 'all' && dept === 'all' && member === 'all'
+  const groups = useMemo(() => {
+    const m = new Map()
+    filtered.forEach((r) => {
+      const k = r.event || '—'
+      if (!m.has(k)) m.set(k, [])
+      m.get(k).push(r)
+    })
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [filtered])
+
+  const slug = (s) => (s || 'event').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+
+  // CSV columns are team-aware: team name + every member's name/email/phone are
+  // filled for team rows and blank for solo ones.
+  const csvCols = [
+    { label: 'Team', value: (r) => (r.isTeam ? r.teamName : '') },
+    { label: 'Name', value: (r) => r.name },
+    { label: 'Email', value: (r) => r.email },
+    { label: 'Event', value: (r) => r.event },
+    { label: 'Department', value: (r) => r.department },
+    { label: 'College', value: (r) => r.college },
+    { label: 'Team members', value: (r) => (r.isTeam ? (r.members || []).map((m) => m.name).filter(Boolean).join('; ') : '') },
+    { label: 'Member emails', value: (r) => (r.isTeam ? (r.members || []).map((m) => m.email).filter(Boolean).join('; ') : '') },
+    { label: 'Member phones', value: (r) => (r.isTeam ? (r.members || []).map((m) => m.phone).filter(Boolean).join('; ') : '') },
+    { label: 'ACM Member', value: (r) => (r.acmMember ? 'Yes' : 'No') },
+    { label: 'Status', value: (r) => r.status },
+    { label: 'Payment', value: (r) => paymentLabel(r) },
+    { label: 'Payment ID', value: (r) => r.paymentId || '' },
+    { label: 'Paid at', value: (r) => fmtDateTime(r.paidAt) },
+  ]
+  const exportCsv = (list, name = 'event-registrations') => downloadCsv(name, list, csvCols)
+
+  const renderTable = (list) => (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[860px] text-left text-sm">
+        <thead className="text-xs uppercase tracking-wide text-neutral-400">
+          <tr className="border-b border-neutral-100 dark:border-neutral-800">
+            <th className="px-5 py-3 font-medium">Participant / Team</th>
+            <th className="px-5 py-3 font-medium">Event</th>
+            <th className="px-5 py-3 font-medium">Department</th>
+            <th className="px-5 py-3 font-medium">ACM</th>
+            <th className="px-5 py-3 font-medium">Status</th>
+            <th className="px-5 py-3 font-medium">Payment</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+          {list.map((p) => {
+            const isOpen = expanded.has(p.id)
+            return (
+              <Fragment key={p.id}>
+                <tr className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40">
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0">
+                        {p.isTeam ? (
+                          <>
+                            <button onClick={() => toggleExpand(p.id)} className="flex items-center gap-1.5 text-left font-medium">
+                              <Users className="h-3.5 w-3.5 text-acm-500" /> {p.teamName || 'Team'}
+                              <ChevronDown className={cn('h-3.5 w-3.5 text-neutral-400 transition-transform', isOpen && 'rotate-180')} />
+                            </button>
+                            <div className="text-xs text-neutral-400">{p.teamSize} members · led by {p.name}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="font-medium">{p.name}</div>
+                            <div className="text-xs text-neutral-400">{p.email}</div>
+                          </>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setMsgTo(p)}
+                        disabled={!p.userId}
+                        title={p.userId ? 'Message the registrant' : 'No account linked'}
+                        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-acm-300 hover:text-acm-500 disabled:opacity-30 dark:border-neutral-700"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.event}</td>
+                  <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.department}</td>
+                  <td className="px-5 py-3">
+                    {p.acmMember ? <Badge tone="blue">Member</Badge> : <span className="text-neutral-400">—</span>}
+                  </td>
+                  <td className="px-5 py-3">
+                    <Badge tone={p.status === 'Confirmed' ? 'green' : 'amber'} dot={p.status === 'Confirmed'}>{p.status}</Badge>
+                  </td>
+                  <td className="px-5 py-3">
+                    {(p.paymentStatus || '').toLowerCase() === 'paid' ? (
+                      <div>
+                        <Badge tone="green" dot>Paid</Badge>
+                        {p.paymentId && (
+                          <div className="mt-1 text-[11px] leading-tight text-neutral-400">
+                            <code>{p.paymentId}</code>
+                            {fmtDateTime(p.paidAt) && <div>{fmtDateTime(p.paidAt)}</div>}
+                          </div>
+                        )}
+                      </div>
+                    ) : (p.paymentStatus || '').toLowerCase() === 'pending' ? (
+                      paymentNeedsCheck(p) ? (
+                        <span className="inline-flex items-center gap-1.5" title="Stuck pending — a payment may have been taken but not recorded. Check Razorpay.">
+                          <Badge tone="red" dot>Check</Badge>
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                        </span>
+                      ) : (
+                        <Badge tone="amber">Pending</Badge>
+                      )
+                    ) : (
+                      <span className="text-neutral-400">Free</span>
+                    )}
+                  </td>
+                </tr>
+                {p.isTeam && isOpen && (
+                  <tr className="bg-neutral-50/60 dark:bg-neutral-800/30">
+                    <td colSpan={6} className="px-5 py-3">
+                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Team members</div>
+                      <div className="grid gap-1.5 sm:grid-cols-2">
+                        {(p.members || []).map((m, i) => (
+                          <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                            <span className="font-medium">{m.name || '—'}</span>
+                            {m.role === 'leader' && <Badge tone="blue">Leader</Badge>}
+                            <span className="text-neutral-400">{m.email}</span>
+                            {m.phone && <span className="text-neutral-400">· {m.phone}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 p-5 dark:border-neutral-800">
         <h3 className="font-semibold tracking-tight">Registration roster</h3>
-        <Button size="sm" variant="outline" onClick={exportCsv} disabled={!filtered.length}>
+        <Button size="sm" variant="outline" onClick={() => exportCsv(filtered)} disabled={!filtered.length}>
           <Download className="h-4 w-4" /> Export CSV
         </Button>
       </div>
@@ -1140,74 +1274,30 @@ function RegistrationsPanel({ rows, events = [], adminName }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] text-left text-sm">
-          <thead className="text-xs uppercase tracking-wide text-neutral-400">
-            <tr className="border-b border-neutral-100 dark:border-neutral-800">
-              <th className="px-5 py-3 font-medium">Participant</th>
-              <th className="px-5 py-3 font-medium">Event</th>
-              <th className="px-5 py-3 font-medium">Department</th>
-              <th className="px-5 py-3 font-medium">ACM</th>
-              <th className="px-5 py-3 font-medium">Status</th>
-              <th className="px-5 py-3 font-medium">Payment</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-            {filtered.map((p) => (
-              <tr key={p.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40">
-                <td className="px-5 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="min-w-0">
-                      <div className="font-medium">{p.name}</div>
-                      <div className="text-xs text-neutral-400">{p.email}</div>
-                    </div>
-                    <button
-                      onClick={() => setMsgTo(p)}
-                      disabled={!p.userId}
-                      title={p.userId ? 'Message this participant' : 'No account linked'}
-                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-acm-300 hover:text-acm-500 disabled:opacity-30 dark:border-neutral-700"
-                    >
-                      <MessageSquare className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </td>
-                <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.event}</td>
-                <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.department}</td>
-                <td className="px-5 py-3">
-                  {p.acmMember ? <Badge tone="blue">Member</Badge> : <span className="text-neutral-400">—</span>}
-                </td>
-                <td className="px-5 py-3">
-                  <Badge tone={p.status === 'Confirmed' ? 'green' : 'amber'} dot={p.status === 'Confirmed'}>{p.status}</Badge>
-                </td>
-                <td className="px-5 py-3">
-                  {(p.paymentStatus || '').toLowerCase() === 'paid' ? (
-                    <div>
-                      <Badge tone="green" dot>Paid</Badge>
-                      {p.paymentId && (
-                        <div className="mt-1 text-[11px] leading-tight text-neutral-400">
-                          <code>{p.paymentId}</code>
-                          {fmtDateTime(p.paidAt) && <div>{fmtDateTime(p.paidAt)}</div>}
-                        </div>
-                      )}
-                    </div>
-                  ) : (p.paymentStatus || '').toLowerCase() === 'pending' ? (
-                    paymentNeedsCheck(p) ? (
-                      <span className="inline-flex items-center gap-1.5" title="Stuck pending — a payment may have been taken but not recorded. Check Razorpay.">
-                        <Badge tone="red" dot>Check</Badge>
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                      </span>
-                    ) : (
-                      <Badge tone="amber">Pending</Badge>
-                    )
-                  ) : (
-                    <span className="text-neutral-400">Free</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {filtered.length === 0 ? (
+        <p className="p-10 text-center text-sm text-neutral-500">
+          {rows.length ? 'No registrations match these filters.' : 'No registrations yet.'}
+        </p>
+      ) : grouped ? (
+        // No filter → one section per event, each independently exportable.
+        <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
+          {groups.map(([name, list]) => (
+            <div key={name}>
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-neutral-50/60 px-5 py-3 dark:bg-neutral-800/30">
+                <h4 className="text-sm font-semibold tracking-tight">
+                  {name} <span className="text-neutral-400">({list.length})</span>
+                </h4>
+                <Button size="sm" variant="outline" onClick={() => exportCsv(list, `registrations-${slug(name)}`)}>
+                  <Download className="h-4 w-4" /> Export
+                </Button>
+              </div>
+              {renderTable(list)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        renderTable(filtered)
+      )}
       <div className="flex items-center justify-between border-t border-neutral-100 p-4 dark:border-neutral-800">
         <span className="text-xs text-neutral-400">{filtered.length} of {rows.length} registrations</span>
       </div>
