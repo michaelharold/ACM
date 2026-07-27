@@ -33,6 +33,13 @@ export function RegistrationsProvider({ children }) {
 
   async function register(event, form = {}) {
     if (!event || isRegistered(event.id)) return null
+    // Capacity: when the event caps registrations, refuse once it's full. Read
+    // the count fresh so we don't admit past the cap on stale data.
+    const max = Number(event.maxRegistrations) || 0
+    if (max > 0) {
+      const count = await svc.fetchEventCount(event.id)
+      if (count >= max) throw new Error('Sorry — registration for this event is full.')
+    }
     // The amount actually collected — the drawer passes this after any member
     // discount, so a fully-discounted registration is correctly 'free', not a
     // 'pending' that can never be paid.
@@ -53,9 +60,15 @@ export function RegistrationsProvider({ children }) {
       // Paid registrations start 'pending' and flip to 'paid' once the server
       // verifies the Razorpay payment; nothing-to-pay registrations are 'free'.
       paymentStatus: chargeAmount > 0 ? 'pending' : 'free',
+      // Remember whether this event tracks capacity, so a later cleanup knows to
+      // release the slot (and we never decrement an uncapped event's counter).
+      counted: max > 0,
     }
     const created = await svc.createRegistration(regDoc)
     setRegs((prev) => [...prev, created])
+    // Reserve the slot. For paid events this holds the place through checkout;
+    // a cancelled/failed payment releases it via unregister().
+    if (max > 0) svc.bumpEventCount(event.id, 1)
     return created
   }
 
@@ -69,7 +82,10 @@ export function RegistrationsProvider({ children }) {
   // user isn't left "registered" without paying and can try again.
   async function unregister(id) {
     if (!id) return
+    const reg = regs.find((r) => r.id === id)
     try { await svc.deleteRegistration(id) } catch { /* best-effort cleanup */ }
+    // Release the capacity slot this registration was holding.
+    if (reg?.counted && reg?.eventId) svc.bumpEventCount(reg.eventId, -1)
     setRegs((prev) => prev.filter((r) => r.id !== id))
   }
 

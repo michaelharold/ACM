@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
 import { registrationStatus, eventStart, LIVE_WINDOW_MS } from '../lib/eventClock'
+import { isProfileComplete } from '../lib/profile'
 import { cn } from '../lib/cn'
 
 const filters = [
@@ -36,7 +37,7 @@ export default function Events() {
   const [registering, setRegistering] = useState(null)
   const navigate = useNavigate()
   const { eventId } = useParams()
-  const { isAuthed } = useAuth()
+  const { isAuthed, user } = useAuth()
   const { events, loaded } = useData()
   const { isRegistered, register, markRegistrationPaid, unregister } = useRegistrations()
 
@@ -87,6 +88,13 @@ export default function Events() {
     if (!isAuthed) {
       // Per SDD: redirect to Authentication Page if login is required, then back.
       navigate('/auth', { state: { from: `/events/${event.id}` } })
+      return
+    }
+    // Only a complete profile can register — the organiser needs a usable name,
+    // email, phone, department and year. Send them to the profile to finish it,
+    // then straight back to this event.
+    if (!isProfileComplete(user)) {
+      navigate('/dashboard', { state: { completeProfile: true, from: `/events/${event.id}` } })
       return
     }
     navigate('/events')

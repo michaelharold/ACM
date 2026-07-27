@@ -4,7 +4,7 @@ import { Badge } from '../ui/Badge'
 import { PosterImage } from './PosterImage'
 import { fadeUp } from '../ui/Reveal'
 import { statusMeta } from '../../data/mock'
-import { useEventClock, registrationStatus } from '../../lib/eventClock'
+import { useEventClock, registrationStatus, isFull } from '../../lib/eventClock'
 import { formatDate } from '../../lib/format'
 import { cn } from '../../lib/cn'
 
@@ -12,8 +12,10 @@ import { cn } from '../../lib/cn'
 export function EventCard({ event, onOpen, registered = false, muted = false }) {
   const { isLive, countdown } = useEventClock(event)
   // Recomputed on every clock tick, so the badge flips Open/Closed on its own.
-  const status = registrationStatus(event)
-  const meta = statusMeta[status]
+  // A full event reads as closed, with its own "Registrations Full" label.
+  const full = isFull(event)
+  const status = full ? 'closed' : registrationStatus(event)
+  const meta = full ? { label: 'Registrations Full', tone: 'red' } : statusMeta[status]
 
   return (
     <motion.button

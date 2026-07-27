@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint } from 'lucide-react'
+import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Input, Select } from '../components/ui/Input'
@@ -13,6 +13,7 @@ import { useRegistrations } from '../context/RegistrationsContext'
 import { avatarDataUri } from '../lib/avatar'
 import { formatDate } from '../lib/format'
 import { years } from '../lib/orgData'
+import { isValidPhone, isProfileComplete } from '../lib/profile'
 import { fetchMembership } from '../services/firestore'
 
 export default function Dashboard() {
@@ -20,11 +21,17 @@ export default function Dashboard() {
   const { events, departments } = useData()
   const { regs } = useRegistrations()
   const navigate = useNavigate()
+  const location = useLocation()
+  // Arriving here from a "register" click on an incomplete profile: open the
+  // editor and show a prompt, then return to that event once it's complete.
+  const needProfile = !!location.state?.completeProfile
+  const returnTo = location.state?.from
   const [selected, setSelected] = useState(null)
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(needProfile)
   const [saving, setSaving] = useState(false)
   const [membership, setMembership] = useState(null)
   const [membershipLoaded, setMembershipLoaded] = useState(false)
+  const [formErr, setFormErr] = useState('')
 
   useEffect(() => {
     if (!loading && !user) navigate('/auth', { replace: true, state: { from: '/dashboard' } })
@@ -59,14 +66,19 @@ export default function Dashboard() {
   async function handleSave(e) {
     e.preventDefault()
     const data = Object.fromEntries(new FormData(e.currentTarget))
+    const phone = String(data.phone || '').replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '')
+    if (!isValidPhone(phone)) { setFormErr('Enter a valid 10-digit phone number.'); return }
+    if (!data.department?.trim()) { setFormErr('Select your department.'); return }
+    if (!data.year) { setFormErr('Select your year.'); return }
+    setFormErr('')
+    const next = { name: data.name.trim() || displayName, phone, department: data.department.trim(), year: data.year }
     setSaving(true)
     try {
-      await saveProfile({
-        name: data.name.trim() || displayName,
-        department: data.department.trim(),
-        year: data.year,
-      })
+      await saveProfile(next)
       setEditing(false)
+      // If they were sent here to finish registering, return to that event now
+      // that the profile is complete.
+      if (returnTo && isProfileComplete({ ...user, ...next })) navigate(returnTo)
     } finally {
       setSaving(false)
     }
@@ -86,6 +98,7 @@ export default function Dashboard() {
 
   const profileRows = [
     { icon: Mail, label: 'Email', value: user.email },
+    { icon: Phone, label: 'Phone', value: user.phone },
     { icon: Building2, label: 'Department', value: user.department },
     { icon: GraduationCap, label: 'Year', value: user.year },
   ]
@@ -134,7 +147,15 @@ export default function Dashboard() {
 
             {editing ? (
               <form onSubmit={handleSave} className="mt-6 grid gap-4">
+                {needProfile && (
+                  <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300">
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Complete your profile to register for events — we need a valid phone, department and year.
+                  </p>
+                )}
                 <Input label="Full name" name="name" defaultValue={user.name || ''} required />
+                {/* Email is fixed to the signed-in Google account — shown read-only. */}
+                <Input label="Email" name="email" type="email" defaultValue={user.email || ''} disabled readOnly className="cursor-not-allowed opacity-70" />
+                <Input label="Phone (10-digit)" name="phone" type="tel" inputMode="numeric" defaultValue={user.phone || ''} placeholder="9876543210" required />
                 <Select label="Department" name="department" defaultValue={user.department || ''}>
                   <option value="">Select department</option>
                   {departments.map((dept) => (
@@ -147,11 +168,16 @@ export default function Dashboard() {
                     <option key={y} value={y}>{y}</option>
                   ))}
                 </Select>
+                {formErr && (
+                  <p className="flex items-start gap-2 text-xs text-rose-600 dark:text-rose-300">
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {formErr}
+                  </p>
+                )}
                 <div className="mt-1 flex gap-2">
                   <Button type="submit" size="sm" disabled={saving} className="flex-1">
                     <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save'}
                   </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => { setEditing(false); setFormErr('') }} disabled={saving}>
                     <X className="h-4 w-4" /> Cancel
                   </Button>
                 </div>

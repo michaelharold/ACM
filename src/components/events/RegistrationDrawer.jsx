@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle, ShieldCheck } from 'lucide-react'
 import { Modal } from '../ui/Modal'
@@ -35,7 +35,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
   const [form, setForm] = useState({
     name: user?.name || '',
     email: user?.email || '',
-    phone: '',
+    phone: user?.phone || '',
     college: 'TKM College of Engineering',
     department: user?.department || '',
     year: user?.year || '',
@@ -43,6 +43,23 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
     membershipId: '',
     agree: false,
   })
+
+  // Re-seed the form from the profile each time the drawer opens for an event,
+  // so the autofilled name/email/phone/department/year always match the current
+  // profile (the profile is the source of truth; email & phone are locked).
+  useEffect(() => {
+    if (!open) return
+    setForm((f) => ({
+      ...f,
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+      department: user?.department || '',
+      year: user?.year || '',
+      isMember: user?.acmMember || false,
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, event?.id])
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
   const go = (next) => setStep([next, next > step ? 1 : -1])
@@ -100,8 +117,10 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
       // Only a verified, unused id is claimed — the server re-checks it and
       // applies the discount, so an unverified/used id gets no benefit.
       created = await onComplete?.(event, { ...form, membershipId: claimedId, isMember: form.isMember, chargeAmount: payable })
-    } catch {
-      setPayError('We couldn’t save your registration — the service may be temporarily unavailable. Please try again in a moment, or reach us from the Contact page.')
+    } catch (err) {
+      // Show the real reason when it's a meaningful one (e.g. "registration is
+      // full"); otherwise fall back to a generic service-unavailable message.
+      setPayError(err?.message || 'We couldn’t save your registration — the service may be temporarily unavailable. Please try again in a moment, or reach us from the Contact page.')
       setSubmitting(false)
       return
     }
@@ -207,8 +226,10 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onPaid, o
                   <div className="grid gap-3.5">
                     <Input label="Full name" value={form.name} onChange={set('name')} placeholder="Your name" />
                     <div className="grid gap-3.5 sm:grid-cols-2">
-                      <Input label="Email" type="email" value={form.email} onChange={set('email')} placeholder="you@tkmce.ac.in" />
-                      <Input label="Phone" value={form.phone} onChange={set('phone')} placeholder="+91 …" />
+                      {/* Email & phone come from the verified profile and can't be
+                          changed here — that's what keeps the roster trustworthy. */}
+                      <Input label="Email (from profile)" type="email" value={form.email} disabled readOnly className="cursor-not-allowed opacity-70" />
+                      <Input label="Phone (from profile)" value={form.phone} disabled readOnly className="cursor-not-allowed opacity-70" />
                     </div>
                     <Input label="College" value={form.college} onChange={set('college')} />
                     <div className="grid gap-3.5 sm:grid-cols-2">

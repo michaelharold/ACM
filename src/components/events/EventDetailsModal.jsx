@@ -4,7 +4,7 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { PosterImage } from './PosterImage'
 import { statusMeta } from '../../data/mock'
-import { registrationStatus } from '../../lib/eventClock'
+import { registrationStatus, isFull } from '../../lib/eventClock'
 import { formatDateLong, formatDateTime, normalizeUrl } from '../../lib/format'
 
 function Fact({ icon: Icon, label, value }) {
@@ -23,8 +23,9 @@ function Fact({ icon: Icon, label, value }) {
 
 export function EventDetailsModal({ event, open, onClose, onRegister, registered }) {
   if (!event) return null
-  const status = registrationStatus(event)
-  const meta = statusMeta[status]
+  const full = isFull(event)
+  const status = full ? 'closed' : registrationStatus(event)
+  const meta = full ? { label: 'Registrations Full', tone: 'red' } : statusMeta[status]
   const isExternal = !!event.external
   const externalHref = normalizeUrl(event.externalUrl)
   const canRegister = status === 'open' && !registered

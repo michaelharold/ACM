@@ -20,6 +20,8 @@ const defaultProfile = (partial = {}) => ({
   name: 'ACM Member',
   email: '',
   avatar: '',
+  phone: '',
+  phoneVerified: false,
   department: '',
   year: '',
   acmMember: false,

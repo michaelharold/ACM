@@ -11,6 +11,7 @@ import {
   where,
   orderBy,
   serverTimestamp,
+  increment,
 } from 'firebase/firestore'
 import { db, isFirebaseConfigured } from '../lib/firebase'
 import { uploadImage, deleteImage } from '../lib/storage'
@@ -136,8 +137,8 @@ export async function updateUserAccess(uid, permissions) {
 
 // Self-service profile fields only — role and permissions are never writable here.
 export async function updateUserProfile(uid, patch) {
-  const { name = '', department = '', year = '', acmMember = false } = patch
-  const clean = { name, department, year, acmMember: !!acmMember }
+  const { name = '', phone = '', phoneVerified = false, department = '', year = '', acmMember = false } = patch
+  const clean = { name, phone, phoneVerified: !!phoneVerified, department, year, acmMember: !!acmMember }
   if (isFirebaseConfigured) await updateDoc(doc(db, 'users', uid), clean)
   return clean
 }
@@ -184,6 +185,27 @@ export async function createRegistration(regDoc) {
 export async function deleteRegistration(id) {
   if (!isFirebaseConfigured || !id) return
   await deleteDoc(doc(db, 'registrations', id))
+}
+
+// Current registered count for an event, read fresh so a capacity check isn't
+// fooled by stale in-memory data.
+export async function fetchEventCount(id) {
+  if (!isFirebaseConfigured || !id) return 0
+  const snap = await getDoc(doc(db, 'events', id))
+  return snap.exists() ? Number(snap.data().registeredCount) || 0 : 0
+}
+
+// Nudge an event's running registeredCount by +1 (on register) or -1 (when a
+// cancelled/failed registration is cleaned up). A dedicated Firestore rule lets
+// any signed-in user change ONLY this counter by exactly ±1, so capacity can be
+// tracked without giving members write access to the rest of the event.
+export async function bumpEventCount(id, delta) {
+  if (!isFirebaseConfigured || !id) return
+  try {
+    await updateDoc(doc(db, 'events', id), { registeredCount: increment(delta) })
+  } catch {
+    /* best-effort — a failed counter nudge must never break (un)registration */
+  }
 }
 
 // ── Gallery ──────────────────────────────────────────────────

@@ -33,7 +33,18 @@ service cloud.firestore {
     }
 
     // Public content — anyone can read; admins or granted editors write.
-    match /events/{id}        { allow read: if true; allow write: if isAdmin() || hasPerm('events'); }
+    // Exception: any signed-in user may nudge ONLY the registeredCount by
+    // exactly ±1 (never any other field), so event capacity can be tracked as
+    // members register/cancel without granting them event-edit rights.
+    match /events/{id} {
+      allow read: if true;
+      allow write: if isAdmin() || hasPerm('events');
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredCount'])
+        && request.resource.data.registeredCount >= 0
+        && (request.resource.data.registeredCount == resource.data.get('registeredCount', 0) + 1
+            || request.resource.data.registeredCount == resource.data.get('registeredCount', 0) - 1);
+    }
     match /execomGroups/{id}   { allow read: if true; allow write: if isAdmin() || hasPerm('execom'); }
     match /testimonials/{id}   { allow read: if true; allow write: if isAdmin(); }
     // Gallery: one image per document (inline data URI), so uploads never

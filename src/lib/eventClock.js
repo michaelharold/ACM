@@ -39,6 +39,13 @@ export function hasRegWindow(event) {
   return !!(event?.regOpens || event?.regCloses)
 }
 
+// True when an event has hit its registration cap (maxRegistrations > 0 and the
+// running registeredCount has reached it). A full event registers as 'closed'.
+export function isFull(event) {
+  const max = Number(event?.maxRegistrations) || 0
+  return max > 0 && (Number(event?.registeredCount) || 0) >= max
+}
+
 // Ticking clock for an event card: countdown until start, live flag afterwards.
 export function useEventClock(event) {
   const [now, setNow] = useState(() => Date.now())
