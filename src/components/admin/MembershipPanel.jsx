@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Fingerprint, Search, Download, Check, Loader2, AlertCircle, BadgeCheck } from 'lucide-react'
+import { Fingerprint, Search, Download, Check, Loader2, AlertCircle, BadgeCheck, MessageSquare } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
+import { ComposeMessageModal } from '../messages/Thread'
 import { departments } from '../../lib/orgData'
 import { downloadCsv } from '../../lib/csv'
 import * as svc from '../../services/firestore'
@@ -26,12 +27,13 @@ const fmtWhen = (c) => {
     : ''
 }
 
-export function MembershipPanel({ canEdit = true }) {
+export function MembershipPanel({ canEdit = true, adminName }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [drafts, setDrafts] = useState({}) // uid -> edited membershipId
   const [savingId, setSavingId] = useState(null)
+  const [msgTo, setMsgTo] = useState(null)
 
   const [dept, setDept] = useState('all')
   const [klass, setKlass] = useState('')
@@ -173,8 +175,20 @@ export function MembershipPanel({ canEdit = true }) {
               {filtered.map((m) => (
                 <tr key={m.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40">
                   <td className="px-4 py-3">
-                    <div className="font-medium">{fullName(m)}</div>
-                    <div className="text-xs text-neutral-400">{m.email}{m.phone ? ` · ${m.phone}` : ''}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0">
+                        <div className="font-medium">{fullName(m)}</div>
+                        <div className="text-xs text-neutral-400">{m.email}{m.phone ? ` · ${m.phone}` : ''}</div>
+                      </div>
+                      <button
+                        onClick={() => setMsgTo(m)}
+                        disabled={!(m.userId || m.id)}
+                        title="Message this member"
+                        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-acm-300 hover:text-acm-500 disabled:opacity-30 dark:border-neutral-700"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-neutral-600 dark:text-neutral-300">
                     <div className="truncate">{m.department || '—'}</div>
@@ -228,6 +242,15 @@ export function MembershipPanel({ canEdit = true }) {
           </table>
         </div>
       )}
+
+      <ComposeMessageModal
+        open={!!msgTo}
+        onClose={() => setMsgTo(null)}
+        toUid={msgTo?.userId || msgTo?.id}
+        toName={fullName(msgTo || {})}
+        toEmail={msgTo?.email}
+        fromName={adminName}
+      />
     </motion.div>
   )
 }

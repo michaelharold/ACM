@@ -24,6 +24,8 @@ import { fitPoster } from '../lib/imagePrep'
 import { formatDate, to24h, to12h } from '../lib/format'
 import { registrationStatus, hasRegWindow, eventStart } from '../lib/eventClock'
 import { departments as orgDepartments } from '../lib/orgData'
+import { ComposeMessageModal } from '../components/messages/Thread'
+import { MessageSquare } from 'lucide-react'
 import { cn } from '../lib/cn'
 
 const statusCycle = ['open', 'coming-soon', 'closed']
@@ -85,6 +87,7 @@ export default function Admin() {
       setRegRows(
         live.map((r) => ({
           id: r.id,
+          userId: r.userId || '',
           name: r.userName || '—',
           email: r.userEmail || '—',
           event: r.eventName || '—',
@@ -111,7 +114,7 @@ export default function Admin() {
     if (!isAdmin) return
     let alive = true
     svc.fetchMessages()
-      .then((m) => alive && setUnreadMsgs(m.filter((x) => x.status === 'new').length))
+      .then((m) => alive && setUnreadMsgs(m.filter((x) => x.unreadForAdmin ?? (x.status === 'new')).length))
       .catch(() => {})
     return () => { alive = false }
   }, [tab, isAdmin])
@@ -212,7 +215,14 @@ export default function Admin() {
                   {active && (
                     <motion.span layoutId="admin-tab" transition={{ type: 'spring', stiffness: 360, damping: 30 }} className="absolute inset-0 -z-10 rounded-xl bg-neutral-100 dark:bg-neutral-800" />
                   )}
-                  <t.icon className="h-4 w-4" /> {t.label}
+                  <span className="relative">
+                    <t.icon className="h-4 w-4" />
+                    {/* Red unread dot on the Messages tab */}
+                    {t.key === 'messages' && unreadMsgs > 0 && (
+                      <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500 dark:border-neutral-900" />
+                    )}
+                  </span>
+                  {t.label}
                 </button>
               )
             })}
@@ -227,10 +237,10 @@ export default function Admin() {
             {tab === 'execom' && can('execom') && <ExecomPanel />}
             {tab === 'content' && can('content') && <SiteContentPanel />}
             {tab === 'gallery' && can('content') && <GalleryPanel />}
-            {tab === 'membership' && can('membership') && <MembershipPanel canEdit={can('membership')} />}
+            {tab === 'membership' && can('membership') && <MembershipPanel canEdit={can('membership')} adminName={user.name} />}
             {tab === 'payments' && isAdmin && <PaymentsPanel />}
             {tab === 'messages' && isAdmin && <MessagesPanel adminName={user.name} />}
-            {tab === 'registrations' && isAdmin && <RegistrationsPanel rows={regRows} events={events} />}
+            {tab === 'registrations' && isAdmin && <RegistrationsPanel rows={regRows} events={events} adminName={user.name} />}
             {tab === 'access' && isAdmin && <AccessPanel isLive={isLive} />}
           </div>
         </div>
@@ -916,10 +926,11 @@ function AccessPanel({ isLive }) {
   )
 }
 
-function RegistrationsPanel({ rows, events = [] }) {
+function RegistrationsPanel({ rows, events = [], adminName }) {
   const [dept, setDept] = useState('all')
   const [eventFilter, setEventFilter] = useState('all')
   const [member, setMember] = useState('all') // all | member | non-member
+  const [msgTo, setMsgTo] = useState(null)
 
   // Events actually present in the roster, for the dropdown.
   const eventOptions = useMemo(() => {
@@ -1010,8 +1021,20 @@ function RegistrationsPanel({ rows, events = [] }) {
             {filtered.map((p) => (
               <tr key={p.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40">
                 <td className="px-5 py-3">
-                  <div className="font-medium">{p.name}</div>
-                  <div className="text-xs text-neutral-400">{p.email}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="font-medium">{p.name}</div>
+                      <div className="text-xs text-neutral-400">{p.email}</div>
+                    </div>
+                    <button
+                      onClick={() => setMsgTo(p)}
+                      disabled={!p.userId}
+                      title={p.userId ? 'Message this participant' : 'No account linked'}
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-acm-300 hover:text-acm-500 disabled:opacity-30 dark:border-neutral-700"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </td>
                 <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.event}</td>
                 <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.department}</td>
@@ -1046,6 +1069,15 @@ function RegistrationsPanel({ rows, events = [] }) {
       <div className="flex items-center justify-between border-t border-neutral-100 p-4 dark:border-neutral-800">
         <span className="text-xs text-neutral-400">{filtered.length} of {rows.length} registrations</span>
       </div>
+
+      <ComposeMessageModal
+        open={!!msgTo}
+        onClose={() => setMsgTo(null)}
+        toUid={msgTo?.userId}
+        toName={msgTo?.name}
+        toEmail={msgTo?.email}
+        fromName={adminName}
+      />
     </motion.div>
   )
 }

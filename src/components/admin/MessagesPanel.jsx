@@ -1,23 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Mail, MailOpen, CornerUpLeft, Send, Search, Inbox, ExternalLink, CheckCircle2, AlertCircle } from 'lucide-react'
-import { Button } from '../ui/Button'
+import { Mail, MailOpen, Search, Inbox, AlertCircle } from 'lucide-react'
 import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
+import { ThreadView, when } from '../messages/Thread'
 import { avatarDataUri } from '../../lib/avatar'
 import { cn } from '../../lib/cn'
 import * as svc from '../../services/firestore'
 
 const statusTone = { new: 'blue', read: 'neutral', replied: 'green' }
 
-const when = (iso) => {
-  if (!iso) return ''
-  const d = typeof iso === 'string' ? new Date(iso) : iso.toDate?.() || new Date()
-  const mins = Math.round((Date.now() - d.getTime()) / 60000)
-  if (mins < 60) return `${Math.max(mins, 1)}m ago`
-  if (mins < 1440) return `${Math.round(mins / 60)}h ago`
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-}
+// Old threads predate the unread flag, so fall back to the legacy 'new' status.
+const isUnread = (m) => m.unreadForAdmin ?? (m.status === 'new')
 
 export function MessagesPanel({ adminName }) {
   const [rows, setRows] = useState([])
@@ -49,18 +43,18 @@ export function MessagesPanel({ adminName }) {
     )
   }, [rows, q])
 
-  const unread = rows.filter((m) => m.status === 'new').length
+  const unread = rows.filter(isUnread).length
 
   async function openMessage(m) {
     setOpen(m)
-    if (m.status === 'new') {
-      await svc.markMessageRead(m.id)
-      setRows((r) => r.map((x) => (x.id === m.id ? { ...x, status: 'read' } : x)))
+    if (isUnread(m)) {
+      await svc.markThreadRead(m.id, 'admin')
+      setRows((r) => r.map((x) => (x.id === m.id ? { ...x, unreadForAdmin: false, status: x.status === 'new' ? 'read' : x.status } : x)))
     }
   }
 
   function onReplied(id, reply) {
-    setRows((r) => r.map((x) => (x.id === id ? { ...x, status: 'replied', replies: [...(x.replies || []), reply] } : x)))
+    setRows((r) => r.map((x) => (x.id === id ? { ...x, status: 'replied', unreadForAdmin: false, replies: [...(x.replies || []), reply] } : x)))
     setOpen((o) => (o && o.id === id ? { ...o, status: 'replied', replies: [...(o.replies || []), reply] } : o))
   }
 
@@ -108,19 +102,23 @@ export function MessagesPanel({ adminName }) {
                 // min-w-0: grid items default to min-width:auto, which lets a long
                 // message body stretch the row past the panel instead of truncating.
                 'group flex w-full min-w-0 items-start gap-3.5 rounded-xl border p-4 text-left transition-colors',
-                m.status === 'new'
+                isUnread(m)
                   ? 'border-acm-200 bg-acm-50/50 hover:border-acm-300 dark:border-acm-500/30 dark:bg-acm-500/5 dark:hover:border-acm-500/50'
                   : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-800 dark:hover:border-neutral-700',
               )}
             >
-              <img
-                src={avatarDataUri(m.userName || 'Member')}
-                alt=""
-                className="h-9 w-9 shrink-0 rounded-lg object-cover"
-              />
+              <span className="relative shrink-0">
+                <img
+                  src={avatarDataUri(m.userName || 'Member')}
+                  alt=""
+                  className="h-9 w-9 rounded-lg object-cover"
+                />
+                {/* Red unread dot */}
+                {isUnread(m) && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-red-500 dark:border-neutral-900" />}
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className={cn('truncate text-sm', m.status === 'new' ? 'font-bold' : 'font-semibold')}>
+                  <span className={cn('truncate text-sm', isUnread(m) ? 'font-bold' : 'font-semibold')}>
                     {m.userName}
                   </span>
                   <Badge tone={statusTone[m.status] || 'neutral'} className="shrink-0">
@@ -131,7 +129,7 @@ export function MessagesPanel({ adminName }) {
                 <p className="mt-0.5 truncate text-sm font-medium text-neutral-700 dark:text-neutral-300">{m.subject}</p>
                 <p className="mt-0.5 truncate text-xs text-neutral-500 dark:text-neutral-400">{m.body}</p>
               </div>
-              {m.status === 'new' ? (
+              {isUnread(m) ? (
                 <Mail className="mt-1 h-4 w-4 shrink-0 text-acm-500" />
               ) : (
                 <MailOpen className="mt-1 h-4 w-4 shrink-0 text-neutral-300 dark:text-neutral-600" />
@@ -147,45 +145,7 @@ export function MessagesPanel({ adminName }) {
 }
 
 function MessageDetail({ message, onClose, adminName, onReplied }) {
-  const [body, setBody] = useState('')
-  const [sending, setSending] = useState(false)
-  const [result, setResult] = useState(null)
-
-  useEffect(() => {
-    setBody('')
-    setResult(null)
-  }, [message?.id])
-
   if (!message) return <Modal open={false} onClose={onClose} />
-
-  const subject = `Re: ${message.subject}`
-
-  async function submit(e) {
-    e.preventDefault()
-    const text = body.trim()
-    if (!text) return
-    setSending(true)
-    setResult(null)
-    try {
-      const { queued, reply } = await svc.sendReply({
-        messageId: message.id,
-        to: message.userEmail,
-        subject,
-        body: text,
-        fromName: adminName || 'ACM TKMCE',
-      })
-      onReplied(message.id, reply)
-      setBody('')
-      setResult({ ok: true, queued })
-    } catch (err) {
-      setResult({ ok: false, error: err?.message || 'Could not queue the reply.' })
-    } finally {
-      setSending(false)
-    }
-  }
-
-  const mailto = `mailto:${message.userEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-
   return (
     <Modal open={!!message} onClose={onClose} size="lg">
       <div className="p-6 sm:p-8">
@@ -196,71 +156,11 @@ function MessageDetail({ message, onClose, adminName, onReplied }) {
             <p className="mt-0.5 truncate text-sm text-neutral-500 dark:text-neutral-400">
               {message.userName} · <span className="text-acm-500">{message.userEmail}</span>
             </p>
-            <p className="mt-0.5 text-xs text-neutral-400">{when(message.createdAt)}</p>
           </div>
         </div>
-
-        <div className="mt-6 whitespace-pre-wrap rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm leading-relaxed text-neutral-700 dark:border-neutral-800 dark:bg-neutral-800/40 dark:text-neutral-300">
-          {message.body}
+        <div className="mt-6">
+          <ThreadView message={message} side="admin" meName={adminName || 'ACM TKMCE'} onReplied={(reply) => onReplied(message.id, reply)} />
         </div>
-
-        {message.replies?.length > 0 && (
-          <div className="mt-5 space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Replies sent</p>
-            {message.replies.map((r, i) => (
-              <div
-                key={i}
-                className="whitespace-pre-wrap rounded-xl border border-emerald-200 bg-emerald-50/60 p-3.5 text-sm text-neutral-700 dark:border-emerald-500/20 dark:bg-emerald-500/5 dark:text-neutral-300"
-              >
-                {r.body}
-                <span className="mt-1.5 block text-xs text-neutral-400">— {r.byName}, {when(r.sentAt)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <form onSubmit={submit} className="mt-6 border-t border-neutral-200 pt-5 dark:border-neutral-800">
-          <label htmlFor="reply" className="mb-1.5 flex items-center gap-2 text-sm font-medium">
-            <CornerUpLeft className="h-4 w-4 text-acm-500" /> Reply to {message.userName}
-          </label>
-          <textarea
-            id="reply"
-            rows={4}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder={`Write your reply — it goes to ${message.userEmail}`}
-            className="w-full rounded-xl border border-neutral-200 bg-white px-3.5 py-3 text-sm outline-none transition-colors focus:border-acm-500 focus:ring-4 focus:ring-acm-500/10 dark:border-neutral-800 dark:bg-neutral-900"
-          />
-
-          {result && (
-            <p
-              className={cn(
-                'mt-3 flex items-start gap-2 text-sm',
-                result.ok ? 'text-emerald-500' : 'text-rose-500',
-              )}
-            >
-              {result.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
-              {result.ok
-                ? result.queued
-                  ? `Reply queued for delivery to ${message.userEmail}.`
-                  : 'Reply recorded (demo mode — no email was actually sent).'
-                : result.error}
-            </p>
-          )}
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button type="submit" disabled={sending || !body.trim()}>
-              <Send className="h-4 w-4" /> {sending ? 'Sending…' : 'Send reply'}
-            </Button>
-            <Button as="a" href={mailto} variant="outline" type="button">
-              <ExternalLink className="h-4 w-4" /> Open in email client
-            </Button>
-          </div>
-          <p className="mt-3 text-xs text-neutral-400">
-            Replies are delivered by the Firebase “Trigger Email” extension. If it isn’t installed yet, use “Open in
-            email client” — the reply is still recorded on this thread either way.
-          </p>
-        </form>
       </div>
     </Modal>
   )

@@ -7,6 +7,7 @@ import { SocialLinks } from '../SocialLinks'
 import { Button } from '../ui/Button'
 import { Magnetic } from '../ui/Magnetic'
 import { useAuth } from '../../context/AuthContext'
+import { fetchUserMessages } from '../../services/firestore'
 import { avatarDataUri } from '../../lib/avatar'
 import { scrollToId, scrollToTop } from '../../lib/smoothScroll'
 import { cn } from '../../lib/cn'
@@ -42,6 +43,17 @@ export function Navbar() {
   const isPrivileged = isAuthed && (user?.role === 'admin' || Object.values(user?.permissions || {}).some(Boolean))
   const isMember = !!user?.acmMember
   const onHome = pathname === '/'
+  // Unread inbox count → a red dot on the account avatar so a member notices a
+  // reply/message without opening the dashboard. Refreshes on route change.
+  const [unreadInbox, setUnreadInbox] = useState(0)
+  useEffect(() => {
+    if (!user) { setUnreadInbox(0); return }
+    let alive = true
+    fetchUserMessages(user.id)
+      .then((m) => { if (alive) setUnreadInbox(m.filter((x) => x.unreadForUser).length) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [user, pathname])
   const { scrollY } = useScroll()
 
   // Hide when scrolling down past the hero, reveal instantly on any scroll up.
@@ -187,11 +199,16 @@ export function Navbar() {
                 onClick={() => setMenuUser((v) => !v)}
                 className="flex items-center gap-2 rounded-xl border border-neutral-200 py-1 pl-1 pr-2 transition-colors hover:border-neutral-300 dark:border-neutral-800 dark:hover:border-neutral-700"
               >
-                <img
-                  src={user.avatar || avatarDataUri(user.name || 'ACM Member')}
-                  alt=""
-                  className="h-7 w-7 rounded-lg object-cover"
-                />
+                <span className="relative">
+                  <img
+                    src={user.avatar || avatarDataUri(user.name || 'ACM Member')}
+                    alt=""
+                    className="h-7 w-7 rounded-lg object-cover"
+                  />
+                  {unreadInbox > 0 && (
+                    <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500 dark:border-neutral-950" />
+                  )}
+                </span>
                 <motion.span animate={{ rotate: menuUser ? 180 : 0 }}>
                   <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
                 </motion.span>

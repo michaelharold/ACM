@@ -60,15 +60,22 @@ service cloud.firestore {
     // address and cannot make a reply land in a stranger's inbox.
     match /messages/{id} {
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.userEmail == request.auth.token.email
-        && request.resource.data.status == 'new'
-        && request.resource.data.replies.size() == 0
-        && request.resource.data.body is string
-        && request.resource.data.body.size() > 0
-        && request.resource.data.body.size() <= 4000;
-      allow update, delete: if isAdmin();
+      // A user starts their OWN thread (identity must match their token); an
+      // admin may start a thread addressed to any member (admin-initiated).
+      allow create: if (isSignedIn()
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.userEmail == request.auth.token.email
+          && request.resource.data.body is string
+          && request.resource.data.body.size() > 0
+          && request.resource.data.body.size() <= 4000)
+        || isAdmin();
+      // Admins manage any thread. The thread's owner may only append a reply and
+      // toggle the unread flags on their own thread — no other fields may change.
+      allow update: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['replies', 'unreadForAdmin', 'unreadForUser', 'status']));
+      allow delete: if isAdmin();
     }
 
     // Outbound mail queue, drained by the Firebase "Trigger Email" extension.

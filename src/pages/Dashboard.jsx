@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2 } from 'lucide-react'
+import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Input, Select } from '../components/ui/Input'
 import { Reveal, Item } from '../components/ui/Reveal'
+import { Modal } from '../components/ui/Modal'
+import { ThreadView, when } from '../components/messages/Thread'
 import { EventDetailsModal } from '../components/events/EventDetailsModal'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
@@ -15,7 +17,7 @@ import { formatDate } from '../lib/format'
 import { years } from '../lib/orgData'
 import { isValidPhone, isProfileComplete } from '../lib/profile'
 import { isPhoneOtpEnabled, sendPhoneOtp, confirmPhoneOtp, clearRecaptcha } from '../lib/phoneAuth'
-import { fetchMembership } from '../services/firestore'
+import { fetchMembership, fetchUserMessages, markThreadRead } from '../services/firestore'
 
 export default function Dashboard() {
   const { user, loading, logout, saveProfile } = useAuth()
@@ -33,10 +35,38 @@ export default function Dashboard() {
   const [membership, setMembership] = useState(null)
   const [membershipLoaded, setMembershipLoaded] = useState(false)
   const [formErr, setFormErr] = useState('')
+  // Profile inbox — messages from the chapter, with a red dot when unread.
+  const [inbox, setInbox] = useState([])
+  const [openMsg, setOpenMsg] = useState(null)
   // Phone verification (controlled, so OTP state and the number stay in sync).
   const [phoneInput, setPhoneInput] = useState('')
   const [phoneVerifiedLocal, setPhoneVerifiedLocal] = useState(false)
   const [otp, setOtp] = useState({ confirmation: null, sent: false, code: '', busy: false, err: '' })
+
+  // Load the member's inbox threads.
+  useEffect(() => {
+    if (!user) return
+    let alive = true
+    fetchUserMessages(user.id).then((m) => { if (alive) setInbox(m) }).catch(() => {})
+    return () => { alive = false }
+  }, [user])
+
+  const unreadInbox = inbox.filter((m) => m.unreadForUser).length
+
+  async function openThread(m) {
+    setOpenMsg(m)
+    if (m.unreadForUser) {
+      try { await markThreadRead(m.id, 'user') } catch { /* ignore */ }
+      setInbox((list) => list.map((x) => (x.id === m.id ? { ...x, unreadForUser: false } : x)))
+    }
+  }
+
+  function onThreadReplied(reply) {
+    if (!openMsg) return
+    const id = openMsg.id
+    setInbox((list) => list.map((x) => (x.id === id ? { ...x, replies: [...(x.replies || []), reply] } : x)))
+    setOpenMsg((o) => (o ? { ...o, replies: [...(o.replies || []), reply] } : o))
+  }
 
   // Seed the phone editor from the profile whenever the form opens.
   useEffect(() => {
@@ -365,9 +395,62 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        {/* Message inbox — replies and messages from the chapter */}
+        <div className="mt-6 rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="flex items-center gap-2">
+            <span className="relative">
+              <MessageSquare className="h-5 w-5 text-acm-500" />
+              {unreadInbox > 0 && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500 dark:border-neutral-900" />}
+            </span>
+            <h2 className="text-lg font-semibold tracking-tight">Inbox</h2>
+            {unreadInbox > 0 && <Badge tone="red" className="ml-1">{unreadInbox} new</Badge>}
+          </div>
+
+          {inbox.length === 0 ? (
+            <p className="mt-4 text-sm text-neutral-500">No messages yet. Replies from the chapter will appear here.</p>
+          ) : (
+            <div className="mt-4 grid gap-2">
+              {inbox.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => openThread(m)}
+                  className={cn(
+                    'flex w-full min-w-0 items-start gap-3 rounded-xl border p-3.5 text-left transition-colors',
+                    m.unreadForUser
+                      ? 'border-acm-200 bg-acm-50/50 hover:border-acm-300 dark:border-acm-500/30 dark:bg-acm-500/5'
+                      : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-800 dark:hover:border-neutral-700',
+                  )}
+                >
+                  {m.unreadForUser && <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" />}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={cn('truncate text-sm', m.unreadForUser ? 'font-bold' : 'font-semibold')}>{m.subject || 'Message'}</span>
+                      <span className="ml-auto shrink-0 text-xs text-neutral-400">{when(m.createdAt)}</span>
+                    </div>
+                    <p className="mt-0.5 truncate text-xs text-neutral-500 dark:text-neutral-400">
+                      {(m.replies?.length ? m.replies[m.replies.length - 1].body : m.body) || ''}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <EventDetailsModal event={selected} open={!!selected} onClose={() => setSelected(null)} registered />
+
+      <Modal open={!!openMsg} onClose={() => setOpenMsg(null)} size="lg">
+        {openMsg && (
+          <div className="p-6 sm:p-8">
+            <h3 className="text-lg font-bold tracking-tight">{openMsg.subject || 'Message'}</h3>
+            <div className="mt-5">
+              <ThreadView message={openMsg} side="user" meName={displayName} onReplied={onThreadReplied} />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

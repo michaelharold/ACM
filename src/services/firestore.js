@@ -12,6 +12,7 @@ import {
   orderBy,
   serverTimestamp,
   increment,
+  arrayUnion,
 } from 'firebase/firestore'
 import { db, isFirebaseConfigured } from '../lib/firebase'
 import { uploadImage, deleteImage } from '../lib/storage'
@@ -298,8 +299,11 @@ export async function createMessage({ uid, name, email, subject, body }) {
     userEmail: email,
     subject: subject || 'Website enquiry',
     body,
+    initiatedBy: 'user',
     status: 'new',
     replies: [],
+    unreadForAdmin: true,
+    unreadForUser: false,
   }
   if (!isFirebaseConfigured) {
     const local = { id: `m_${Date.now()}`, ...docData, createdAt: new Date().toISOString() }
@@ -359,6 +363,62 @@ export async function sendReply({ messageId, to, subject, body, fromName }) {
 async function getMessageReplies(id) {
   const snap = await getDoc(doc(db, 'messages', id))
   return snap.exists() ? snap.data().replies || [] : []
+}
+
+// Every thread belonging to one user (their profile inbox), newest first.
+export async function fetchUserMessages(uid) {
+  if (!isFirebaseConfigured) return readStore().filter((m) => m.userId === uid)
+  const snap = await getDocs(query(collection(db, 'messages'), where('userId', '==', uid)))
+  return map(snap).sort((a, b) => String(b.createdAt?.toDate?.().toISOString?.() || b.createdAt || '').localeCompare(String(a.createdAt?.toDate?.().toISOString?.() || a.createdAt || '')))
+}
+
+// Admin starts a NEW thread addressed to a member — it lands in that member's
+// profile inbox (and is emailed to them if they use the mailto option). Used by
+// the Messages, Membership and Registrations panels.
+export async function sendAdminMessage({ toUid, toName, toEmail, subject, body, fromName }) {
+  const docData = {
+    userId: toUid,
+    userName: toName || '',
+    userEmail: toEmail || '',
+    subject: subject || 'Message from ACM TKMCE',
+    body,
+    byName: fromName || 'ACM TKMCE',
+    initiatedBy: 'admin',
+    status: 'replied',
+    replies: [],
+    unreadForUser: true,
+    unreadForAdmin: false,
+  }
+  if (!isFirebaseConfigured) {
+    const local = { id: `m_${Date.now()}`, ...docData, createdAt: new Date().toISOString() }
+    writeStore([local, ...readStore()])
+    return local
+  }
+  const ref = await addDoc(collection(db, 'messages'), { ...docData, createdAt: serverTimestamp() })
+  return { id: ref.id, ...docData }
+}
+
+// Append an in-app reply to an existing thread. `from` is 'admin' or 'user';
+// the OTHER side's unread flag is raised so they get a notification dot.
+export async function replyInApp({ messageId, from, body, byName }) {
+  const reply = { from, body, byName: byName || (from === 'admin' ? 'ACM TKMCE' : 'You'), sentAt: new Date().toISOString() }
+  const patch = from === 'admin' ? { unreadForUser: true, status: 'replied' } : { unreadForAdmin: true }
+  if (!isFirebaseConfigured) {
+    writeStore(readStore().map((m) => (m.id === messageId ? { ...m, replies: [...(m.replies || []), reply], ...patch } : m)))
+    return reply
+  }
+  await updateDoc(doc(db, 'messages', messageId), { replies: arrayUnion(reply), ...patch })
+  return reply
+}
+
+// Clear the unread flag for one side when they open a thread.
+export async function markThreadRead(id, side) {
+  const patch = side === 'admin' ? { unreadForAdmin: false } : { unreadForUser: false }
+  if (!isFirebaseConfigured) {
+    writeStore(readStore().map((m) => (m.id === id ? { ...m, ...patch } : m)))
+    return
+  }
+  await updateDoc(doc(db, 'messages', id), patch)
 }
 
 // ── ACM memberships ──────────────────────────────────────────
