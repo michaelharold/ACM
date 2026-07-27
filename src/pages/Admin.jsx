@@ -592,7 +592,17 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex items-center justify-between border-b border-neutral-100 p-5 dark:border-neutral-800">
         <h3 className="font-semibold tracking-tight">Manage events <span className="text-neutral-400">({events.length})</span></h3>
-        <Button size="sm" onClick={onAdd}><Plus className="h-4 w-4" /> New event</Button>
+        <Button
+          size="sm"
+          onClick={async () => {
+            // Create the draft AND open its editor straight away, so the form is
+            // ready to fill instead of making the admin click the new row.
+            const created = await onAdd()
+            if (created?.id) setOpenId(created.id)
+          }}
+        >
+          <Plus className="h-4 w-4" /> New event
+        </Button>
       </div>
       <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
         {events.map((e) => {
