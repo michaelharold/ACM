@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, Trash2, Save, ImageUp, ChevronUp, ChevronDown, Users, GripVertical, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '../ui/Button'
+import { InfoHint } from '../ui/Field'
 import { useData } from '../../context/DataContext'
 import { iconMap } from '../../lib/icons'
 import { avatarDataUri } from '../../lib/avatar'
@@ -133,6 +134,7 @@ export function ExecomPanel() {
         <div>
           <h3 className="flex items-center gap-2 font-semibold tracking-tight">
             <Users className="h-4 w-4 text-acm-500" /> Execom
+            <InfoHint text="The team roster shown on the Execom page — grouped by team, in the order set here." />
           </h3>
           <p className="mt-1 text-xs text-neutral-400">
             Add teams and members, write their bios, and use the arrows or the position number to set the order they appear in on the site.
@@ -231,6 +233,7 @@ export function ExecomPanel() {
                     className="h-3.5 w-3.5 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
                   />
                   Lead row
+                  <InfoHint text="Shows this team as a standalone leadership row (like Chair or Secretary) instead of a team card with members." />
                 </label>
 
                 <span className="ml-auto flex shrink-0 items-center gap-1.5">

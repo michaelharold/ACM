@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
   Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet, AlertCircle,
-  Loader2, UserX,
+  Loader2, UserX, FileText,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
@@ -30,6 +30,7 @@ import { MessageSquare, AlertTriangle, Search } from 'lucide-react'
 import { paymentNeedsCheck, countPaymentChecks } from '../lib/paymentHealth'
 import { adminTeamAction } from '../lib/teamAdmin'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { Field, FormSection, InfoHint } from '../components/ui/Field'
 import { cn } from '../lib/cn'
 
 const statusCycle = ['open', 'coming-soon', 'closed']
@@ -452,169 +453,166 @@ function EventEditor({ event, onSave }) {
   }
 
   return (
-    <div className="grid gap-3 border-t border-neutral-100 bg-neutral-50/60 p-4 sm:grid-cols-2 dark:border-neutral-800 dark:bg-neutral-800/30">
-      <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
-        Event name
-        <input className={cn(inputCls, 'mt-1')} value={draft.name} onChange={set('name')} />
-      </label>
+    <div className="space-y-3.5 border-t border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-950/40">
+      <FormSection icon={CalendarDays} title="Basics" hint="The core facts shown on the event card and details page.">
+        <Field label="Event name" hint="The name shown everywhere — the events page, posters, and registration." className="sm:col-span-2">
+          <input className={cn(inputCls, 'mt-1')} value={draft.name} onChange={set('name')} />
+        </Field>
 
-      {/* Internal (register on this site) vs external (redirect elsewhere) */}
-      <div className="sm:col-span-2">
-        <span className="text-xs font-medium text-neutral-500">Event type</span>
-        <div className="mt-1 inline-flex rounded-lg border border-neutral-200 bg-white p-0.5 dark:border-neutral-700 dark:bg-neutral-800">
-          {[
-            { key: false, label: 'Internal (register here)' },
-            { key: true, label: 'External (redirect)' },
-          ].map((opt) => (
-            <button
-              key={String(opt.key)}
-              type="button"
-              onClick={() => setDraft((d) => ({ ...d, external: opt.key }))}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                isExternal === opt.key
-                  ? 'bg-acm-600 text-white'
-                  : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200',
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {isExternal && (
-        <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
-          Event website URL (users are redirected here to register)
-          <input
-            type="url"
-            placeholder="https://external-site.com/event"
-            className={cn(inputCls, 'mt-1')}
-            value={draft.externalUrl}
-            onChange={set('externalUrl')}
-          />
-        </label>
-      )}
-
-      <label className="text-xs font-medium text-neutral-500">
-        Date
-        <input type="date" className={cn(inputCls, 'mt-1')} value={draft.date} onChange={set('date')} />
-      </label>
-      <label className="text-xs font-medium text-neutral-500">
-        Start time
-        <input
-          type="time"
-          className={cn(inputCls, 'mt-1')}
-          value={to24h(draft.time)}
-          onChange={(e) => setDraft((d) => ({ ...d, time: to12h(e.target.value) }))}
-        />
-      </label>
-      <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
-        Venue
-        <input className={cn(inputCls, 'mt-1')} value={draft.venue} onChange={set('venue')} />
-      </label>
-      {!isExternal && (
-        <label className="text-xs font-medium text-neutral-500">
-          Registration Fee (₹)
-          <input type="number" min="0" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="Enter Registration Fee"  />
-        </label>
-      )}
-      {!isExternal && (
-        <label className="text-xs font-medium text-neutral-500">
-          {draft.isGroup ? 'Max teams' : 'Max registrations'}
-          <input
-            type="number"
-            min="0"
-            step="1"
-            className={cn(inputCls, 'mt-1')}
-            value={draft.maxRegistrations}
-            onChange={set('maxRegistrations')}
-            placeholder="0 = unlimited"
-          />
-          <span className="mt-1 block text-[11px] font-normal text-neutral-400">
-            Registration closes automatically once this many {draft.isGroup ? 'teams have' : 'people have'} registered.
-          </span>
-        </label>
-      )}
-
-      {/* Group / team event */}
-      {!isExternal && (
+        {/* Internal (register on this site) vs external (redirect elsewhere) */}
         <div className="sm:col-span-2">
-          <label className="flex cursor-pointer items-center gap-2.5">
-            <input
-              type="checkbox"
-              checked={draft.isGroup}
-              onChange={(e) => setDraft((d) => ({ ...d, isGroup: e.target.checked }))}
-              className="h-4 w-4 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
-            />
-            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Group event (register as a team)</span>
-          </label>
-          {draft.isGroup && (
-            <div className="mt-2.5 grid gap-3 rounded-lg border border-neutral-200 bg-white p-3 sm:grid-cols-2 dark:border-neutral-700 dark:bg-neutral-800/40">
-              <label className="text-xs font-medium text-neutral-500">
-                Minimum members per team
-                <input type="number" min="1" step="1" className={cn(inputCls, 'mt-1')} value={draft.minTeamSize} onChange={set('minTeamSize')} placeholder="e.g. 2" />
-              </label>
-              <label className="text-xs font-medium text-neutral-500">
-                Maximum members per team
-                <input type="number" min="1" step="1" className={cn(inputCls, 'mt-1')} value={draft.maxTeamSize} onChange={set('maxTeamSize')} placeholder="e.g. 4" />
-              </label>
-              <p className="text-[11px] font-normal leading-relaxed text-neutral-400 sm:col-span-2">
-                Counts include the person registering. The registrant adds their teammates by their website-registered email during signup.
-              </p>
-            </div>
-          )}
+          <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-neutral-600 dark:text-neutral-300">
+            Event type
+            <InfoHint text="Internal events collect registrations here — a roster, payments, the works. External just links out; nothing is tracked on this site." />
+          </span>
+          <div className="inline-flex rounded-lg border border-neutral-200 bg-white p-0.5 dark:border-neutral-700 dark:bg-neutral-800">
+            {[
+              { key: false, label: 'Internal (register here)' },
+              { key: true, label: 'External (redirect)' },
+            ].map((opt) => (
+              <button
+                key={String(opt.key)}
+                type="button"
+                onClick={() => setDraft((d) => ({ ...d, external: opt.key }))}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                  isExternal === opt.key
+                    ? 'bg-acm-600 text-white'
+                    : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200',
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {isExternal && (
+          <Field label="Event website URL" hint="Where visitors are sent to register — the site never sees who signs up." className="sm:col-span-2">
+            <input
+              type="url"
+              placeholder="https://external-site.com/event"
+              className={cn(inputCls, 'mt-1')}
+              value={draft.externalUrl}
+              onChange={set('externalUrl')}
+            />
+          </Field>
+        )}
+
+        <Field label="Date" hint="Also drives the countdown and LIVE badge automatically.">
+          <input type="date" className={cn(inputCls, 'mt-1')} value={draft.date} onChange={set('date')} />
+        </Field>
+        <Field label="Start time">
+          <input
+            type="time"
+            className={cn(inputCls, 'mt-1')}
+            value={to24h(draft.time)}
+            onChange={(e) => setDraft((d) => ({ ...d, time: to12h(e.target.value) }))}
+          />
+        </Field>
+        <Field label="Venue" hint="Shown on the event card and details page." className="sm:col-span-2">
+          <input className={cn(inputCls, 'mt-1')} value={draft.venue} onChange={set('venue')} />
+        </Field>
+      </FormSection>
+
+      {!isExternal && (
+        <FormSection icon={Wallet} title="Registration & pricing" hint="What it costs, how many can join, and where the money goes.">
+          <Field label="Registration fee (₹)" hint="What each registrant pays. Leave at 0 for a free event.">
+            <input type="number" min="0" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="0 = free" />
+          </Field>
+          <Field
+            label={draft.isGroup ? 'Max teams' : 'Max registrations'}
+            hint={`Registration closes automatically once this many ${draft.isGroup ? 'teams have' : 'people have'} registered. 0 = unlimited.`}
+          >
+            <input
+              type="number"
+              min="0"
+              step="1"
+              className={cn(inputCls, 'mt-1')}
+              value={draft.maxRegistrations}
+              onChange={set('maxRegistrations')}
+              placeholder="0 = unlimited"
+            />
+          </Field>
+          {Number(draft.fee) > 0 && (
+            <Field label="ACM member discount (₹ off)" hint="How much a verified ACM member saves off the fee.">
+              <input type="number" min="0" className={cn(inputCls, 'mt-1')} value={draft.acmDiscount} onChange={set('acmDiscount')} placeholder="0 = no discount" />
+            </Field>
+          )}
+          {Number(draft.fee) > 0 && (
+            <Field label="Credit payment to" hint="Which Razorpay account profile this event's payments are credited to.">
+              <select className={cn(inputCls, 'mt-1')} value={draft.paymentAccountId} onChange={set('paymentAccountId')}>
+                <option value="">Default account</option>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </select>
+            </Field>
+          )}
+        </FormSection>
       )}
-      {!isExternal && Number(draft.fee) > 0 && (
-        <label className="text-xs font-medium text-neutral-500">
-          ACM member discount (₹ off)
-          <input type="number" min="0" className={cn(inputCls, 'mt-1')} value={draft.acmDiscount} onChange={set('acmDiscount')} placeholder="0 = no discount" />
-        </label>
-      )}
-      {!isExternal && Number(draft.fee) > 0 && (
-        <label className="text-xs font-medium text-neutral-500">
-          Credit payment to
-          <select className={cn(inputCls, 'mt-1')} value={draft.paymentAccountId} onChange={set('paymentAccountId')}>
-            <option value="">Default account</option>
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-          </select>
-        </label>
+
+      {!isExternal && (
+        <FormSection icon={Users} title="Team settings" hint="Register solo, or as a pre-formed team.">
+          <div className="sm:col-span-2">
+            <label className="flex cursor-pointer items-center gap-2.5">
+              <input
+                type="checkbox"
+                checked={draft.isGroup}
+                onChange={(e) => setDraft((d) => ({ ...d, isGroup: e.target.checked }))}
+                className="h-4 w-4 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
+              />
+              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200">Group event (register as a team)</span>
+            </label>
+            {draft.isGroup && (
+              <div className="mt-3 grid gap-3.5 rounded-lg border border-neutral-200 bg-neutral-50 p-3 sm:grid-cols-2 dark:border-neutral-700 dark:bg-neutral-800/60">
+                <Field label="Minimum members per team" hint="Counts include the person registering.">
+                  <input type="number" min="1" step="1" className={cn(inputCls, 'mt-1')} value={draft.minTeamSize} onChange={set('minTeamSize')} placeholder="e.g. 2" />
+                </Field>
+                <Field label="Maximum members per team">
+                  <input type="number" min="1" step="1" className={cn(inputCls, 'mt-1')} value={draft.maxTeamSize} onChange={set('maxTeamSize')} placeholder="e.g. 4" />
+                </Field>
+                <p className="text-[11px] font-normal leading-relaxed text-neutral-400 sm:col-span-2">
+                  The registrant adds teammates by name and email. An existing account is linked immediately; someone without one yet is still recorded and linked automatically if they sign up later.
+                </p>
+              </div>
+            )}
+          </div>
+        </FormSection>
       )}
 
       {/* Status window drives the Open/Coming Soon/Closed badge for both
           internal and external events, so nobody has to flip it by hand. */}
-      <div className="rounded-lg border border-neutral-200 bg-white p-3 sm:col-span-2 dark:border-neutral-700 dark:bg-neutral-800/40">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-600 dark:text-neutral-300">
-          <Clock className="h-3.5 w-3.5 text-acm-500" /> {isExternal ? 'Open / close window' : 'Registration window'} — the status badge updates automatically
-        </div>
-        <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
-          <label className="text-xs font-medium text-neutral-500">
-            Opens
-            <input type="datetime-local" className={cn(inputCls, 'mt-1')} value={draft.regOpens} onChange={set('regOpens')} />
-          </label>
-          <label className="text-xs font-medium text-neutral-500">
-            Closes
-            <input type="datetime-local" className={cn(inputCls, 'mt-1')} value={draft.regCloses} onChange={set('regCloses')} />
-          </label>
-        </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
+      <FormSection
+        icon={Clock}
+        title={isExternal ? 'Open / close window' : 'Registration window'}
+        hint="Automatically flips the event's status badge — no manual toggling needed once this is set."
+      >
+        <Field label="Opens">
+          <input type="datetime-local" className={cn(inputCls, 'mt-1')} value={draft.regOpens} onChange={set('regOpens')} />
+        </Field>
+        <Field label="Closes">
+          <input type="datetime-local" className={cn(inputCls, 'mt-1')} value={draft.regCloses} onChange={set('regCloses')} />
+        </Field>
+        <p className="text-[11px] leading-relaxed text-neutral-400 sm:col-span-2">
           Before <strong>Opens</strong> → Coming Soon · between the two → {isExternal ? 'Open' : 'Registration Open'} · after <strong>Closes</strong> → Closed. Leave both blank to set the status manually instead.
         </p>
-      </div>
-      <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
-        Card blurb (short description)
-        <input className={cn(inputCls, 'mt-1')} value={draft.shortDescription} onChange={set('shortDescription')} />
-      </label>
-      <label className="text-xs font-medium text-neutral-500 sm:col-span-2">
-        Full description
-        <textarea rows={3} className={cn(inputCls, 'mt-1')} value={draft.description} onChange={set('description')} />
-      </label>
-      <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadPoster} />
-        <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
-          <ImageUp className="h-4 w-4" /> Upload poster
-        </Button>
+      </FormSection>
+
+      <FormSection icon={FileText} title="Description & poster" hint="The copy and image shown on the card and details page.">
+        <Field label="Card blurb" hint="The one-line summary shown on the event card." className="sm:col-span-2">
+          <input className={cn(inputCls, 'mt-1')} value={draft.shortDescription} onChange={set('shortDescription')} />
+        </Field>
+        <Field label="Full description" hint="The longer write-up shown on the event's details page." className="sm:col-span-2">
+          <textarea rows={3} className={cn(inputCls, 'mt-1')} value={draft.description} onChange={set('description')} />
+        </Field>
+        <div className="sm:col-span-2">
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadPoster} />
+          <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
+            <ImageUp className="h-4 w-4" /> Upload poster
+          </Button>
+        </div>
+      </FormSection>
+
+      <div className="flex flex-wrap items-center gap-3">
         <Button size="sm" onClick={handleSave} disabled={saving}>
           <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save details'}
         </Button>
@@ -622,7 +620,7 @@ function EventEditor({ event, onSave }) {
       </div>
 
       {formErr && (
-        <p className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700 sm:col-span-2 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300">
+        <p className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {formErr}
         </p>
       )}
@@ -634,7 +632,7 @@ function EventEditor({ event, onSave }) {
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
-            className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-700 sm:col-span-2 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300"
+            className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300"
           >
             <CheckCircle2 className="h-4 w-4 shrink-0" /> Event saved — changes are live.
           </motion.div>
@@ -763,47 +761,49 @@ function SiteContentPanel() {
       <div className="space-y-8 p-5">
         {/* Headline copy */}
         <div className="grid gap-4">
-          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Headline copy</h4>
-          <label className="block">
-            <span className="mb-1.5 block text-xs text-neutral-400">Hero tagline</span>
+          <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+            Headline copy
+            <InfoHint text="The hero section and about-page copy on the home page." />
+          </h4>
+          <Field label="Hero tagline" hint="The line under the big headline on the home page.">
             <textarea
               rows={2}
               className={cn(inputCls, 'resize-y')}
               value={draft.heroTagline}
               onChange={(e) => mark({ ...draft, heroTagline: e.target.value })}
             />
-          </label>
-          <label className="block">
-            <span className="mb-1.5 block text-xs text-neutral-400">About section title</span>
+          </Field>
+          <Field label="About section title">
             <input
               className={inputCls}
               value={draft.aboutTitle}
               onChange={(e) => mark({ ...draft, aboutTitle: e.target.value })}
             />
-          </label>
+          </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-xs text-neutral-400">Gallery title</span>
+            <Field label="Gallery title">
               <input
                 className={inputCls}
                 value={draft.galleryTitle}
                 onChange={(e) => mark({ ...draft, galleryTitle: e.target.value })}
               />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs text-neutral-400">Gallery blurb</span>
+            </Field>
+            <Field label="Gallery blurb">
               <input
                 className={inputCls}
                 value={draft.galleryBlurb}
                 onChange={(e) => mark({ ...draft, galleryBlurb: e.target.value })}
               />
-            </label>
+            </Field>
           </div>
         </div>
 
         {/* Vision / Mission / Values */}
         <div>
-          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Vision · Mission · Values</h4>
+          <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+            Vision · Mission · Values
+            <InfoHint text="The three cards in the Goals section. The bold key (e.g. 'Vision') and the body text are both editable." />
+          </h4>
           <div className="mt-3 space-y-3">
             {draft.goals.map((g, i) => (
               <div key={i} className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
@@ -825,7 +825,10 @@ function SiteContentPanel() {
 
         {/* Why join cards */}
         <div>
-          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">“Why join us” cards</h4>
+          <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+            “Why join us” cards
+            <InfoHint text="The four cards on the home page explaining why someone should join the chapter." />
+          </h4>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {draft.whyJoin.map((w, i) => (
               <div key={i} className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
@@ -847,7 +850,10 @@ function SiteContentPanel() {
 
         {/* Establishment */}
         <div>
-          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Year of establishment</h4>
+          <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+            Year of establishment
+            <InfoHint text="Used wherever the site shows how long the chapter has been around." />
+          </h4>
           <input
             className={cn(inputCls, 'mt-2 max-w-[160px]')}
             value={draft.established}
@@ -858,11 +864,14 @@ function SiteContentPanel() {
         {/* Departments — shared dropdown options */}
         <div>
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Departments</h4>
+            <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+              Departments
+              <InfoHint text="The options members pick from in their profile and when registering for events." />
+            </h4>
             <Button size="sm" variant="outline" onClick={addDept}><Plus className="h-4 w-4" /> Add</Button>
           </div>
           <p className="mt-1 text-xs text-neutral-400">
-            The options members pick from in their profile and when registering for events. Changes apply everywhere on save.
+            Changes apply everywhere on save.
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {depts.map((d, i) => (
@@ -887,7 +896,10 @@ function SiteContentPanel() {
 
         {/* Stats */}
         <div>
-          <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Chapter statistics</h4>
+          <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+            Chapter statistics
+            <InfoHint text="The number tiles on the About section (e.g. Members, Events Conducted). Left field is the number, right is its suffix like '+'." />
+          </h4>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {draft.stats.map((s, i) => (
               <div key={s.label} className="flex items-center gap-2 rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
@@ -912,7 +924,10 @@ function SiteContentPanel() {
         {/* Announcements ticker */}
         <div>
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Announcement ticker</h4>
+            <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+              Announcement ticker
+              <InfoHint text="The scrolling strip near the top of the home page. Tag is the small pill (e.g. 'New'), text is the message." />
+            </h4>
             <Button size="sm" variant="outline" onClick={addAnn}><Plus className="h-4 w-4" /> Add</Button>
           </div>
           <div className="mt-3 space-y-2">
