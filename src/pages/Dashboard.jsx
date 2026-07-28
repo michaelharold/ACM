@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
 import { avatarDataUri } from '../lib/avatar'
+import { cn } from '../lib/cn'
 import { formatDate } from '../lib/format'
 import { years } from '../lib/orgData'
 import { isValidPhone, isProfileComplete } from '../lib/profile'
@@ -190,7 +191,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-4">
             <img src={avatar} alt="" className="h-14 w-14 rounded-2xl object-cover ring-2 ring-white shadow-sm dark:ring-neutral-800" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Hi, {displayName.split(' ')[0]} 👋</h1>
+              <h1 className="text-2xl font-bold tracking-tight">Hi, {displayName.split(' ')[0]}</h1>
               <p className="text-sm text-neutral-500 dark:text-neutral-400">Here's your ACM TKMCE space.</p>
             </div>
           </div>

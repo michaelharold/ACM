@@ -75,8 +75,8 @@ export default function Admin() {
     { key: 'gallery', label: 'Gallery', icon: Images, show: can('content') },
     { key: 'membership', label: 'Membership', icon: Fingerprint, show: can('membership') },
     { key: 'payments', label: 'Payments', icon: Wallet, show: isAdmin },
-    { key: 'messages', label: 'Messages', icon: Inbox, show: isAdmin },
-    { key: 'registrations', label: 'Registrations', icon: Users, show: isAdmin },
+    { key: 'messages', label: 'Messages', icon: Inbox, show: can('messages') },
+    { key: 'registrations', label: 'Registrations', icon: Users, show: can('registrations') },
     { key: 'access', label: 'Access', icon: KeyRound, show: isAdmin },
   ].filter((t) => t.show)
 
@@ -103,6 +103,9 @@ export default function Admin() {
           status: r.status || 'Confirmed',
           paymentStatus: r.paymentStatus || '',
           paymentId: r.razorpayPaymentId || '',
+          // Kept alongside the renamed `paymentId` (used for display/CSV) so
+          // paymentNeedsCheck's razorpayPaymentId check still has a field to read.
+          razorpayPaymentId: r.razorpayPaymentId || '',
           razorpayOrderId: r.razorpayOrderId || '',
           paidAt: r.paidAt || null,
           createdAt: r.createdAt || null,
@@ -250,8 +253,8 @@ export default function Admin() {
             {tab === 'gallery' && can('content') && <GalleryPanel />}
             {tab === 'membership' && can('membership') && <MembershipPanel canEdit={can('membership')} adminName={user.name} />}
             {tab === 'payments' && isAdmin && <PaymentsPanel />}
-            {tab === 'messages' && isAdmin && <MessagesPanel adminName={user.name} />}
-            {tab === 'registrations' && isAdmin && <RegistrationsPanel rows={regRows} events={events} adminName={user.name} />}
+            {tab === 'messages' && can('messages') && <MessagesPanel adminName={user.name} />}
+            {tab === 'registrations' && can('registrations') && <RegistrationsPanel rows={regRows} events={events} adminName={user.name} canMessage={can('messages')} />}
             {tab === 'access' && isAdmin && <AccessPanel isLive={isLive} />}
           </div>
         </div>
@@ -932,6 +935,8 @@ const grantKeys = [
   { key: 'execom', label: 'Execom' },
   { key: 'content', label: 'Site Content' },
   { key: 'membership', label: 'Membership' },
+  { key: 'messages', label: 'Messages' },
+  { key: 'registrations', label: 'Registrations' },
 ]
 
 const demoUsers = [
@@ -1052,7 +1057,7 @@ function AccessPanel({ isLive }) {
   )
 }
 
-function RegistrationsPanel({ rows, events = [], adminName }) {
+function RegistrationsPanel({ rows, events = [], adminName, canMessage }) {
   const [dept, setDept] = useState('all')
   const [eventFilter, setEventFilter] = useState('all')
   const [member, setMember] = useState('all') // all | member | non-member
@@ -1158,14 +1163,16 @@ function RegistrationsPanel({ rows, events = [], adminName }) {
                           </>
                         )}
                       </div>
-                      <button
-                        onClick={() => setMsgTo(p)}
-                        disabled={!p.userId}
-                        title={p.userId ? 'Message the registrant' : 'No account linked'}
-                        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-acm-300 hover:text-acm-500 disabled:opacity-30 dark:border-neutral-700"
-                      >
-                        <MessageSquare className="h-3.5 w-3.5" />
-                      </button>
+                      {canMessage && (
+                        <button
+                          onClick={() => setMsgTo(p)}
+                          disabled={!p.userId}
+                          title={p.userId ? 'Message the registrant' : 'No account linked'}
+                          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-acm-300 hover:text-acm-500 disabled:opacity-30 dark:border-neutral-700"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                   <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.event}</td>

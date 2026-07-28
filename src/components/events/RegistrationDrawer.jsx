@@ -106,7 +106,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
       if (isGroup) {
         if (!form.teamName.trim()) return false
         const filled = teammates.filter((t) => t.email.trim())
-        if (!filled.every((t) => emailRe.test(t.email.trim()))) return false
+        if (!filled.every((t) => t.name.trim() && emailRe.test(t.email.trim()))) return false
         const size = 1 + filled.length
         const min = Number(event?.minTeamSize) || 1
         const max = Number(event?.maxTeamSize) || 999
@@ -306,7 +306,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                         </span>
                       </div>
                       <p className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">
-                        You’re team member 1. Add each teammate by the email they signed up with — they must have a website account.
+                        You’re team member 1. Add each teammate's name and email. If they have a website account, their registration syncs to their dashboard automatically — if not, we'll still record them from what you enter here.
                       </p>
                       <div className="grid gap-2.5">
                         {teammates.map((t, i) => (

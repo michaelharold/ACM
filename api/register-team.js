@@ -40,30 +40,40 @@ export default async function handler(req, res) {
     const leader = leaderSnap.exists ? leaderSnap.data() : {}
     const leaderEmail = (leader.email || '').toLowerCase()
 
-    // Teammate emails: trimmed, de-duped, excluding the leader's own.
-    const emails = [...new Set((teammates || []).map((t) => (t?.email || '').trim().toLowerCase()).filter(Boolean))]
-      .filter((e) => e !== leaderEmail)
+    // Teammates: trimmed, de-duped by email, excluding the leader's own. Name
+    // travels with the email so an unregistered teammate can still be recorded.
+    const seen = new Set()
+    const teammateInputs = []
+    for (const t of (teammates || [])) {
+      const email = (t?.email || '').trim().toLowerCase()
+      if (!email || email === leaderEmail || seen.has(email)) continue
+      seen.add(email)
+      teammateInputs.push({ email, name: (t?.name || '').trim() })
+    }
 
-    const size = 1 + emails.length
+    const size = 1 + teammateInputs.length
     const min = Number(ev.minTeamSize) || 1
     const max = Number(ev.maxTeamSize) || 999
     if (size < min) return send(res, 400, { error: `A team needs at least ${min} member${min === 1 ? '' : 's'} (including you).` })
     if (size > max) return send(res, 400, { error: `A team can have at most ${max} member${max === 1 ? '' : 's'} (including you).` })
 
-    // Build the trusted member list from real user records.
+    // Build the member list. A teammate with a site account is looked up and
+    // linked by uid — their registration then syncs to their own dashboard. A
+    // teammate with no account is still recorded (name + email as entered by
+    // the leader), just without that sync — there's no account to sync to.
     const members = [{ uid, name: leader.name || leader.googleName || '', email: leader.email || '', phone: leader.phone || '', role: 'leader' }]
-    const notFound = []
-    for (const email of emails) {
-      const doc = await findUserByEmail(db, email)
-      if (!doc) { notFound.push(email); continue }
-      const d = doc.data()
-      members.push({ uid: doc.id, name: d.name || d.googleName || '', email: d.email || email, phone: d.phone || '', role: 'member' })
-    }
-    if (notFound.length) {
-      return send(res, 400, { error: `Not registered on the site: ${notFound.join(', ')}. Ask them to sign up first.` })
+    for (const t of teammateInputs) {
+      const doc = await findUserByEmail(db, t.email)
+      if (doc) {
+        const d = doc.data()
+        members.push({ uid: doc.id, name: d.name || d.googleName || t.name || '', email: d.email || t.email, phone: d.phone || '', role: 'member' })
+      } else {
+        if (!t.name) return send(res, 400, { error: `Add a name for ${t.email} — they don't have a website account yet, so we can't look one up.` })
+        members.push({ uid: null, name: t.name, email: t.email, phone: '', role: 'member' })
+      }
     }
 
-    const memberUids = members.map((m) => m.uid)
+    const memberUids = members.filter((m) => m.uid).map((m) => m.uid)
 
     // One registration per person per event — solo or within any team.
     const existing = await db.collection('registrations').where('eventId', '==', eventId).get()

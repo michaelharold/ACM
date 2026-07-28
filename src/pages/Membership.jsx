@@ -136,7 +136,7 @@ export default function Membership() {
         {phase === 'blocked' && <Blocked />}
 
         {phase === 'form' && (
-          <MembershipForm user={user} onSubmit={handleSubmit} submitting={submitting} error={error} fee={membershipFee} chargesFee={chargesFee} />
+          <MembershipForm user={user} onSubmit={handleSubmit} submitting={submitting} error={error} fee={membershipFee} chargesFee={chargesFee} departments={departments} />
         )}
 
         {phase === 'status' && membership && (
@@ -147,7 +147,7 @@ export default function Membership() {
   )
 }
 
-function MembershipForm({ user, onSubmit, submitting, error, fee, chargesFee }) {
+function MembershipForm({ user, onSubmit, submitting, error, fee, chargesFee, departments }) {
   return (
     <motion.form
       initial={{ opacity: 0, y: 14 }}

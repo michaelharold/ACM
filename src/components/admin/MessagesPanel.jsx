@@ -48,8 +48,9 @@ export function MessagesPanel({ adminName }) {
   async function openMessage(m) {
     setOpen(m)
     if (isUnread(m)) {
-      await svc.markThreadRead(m.id, 'admin')
-      setRows((r) => r.map((x) => (x.id === m.id ? { ...x, unreadForAdmin: false, status: x.status === 'new' ? 'read' : x.status } : x)))
+      const wasNew = m.status === 'new'
+      await svc.markThreadRead(m.id, 'admin', { wasNew })
+      setRows((r) => r.map((x) => (x.id === m.id ? { ...x, unreadForAdmin: false, status: wasNew ? 'read' : x.status } : x)))
     }
   }
 

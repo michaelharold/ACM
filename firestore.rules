@@ -59,19 +59,22 @@ service cloud.firestore {
     // caller's own auth token, so a sender cannot post under someone else's
     // address and cannot make a reply land in a stranger's inbox.
     match /messages/{id} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin() || hasPerm('messages'));
       // A user starts their OWN thread (identity must match their token); an
-      // admin may start a thread addressed to any member (admin-initiated).
+      // admin (or a granted editor — full inbox via 'messages', or the
+      // one-off "message this person" convenience on the Membership /
+      // Registrations panels) may start a thread addressed to any member.
       allow create: if (isSignedIn()
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.userEmail == request.auth.token.email
           && request.resource.data.body is string
           && request.resource.data.body.size() > 0
           && request.resource.data.body.size() <= 4000)
-        || isAdmin();
-      // Admins manage any thread. The thread's owner may only append a reply and
-      // toggle the unread flags on their own thread — no other fields may change.
-      allow update: if isAdmin()
+        || isAdmin() || hasPerm('messages') || hasPerm('membership') || hasPerm('registrations');
+      // Admins and 'messages'-granted editors manage any thread. The thread's
+      // owner may only append a reply and toggle the unread flags on their
+      // own thread — no other fields may change.
+      allow update: if isAdmin() || hasPerm('messages')
         || (isSignedIn() && resource.data.userId == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys()
                  .hasOnly(['replies', 'unreadForAdmin', 'unreadForUser', 'status']));
@@ -92,6 +95,7 @@ service cloud.firestore {
         resource.data.userId == request.auth.uid
         || request.auth.uid in resource.data.get('memberUids', [])
         || isAdmin()
+        || hasPerm('registrations')
       );
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if isAdmin();

@@ -327,50 +327,6 @@ export async function fetchMessages() {
   return map(snap)
 }
 
-export async function markMessageRead(id) {
-  if (!isFirebaseConfigured) {
-    writeStore(readStore().map((m) => (m.id === id && m.status === 'new' ? { ...m, status: 'read' } : m)))
-    return
-  }
-  await updateDoc(doc(db, 'messages', id), { status: 'read' })
-}
-
-// Queues a reply for delivery and records it on the thread.
-//
-// Delivery itself is done by the Firebase "Trigger Email" extension, which
-// watches the `mail` collection and sends each document it finds. A static
-// site cannot send email on its own — without that extension installed the
-// reply is still recorded here, and the admin UI offers a mailto: fallback.
-export async function sendReply({ messageId, to, subject, body, fromName }) {
-  const reply = { body, sentAt: new Date().toISOString(), byName: fromName }
-  if (!isFirebaseConfigured) {
-    writeStore(
-      readStore().map((m) =>
-        m.id === messageId ? { ...m, replies: [...(m.replies || []), reply], status: 'replied' } : m,
-      ),
-    )
-    return { queued: false, reply }
-  }
-  await addDoc(collection(db, 'mail'), {
-    to: [to],
-    message: {
-      subject,
-      text: body,
-      html: `<p>${body.replace(/\n/g, '<br/>')}</p><hr/><p style="color:#888;font-size:12px">Sent by ${fromName} — ACM TKMCE Student Chapter</p>`,
-    },
-    createdAt: serverTimestamp(),
-  })
-  await updateDoc(doc(db, 'messages', messageId), {
-    replies: [...(await getMessageReplies(messageId)), reply],
-    status: 'replied',
-  })
-  return { queued: true, reply }
-}
-
-async function getMessageReplies(id) {
-  const snap = await getDoc(doc(db, 'messages', id))
-  return snap.exists() ? snap.data().replies || [] : []
-}
 
 // Every thread belonging to one user (their profile inbox), newest first.
 export async function fetchUserMessages(uid) {
@@ -418,9 +374,13 @@ export async function replyInApp({ messageId, from, body, byName }) {
   return reply
 }
 
-// Clear the unread flag for one side when they open a thread.
-export async function markThreadRead(id, side) {
+// Clear the unread flag for one side when they open a thread. When the admin
+// opens a still-'new' thread this also advances status to 'read' — otherwise
+// that transition only ever happened in local React state and reverted back
+// to 'new' on the next fetch.
+export async function markThreadRead(id, side, { wasNew = false } = {}) {
   const patch = side === 'admin' ? { unreadForAdmin: false } : { unreadForUser: false }
+  if (side === 'admin' && wasNew) patch.status = 'read'
   if (!isFirebaseConfigured) {
     writeStore(readStore().map((m) => (m.id === id ? { ...m, ...patch } : m)))
     return

@@ -118,8 +118,6 @@ function LeadRow({ group, onOpen }) {
 
 export function Execom() {
   const { execomGroups } = useData()
- 
-  console.log(execomGroups)
 
   const [selected, setSelected] = useState(null)
 
