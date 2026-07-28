@@ -50,6 +50,10 @@ service cloud.firestore {
     // Gallery: one image per document (inline data URI), so uploads never
     // approach the 1 MB per-document cap.
     match /gallery/{id}        { allow read: if true; allow write: if isAdmin() || hasPerm('content'); }
+    // Event guideline images — same one-image-per-document reasoning as
+    // gallery, keyed to an event via eventId instead of being global. Managed
+    // from the Events tab, so it shares that tab's edit permission.
+    match /eventGuidelines/{id} { allow read: if true; allow write: if isAdmin() || hasPerm('events'); }
     match /siteContent/{id}    { allow read: if true; allow write: if isAdmin() || hasPerm('content'); }
 
     // Contact messages — a signed-in user may send one as themselves and read

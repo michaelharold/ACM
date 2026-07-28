@@ -46,6 +46,14 @@ export function isFull(event) {
   return max > 0 && (Number(event?.registeredCount) || 0) >= max
 }
 
+// registrationStatus, but a full event always reads as 'closed' — same badge,
+// same filtering/sorting, same everything a normally-closed event gets. Use
+// this (not registrationStatus) anywhere that needs to know if people can
+// still register right now.
+export function effectiveStatus(event, now = Date.now()) {
+  return isFull(event) ? 'closed' : registrationStatus(event, now)
+}
+
 // Ticking clock for an event card: countdown until start, live flag afterwards.
 export function useEventClock(event) {
   const [now, setNow] = useState(() => Date.now())

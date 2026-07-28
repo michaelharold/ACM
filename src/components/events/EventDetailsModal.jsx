@@ -1,11 +1,13 @@
-import { CalendarDays, Clock, MapPin, Wallet, Timer, CheckCircle2, ExternalLink, ArrowUpRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CalendarDays, Clock, MapPin, Wallet, Timer, CheckCircle2, ExternalLink, ArrowUpRight, Users, ClipboardList, ShieldCheck } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { PosterImage } from './PosterImage'
 import { statusMeta } from '../../data/mock'
-import { registrationStatus, isFull } from '../../lib/eventClock'
+import { effectiveStatus } from '../../lib/eventClock'
 import { formatDateLong, formatDateTime, normalizeUrl } from '../../lib/format'
+import { fetchEventGuidelineImages } from '../../services/firestore'
 
 function Fact({ icon: Icon, label, value }) {
   return (
@@ -22,10 +24,21 @@ function Fact({ icon: Icon, label, value }) {
 }
 
 export function EventDetailsModal({ event, open, onClose, onRegister, registered }) {
+  // Guideline images live in their own collection, so they're fetched per
+  // event rather than arriving on the event object itself. This effect must
+  // run before the `!event` early return below (hooks can't be conditional).
+  const [guideImages, setGuideImages] = useState([])
+  useEffect(() => {
+    if (!event?.id) { setGuideImages([]); return }
+    let alive = true
+    fetchEventGuidelineImages(event.id).then((l) => alive && setGuideImages(l || [])).catch(() => {})
+    return () => { alive = false }
+  }, [event?.id])
+
   if (!event) return null
-  const full = isFull(event)
-  const status = full ? 'closed' : registrationStatus(event)
-  const meta = full ? { label: 'Registrations Full', tone: 'red' } : statusMeta[status]
+  // A full event reads exactly like a normally-closed one — see EventCard.
+  const status = effectiveStatus(event)
+  const meta = statusMeta[status]
   const isExternal = !!event.external
   const externalHref = normalizeUrl(event.externalUrl)
   const canRegister = status === 'open' && !registered
@@ -47,13 +60,22 @@ export function EventDetailsModal({ event, open, onClose, onRegister, registered
         </div>
       </PosterImage>
 
-      <div className="p-6 sm:p-8">
+      {/* Extra bottom padding so the last section always clears the sticky
+          action bar below instead of scrolling to a stop right behind it. */}
+      <div className="p-6 pb-28 sm:p-8 sm:pb-28">
         {/* Facts */}
         <div className="grid gap-3 sm:grid-cols-2">
           <Fact icon={CalendarDays} label="Date" value={formatDateLong(event.date)} />
           <Fact icon={Clock} label="Time" value={event.time} />
           <Fact icon={MapPin} label="Venue" value={event.venue} />
           {!isExternal && <Fact icon={Wallet} label="Fee" value={event.fee ? `₹${event.fee}` : 'Free'} />}
+          {!isExternal && event.isGroup && (event.minTeamSize || event.maxTeamSize) && (
+            <Fact
+              icon={Users}
+              label="Team size"
+              value={`${event.minTeamSize}${event.maxTeamSize && event.maxTeamSize !== event.minTeamSize ? `–${event.maxTeamSize}` : ''} members`}
+            />
+          )}
         </div>
 
         {/* Description */}
@@ -61,6 +83,37 @@ export function EventDetailsModal({ event, open, onClose, onRegister, registered
           <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">About this event</h3>
           <p className="mt-3 text-pretty leading-relaxed text-neutral-600 dark:text-neutral-300">{event.description}</p>
         </section>
+
+        {/* Guidelines — images and/or text, whichever the organiser published */}
+        {(guideImages.length > 0 || (event.guidelinesEnabled && event.guidelinesText?.trim())) && (
+          <section className="mt-8">
+            <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+              <ClipboardList className="h-4 w-4" /> Guidelines
+            </h3>
+            {guideImages.length > 0 && (
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {guideImages.map((g) => (
+                  <a key={g.id} href={g.image} target="_blank" rel="noreferrer noopener" className="block overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-800">
+                    <img src={g.image} alt="Event guideline" className="aspect-[4/3] w-full object-cover transition-transform hover:scale-105" />
+                  </a>
+                ))}
+              </div>
+            )}
+            {event.guidelinesEnabled && event.guidelinesText?.trim() && (
+              <p className="mt-3 whitespace-pre-wrap text-pretty leading-relaxed text-neutral-600 dark:text-neutral-300">{event.guidelinesText}</p>
+            )}
+          </section>
+        )}
+
+        {/* Code of conduct */}
+        {event.codeOfConductEnabled && event.codeOfConductText?.trim() && (
+          <section className="mt-8">
+            <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+              <ShieldCheck className="h-4 w-4" /> Code of conduct
+            </h3>
+            <p className="mt-3 whitespace-pre-wrap text-pretty leading-relaxed text-neutral-600 dark:text-neutral-300">{event.codeOfConductText}</p>
+          </section>
+        )}
 
         {/* Speakers */}
         {event.speakers?.length > 0 && (

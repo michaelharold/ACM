@@ -12,7 +12,7 @@ import { BrandBackdrop } from '../components/sections/BrandBackdrop'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
-import { registrationStatus, eventStart, LIVE_WINDOW_MS } from '../lib/eventClock'
+import { effectiveStatus, eventStart, LIVE_WINDOW_MS } from '../lib/eventClock'
 import { isProfileComplete } from '../lib/profile'
 import { cn } from '../lib/cn'
 
@@ -45,7 +45,7 @@ export default function Events() {
     const now = Date.now()
     // Filter first.
     const match = (e) => {
-      const status = registrationStatus(e)
+      const status = effectiveStatus(e)
       switch (filter) {
         case 'latest': return !isEnded(e, now)
         case 'open': return status === 'open' && !isEnded(e, now)
@@ -63,7 +63,7 @@ export default function Events() {
     const rank = (e) => {
       if (isEnded(e, now)) return 3
       if (isRegistered(e.id)) return 1
-      if (registrationStatus(e) === 'closed') return 2
+      if (effectiveStatus(e) === 'closed') return 2
       return 0
     }
     return events

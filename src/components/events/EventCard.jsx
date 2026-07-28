@@ -1,10 +1,10 @@
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, ArrowUpRight, Timer, Radio, ExternalLink, CheckCircle2 } from 'lucide-react'
+import { CalendarDays, MapPin, ArrowUpRight, Timer, Radio, ExternalLink, CheckCircle2, Users } from 'lucide-react'
 import { Badge } from '../ui/Badge'
 import { PosterImage } from './PosterImage'
 import { fadeUp } from '../ui/Reveal'
 import { statusMeta } from '../../data/mock'
-import { useEventClock, registrationStatus, isFull } from '../../lib/eventClock'
+import { useEventClock, effectiveStatus } from '../../lib/eventClock'
 import { formatDate } from '../../lib/format'
 import { cn } from '../../lib/cn'
 
@@ -12,10 +12,10 @@ import { cn } from '../../lib/cn'
 export function EventCard({ event, onOpen, registered = false, muted = false }) {
   const { isLive, countdown } = useEventClock(event)
   // Recomputed on every clock tick, so the badge flips Open/Closed on its own.
-  // A full event reads as closed, with its own "Registrations Full" label.
-  const full = isFull(event)
-  const status = full ? 'closed' : registrationStatus(event)
-  const meta = full ? { label: 'Registrations Full', tone: 'red' } : statusMeta[status]
+  // A full event reads exactly like a normally-closed one — same "Registration
+  // Closed" badge, same everything — rather than a distinct "full" state.
+  const status = effectiveStatus(event)
+  const meta = statusMeta[status]
 
   return (
     <motion.button
@@ -91,6 +91,12 @@ export function EventCard({ event, onOpen, registered = false, muted = false }) 
           <span className="inline-flex items-center gap-1.5">
             <MapPin className="h-3.5 w-3.5" /> {event.venue}
           </span>
+          {event.isGroup && (event.minTeamSize || event.maxTeamSize) && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-acm-500/10 px-2 py-0.5 font-medium text-acm-600 dark:text-acm-400">
+              <Users className="h-3.5 w-3.5" /> Team of {event.minTeamSize}
+              {event.maxTeamSize && event.maxTeamSize !== event.minTeamSize ? `–${event.maxTeamSize}` : ''}
+            </span>
+          )}
           {event.external && (
             <span className="inline-flex items-center gap-1.5 font-medium text-acm-600 dark:text-acm-400">
               <ExternalLink className="h-3.5 w-3.5" /> External event

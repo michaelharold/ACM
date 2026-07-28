@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
   Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet, AlertCircle,
-  Loader2, UserX, FileText, Shuffle,
+  Loader2, UserX, FileText, Shuffle, Info,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
@@ -22,8 +22,9 @@ import { participants as seedParticipants, statusMeta } from '../data/mock'
 import * as svc from '../services/firestore'
 import { avatarDataUri } from '../lib/avatar'
 import { fitPoster } from '../lib/imagePrep'
+import { EVENT_GUIDELINE_MAX_IMAGES } from '../lib/storageBudget'
 import { formatDate, to24h, to12h } from '../lib/format'
-import { registrationStatus, hasRegWindow, eventStart } from '../lib/eventClock'
+import { effectiveStatus, hasRegWindow, eventStart } from '../lib/eventClock'
 import { departments as orgDepartments } from '../lib/orgData'
 import { ComposeMessageModal } from '../components/messages/Thread'
 import { MessageSquare, AlertTriangle, Search } from 'lucide-react'
@@ -195,7 +196,7 @@ export default function Admin() {
     { label: 'Total Events', value: events.length, icon: CalendarDays, tone: 'blue' },
     { label: 'Total Registrations', value: regRows.length, icon: Ticket, tone: 'green' },
     { label: 'Unread Messages', value: unreadMsgs, icon: Inbox, tone: 'amber' },
-    { label: 'Open Events', value: events.filter((e) => registrationStatus(e) === 'open').length, icon: TrendingUp, tone: 'blue' },
+    { label: 'Open Events', value: events.filter((e) => effectiveStatus(e) === 'open').length, icon: TrendingUp, tone: 'blue' },
   ]
 
   return (
@@ -323,7 +324,7 @@ function Overview({ stats, events, paymentAlerts = 0, onReviewAlerts }) {
             // Use the SAME live status the events page shows (derived from the
             // registration window), not the stored e.status — otherwise every
             // freshly-created event reads its default 'coming-soon' here.
-            const meta = statusMeta[registrationStatus(e)] || statusMeta['coming-soon']
+            const meta = statusMeta[effectiveStatus(e)] || statusMeta['coming-soon']
             return (
               <div key={e.id} className="flex items-center gap-4 py-3">
                 <img src={e.poster} alt="" className="h-11 w-11 rounded-lg object-cover" />
@@ -365,6 +366,10 @@ function EventEditor({ event, onSave }) {
     regCloses: event.regCloses || '',
     external: !!event.external,
     externalUrl: event.externalUrl || '',
+    guidelinesEnabled: !!event.guidelinesEnabled,
+    guidelinesText: event.guidelinesText || '',
+    codeOfConductEnabled: !!event.codeOfConductEnabled,
+    codeOfConductText: event.codeOfConductText || '',
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -372,11 +377,65 @@ function EventEditor({ event, onSave }) {
   const [accounts, setAccounts] = useState([])
   const fileRef = useRef(null)
 
+  // Guideline images live in their own collection (api parity with gallery —
+  // one doc per image), so they're fetched/edited immediately here rather
+  // than batched into the draft-and-Save-details flow the rest of the form uses.
+  const [guideImages, setGuideImages] = useState([])
+  const [guideBusy, setGuideBusy] = useState(false)
+  const [guideErr, setGuideErr] = useState('')
+  const guideFileRef = useRef(null)
+
   useEffect(() => {
     let alive = true
     svc.fetchPaymentAccounts().then((l) => alive && setAccounts((l || []).filter((a) => a.active !== false))).catch(() => {})
+    svc.fetchEventGuidelineImages(event.id).then((l) => alive && setGuideImages(l || [])).catch(() => {})
     return () => { alive = false }
-  }, [])
+  }, [event.id])
+
+  async function uploadGuideImages(e) {
+    const files = [...(e.target.files || [])]
+    if (!files.length) return
+    setGuideErr('')
+    const remaining = EVENT_GUIDELINE_MAX_IMAGES - guideImages.length
+    if (remaining <= 0) {
+      setGuideErr(`Up to ${EVENT_GUIDELINE_MAX_IMAGES} guideline images per event — remove one before adding more.`)
+      e.target.value = ''
+      return
+    }
+    const toUpload = files.slice(0, remaining)
+    setGuideBusy(true)
+    try {
+      let order = guideImages.length
+      for (const file of toUpload) {
+        try {
+          const image = await fitPoster(file)
+          const created = await svc.addEventGuidelineImage(event.id, image, order++)
+          setGuideImages((g) => [...g, created])
+        } catch (err) {
+          setGuideErr(err?.message || 'Could not upload one of those images.')
+        }
+      }
+      if (files.length > toUpload.length) {
+        setGuideErr(`Only ${remaining} more image${remaining === 1 ? '' : 's'} fit (cap ${EVENT_GUIDELINE_MAX_IMAGES}); the rest were skipped.`)
+      }
+    } finally {
+      setGuideBusy(false)
+      e.target.value = ''
+    }
+  }
+
+  async function removeGuideImage(id) {
+    setGuideErr('')
+    const prev = guideImages
+    setGuideImages((g) => g.filter((img) => img.id !== id))
+    try {
+      await svc.deleteEventGuidelineImage(id)
+    } catch (err) {
+      setGuideImages(prev)
+      setGuideErr(err?.message || 'Could not remove that image.')
+    }
+  }
+
   const set = (k) => (e) => setDraft((d) => ({ ...d, [k]: e.target.value }))
   const isExternal = draft.external
 
@@ -417,6 +476,12 @@ function EventEditor({ event, onSave }) {
     if (opens && d.date) {
       const start = eventStart(d).getTime()
       if (!Number.isNaN(start) && start < opens) return 'The event start time should be after registration opens.'
+    }
+    if (d.guidelinesEnabled && !d.guidelinesText?.trim()) {
+      return 'Guidelines are empty — add the text, or turn off "Publish guidelines".'
+    }
+    if (d.codeOfConductEnabled && !d.codeOfConductText?.trim()) {
+      return 'Code of conduct is empty — add the text, or turn off "Publish code of conduct".'
     }
     return ''
   }
@@ -667,6 +732,108 @@ function EventEditor({ event, onSave }) {
         </div>
       </FormSection>
 
+      <FormSection icon={ShieldCheck} title="Guidelines & code of conduct" hint="Rules or expectations for this specific event — shown when someone opens it, beyond the site-wide agreement they accept when registering.">
+        <div className="sm:col-span-2">
+          <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-neutral-600 dark:text-neutral-300">
+            Guideline images
+            <InfoHint text="Rules sheets, infographics — anything visual. Shown together on the event's details page." />
+          </span>
+          {guideImages.length > 0 && (
+            <div className="mb-2.5 grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {guideImages.map((g) => (
+                <div key={g.id} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
+                  <img src={g.image} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeGuideImage(g.id)}
+                    aria-label="Remove guideline image"
+                    className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-md bg-neutral-950/70 text-white opacity-0 backdrop-blur transition-opacity hover:bg-rose-600 group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <input ref={guideFileRef} type="file" accept="image/*" multiple className="hidden" onChange={uploadGuideImages} />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => guideFileRef.current?.click()}
+            disabled={guideBusy || guideImages.length >= EVENT_GUIDELINE_MAX_IMAGES}
+          >
+            {guideBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Images className="h-4 w-4" />} Upload guideline images
+          </Button>
+          <span className="ml-2 text-xs text-neutral-400">{guideImages.length}/{EVENT_GUIDELINE_MAX_IMAGES}</span>
+          {guideErr && (
+            <p className="mt-2 flex items-start gap-1.5 text-xs text-rose-600 dark:text-rose-300">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {guideErr}
+            </p>
+          )}
+          <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-500 dark:border-neutral-700 dark:bg-neutral-800/60 dark:text-neutral-400">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-acm-500" />
+            Add guideline images above, or check “Publish guidelines” below to write them as text instead.
+          </p>
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={draft.guidelinesEnabled}
+              onChange={(e) => setDraft((d) => ({ ...d, guidelinesEnabled: e.target.checked }))}
+              className="h-4 w-4 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
+            />
+            <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200">Publish guidelines (text)</span>
+          </label>
+          {draft.guidelinesEnabled && (
+            <div className="mt-2.5">
+              <textarea
+                rows={4}
+                className={inputCls}
+                placeholder="e.g. Teams must check in 30 minutes before the event starts…"
+                value={draft.guidelinesText}
+                onChange={set('guidelinesText')}
+              />
+              {!draft.guidelinesText.trim() && (
+                <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Guidelines are empty — add some text before saving, or turn this off.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={draft.codeOfConductEnabled}
+              onChange={(e) => setDraft((d) => ({ ...d, codeOfConductEnabled: e.target.checked }))}
+              className="h-4 w-4 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
+            />
+            <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200">Publish code of conduct (text)</span>
+          </label>
+          {draft.codeOfConductEnabled && (
+            <div className="mt-2.5">
+              <textarea
+                rows={4}
+                className={inputCls}
+                placeholder="e.g. Be respectful, no harassment, follow organiser instructions…"
+                value={draft.codeOfConductText}
+                onChange={set('codeOfConductText')}
+              />
+              {!draft.codeOfConductText.trim() && (
+                <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Code of conduct is empty — add some text before saving, or turn this off.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </FormSection>
+
       <div className="flex flex-wrap items-center gap-3">
         <Button size="sm" onClick={handleSave} disabled={saving}>
           <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save details'}
@@ -718,7 +885,7 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
       </div>
       <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
         {events.map((e) => {
-          const status = registrationStatus(e)
+          const status = effectiveStatus(e)
           const auto = hasRegWindow(e)
           return (
           <div key={e.id}>

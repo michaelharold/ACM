@@ -18,6 +18,12 @@ export const STORAGE_BUDGET_BYTES = 700 * 1024 * 1024
 // ceiling as much as a storage one. Uploads are blocked past it.
 export const GALLERY_MAX_IMAGES = 80
 
+// Guideline images live in their own per-event-fetched collection (not
+// preloaded app-wide like gallery/events/execomGroups), so they aren't part
+// of the StorageMeter estimate above — this cap alone keeps a single event
+// from accumulating an unbounded number of them.
+export const EVENT_GUIDELINE_MAX_IMAGES = 6
+
 const len = (s) => (typeof s === 'string' && s.startsWith('data:') ? s.length : 0)
 
 // Best-effort byte estimate of every inline image across the site.

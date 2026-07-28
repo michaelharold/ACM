@@ -55,7 +55,49 @@ export async function deleteEvent(id) {
   // file in the bucket.
   const snap = await getDoc(doc(db, 'events', id))
   if (snap.exists()) await deleteImage(snap.data().poster)
+  const guides = await getDocs(query(collection(db, 'eventGuidelines'), where('eventId', '==', id)))
+  await Promise.all(guides.docs.map((g) => deleteEventGuidelineImage(g.id)))
   await deleteDoc(doc(db, 'events', id))
+}
+
+// ── Event guideline images ──────────────────────────────────
+// One image per document (same reasoning as gallery), scoped to an event via
+// eventId — a rules-sheet or infographic shown alongside the event's poster.
+const GUIDELINES_KEY = 'acm-event-guidelines'
+const readAllGuidelines = () => readLocal(GUIDELINES_KEY) || []
+const writeAllGuidelines = (rows) => {
+  try {
+    localStorage.setItem(GUIDELINES_KEY, JSON.stringify(rows))
+  } catch {
+    /* quota exceeded — the demo just won't persist */
+  }
+}
+
+export async function fetchEventGuidelineImages(eventId) {
+  if (!isFirebaseConfigured) return readAllGuidelines().filter((g) => g.eventId === eventId)
+  const snap = await getDocs(query(collection(db, 'eventGuidelines'), where('eventId', '==', eventId), orderBy('order', 'asc')))
+  return snap.empty ? [] : map(snap)
+}
+
+export async function addEventGuidelineImage(eventId, image, order = 0) {
+  if (!isFirebaseConfigured) {
+    const local = { id: `eg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, eventId, image, order }
+    writeAllGuidelines([...readAllGuidelines(), local])
+    return local
+  }
+  const hosted = await uploadImage('eventGuidelines', image)
+  const ref = await addDoc(collection(db, 'eventGuidelines'), { eventId, image: hosted, order, createdAt: serverTimestamp() })
+  return { id: ref.id, eventId, image: hosted, order }
+}
+
+export async function deleteEventGuidelineImage(id) {
+  if (!isFirebaseConfigured) {
+    writeAllGuidelines(readAllGuidelines().filter((g) => g.id !== id))
+    return
+  }
+  const snap = await getDoc(doc(db, 'eventGuidelines', id))
+  if (snap.exists()) await deleteImage(snap.data().image)
+  await deleteDoc(doc(db, 'eventGuidelines', id))
 }
 
 // ── Execom ───────────────────────────────────────────────────
