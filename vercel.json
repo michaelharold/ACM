@@ -4,5 +4,8 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/cron-group-events", "schedule": "0 3 * * *" }
   ]
 }

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
   Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet, AlertCircle,
-  Loader2, UserX, FileText,
+  Loader2, UserX, FileText, Shuffle,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
@@ -30,6 +30,7 @@ import { MessageSquare, AlertTriangle, Search } from 'lucide-react'
 import { paymentNeedsCheck, countPaymentChecks } from '../lib/paymentHealth'
 import { adminTeamAction } from '../lib/teamAdmin'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { Modal } from '../components/ui/Modal'
 import { Field, FormSection, InfoHint } from '../components/ui/Field'
 import { cn } from '../lib/cn'
 
@@ -102,6 +103,7 @@ export default function Admin() {
         acmMember: !!r.acmMember,
         isTeam: !!r.isTeam,
         teamName: r.teamName || '',
+        randomlyGrouped: !!r.randomlyGrouped,
         members: r.members || [],
         teamSize: r.teamSize || (r.members ? r.members.length : 1),
         status: r.status || 'Confirmed',
@@ -354,6 +356,9 @@ function EventEditor({ event, onSave }) {
     isGroup: !!event.isGroup,
     minTeamSize: event.minTeamSize || '',
     maxTeamSize: event.maxTeamSize || '',
+    randomGrouping: !!event.randomGrouping,
+    groupingMode: event.groupingMode || 'pureRandom',
+    groupingAt: event.groupingAt || '',
     paymentAccountId: event.paymentAccountId || '',
     deadline: event.deadline || '',
     regOpens: event.regOpens || '',
@@ -393,7 +398,7 @@ function EventEditor({ event, onSave }) {
       if (fee > 0 && disc > fee) return 'The ACM discount can’t be more than the fee.'
       if (d.maxRegistrations !== '' && d.maxRegistrations != null) {
         const cap = Number(d.maxRegistrations)
-        if (!Number.isInteger(cap) || cap < 0) return `${d.isGroup ? 'Max teams' : 'Max registrations'} must be a whole number of 0 or more.`
+        if (!Number.isInteger(cap) || cap < 0) return `${d.isGroup && !d.randomGrouping ? 'Max teams' : 'Max registrations'} must be a whole number of 0 or more.`
       }
       if (d.isGroup) {
         const min = Number(d.minTeamSize)
@@ -401,6 +406,9 @@ function EventEditor({ event, onSave }) {
         if (!Number.isInteger(min) || min < 1) return 'Minimum team size must be a whole number of 1 or more.'
         if (!Number.isInteger(max) || max < 1) return 'Maximum team size must be a whole number of 1 or more.'
         if (max < min) return 'Maximum team size can’t be less than the minimum.'
+        if (d.randomGrouping && !d.groupingAt && !d.regCloses) {
+          return 'Random Grouping needs a time to run — set "Group at" below, or set Registration closes.'
+        }
       }
     }
     const opens = d.regOpens ? new Date(d.regOpens).getTime() : null
@@ -429,6 +437,9 @@ function EventEditor({ event, onSave }) {
         isGroup: !!draft.isGroup,
         minTeamSize: draft.isGroup ? Math.max(1, Math.floor(Number(draft.minTeamSize) || 1)) : 0,
         maxTeamSize: draft.isGroup ? Math.max(1, Math.floor(Number(draft.maxTeamSize) || 1)) : 0,
+        randomGrouping: draft.isGroup && !!draft.randomGrouping,
+        groupingMode: draft.groupingMode || 'pureRandom',
+        groupingAt: draft.isGroup && draft.randomGrouping ? draft.groupingAt : '',
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
@@ -521,8 +532,8 @@ function EventEditor({ event, onSave }) {
             <input type="number" min="0" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="0 = free" />
           </Field>
           <Field
-            label={draft.isGroup ? 'Max teams' : 'Max registrations'}
-            hint={`Registration closes automatically once this many ${draft.isGroup ? 'teams have' : 'people have'} registered. 0 = unlimited.`}
+            label={draft.isGroup && !draft.randomGrouping ? 'Max teams' : 'Max registrations'}
+            hint={`Registration closes automatically once this many ${draft.isGroup && !draft.randomGrouping ? 'teams have' : 'people have'} registered. 0 = unlimited.${draft.isGroup && draft.randomGrouping ? ' Random Grouping registers people individually, so this caps registrants, not teams.' : ''}`}
           >
             <input
               type="number"
@@ -573,6 +584,50 @@ function EventEditor({ event, onSave }) {
                 <p className="text-[11px] font-normal leading-relaxed text-neutral-400 sm:col-span-2">
                   The registrant adds teammates by name and email. An existing account is linked immediately; someone without one yet is still recorded and linked automatically if they sign up later.
                 </p>
+
+                {/* Random Grouping — deliberately styled apart from the rest of
+                    the form, since it changes registration behaviour entirely
+                    (solo sign-up, teams assigned later) rather than just
+                    tweaking a limit. */}
+                <div className="overflow-hidden rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 via-fuchsia-50/50 to-white p-4 shadow-sm sm:col-span-2 dark:border-violet-500/30 dark:from-violet-500/10 dark:via-fuchsia-500/5 dark:to-transparent">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-sm shadow-violet-500/30">
+                        <Shuffle className="h-4.5 w-4.5" />
+                      </span>
+                      <div>
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-violet-900 dark:text-violet-200">
+                          Random Grouping
+                          <InfoHint text="People register solo — normal fee, normal ACM discount — and get placed into teams automatically once registration closes (or a time you set). They see their team on their dashboard once it's assigned." />
+                        </span>
+                        <p className="text-xs text-violet-600/80 dark:text-violet-300/70">Skip team sign-up — assign teammates automatically</p>
+                      </div>
+                    </div>
+                    <Switch tone="violet" on={!!draft.randomGrouping} onClick={() => setDraft((d) => ({ ...d, randomGrouping: !d.randomGrouping }))} />
+                  </div>
+
+                  <AnimatePresence initial={false}>
+                    {draft.randomGrouping && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                        <div className="mt-4 grid gap-3.5 border-t border-violet-200/70 pt-4 dark:border-violet-500/20 sm:grid-cols-2">
+                          <Field label="Group at" hint="When grouping runs. Leave blank to use Registration closes instead. This runs once a day (free-tier scheduling) — allow up to 24h after this time.">
+                            <input type="datetime-local" className={cn(inputCls, 'mt-1')} value={draft.groupingAt} onChange={set('groupingAt')} />
+                          </Field>
+                          <Field label="Grouping style" hint="How teammates are picked across departments.">
+                            <select className={cn(inputCls, 'mt-1')} value={draft.groupingMode} onChange={set('groupingMode')}>
+                              <option value="pureRandom">Pure random mix</option>
+                              <option value="sameDept">Group same departments together</option>
+                              <option value="noSameDept">Avoid same department in a team</option>
+                            </select>
+                          </Field>
+                        </div>
+                        <p className="mt-3 text-[11px] leading-relaxed text-violet-600/70 dark:text-violet-300/60">
+                          Anyone left over who can't fill a full team stays ungrouped, queued for you to place manually from the Registrations tab.
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             )}
           </div>
@@ -1097,6 +1152,11 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
   // pending destructive action (delete team / remove member) awaiting confirm.
   const [addingTo, setAddingTo] = useState(null)
   const [confirmAction, setConfirmAction] = useState(null) // { kind: 'deleteTeam'|'removeMember', reg, member? }
+  // Random Grouping: manual "run now" per event, and the ungrouped-leftover picker.
+  const [groupingBusyEventId, setGroupingBusyEventId] = useState(null)
+  const [groupingErr, setGroupingErr] = useState('')
+  const [groupingErrEventId, setGroupingErrEventId] = useState(null)
+  const [formTeamFor, setFormTeamFor] = useState(null) // the event whose leftover pool we're picking from
 
   async function addTeammate(reg, { name, email }) {
     await adminTeamAction({ action: 'addMember', registrationId: reg.id, name, email })
@@ -1112,6 +1172,21 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
   async function confirmRemoveMember() {
     await adminTeamAction({ action: 'removeMember', registrationId: confirmAction.reg.id, email: confirmAction.member.email })
     await onTeamChanged?.()
+  }
+
+  async function runGroupingNow(eventId) {
+    setGroupingErr('')
+    setGroupingErrEventId(null)
+    setGroupingBusyEventId(eventId)
+    try {
+      await adminTeamAction({ action: 'runGroupingNow', eventId })
+      await onTeamChanged?.()
+    } catch (err) {
+      setGroupingErr(err?.message || 'Could not run grouping.')
+      setGroupingErrEventId(eventId)
+    } finally {
+      setGroupingBusyEventId(null)
+    }
   }
 
   // Events actually present in the roster, for the dropdown.
@@ -1203,9 +1278,16 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
                           <>
                             <button onClick={() => toggleExpand(p.id)} className="flex items-center gap-1.5 text-left font-medium">
                               <Users className="h-3.5 w-3.5 text-acm-500" /> {p.teamName || 'Team'}
+                              {p.randomlyGrouped && (
+                                <span title="Formed by Random Grouping" className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+                                  <Shuffle className="h-2.5 w-2.5" /> Auto
+                                </span>
+                              )}
                               <ChevronDown className={cn('h-3.5 w-3.5 text-neutral-400 transition-transform', isOpen && 'rotate-180')} />
                             </button>
-                            <div className="text-xs text-neutral-400">{p.teamSize} members · led by {p.name}</div>
+                            <div className="text-xs text-neutral-400">
+                              {p.teamSize} members{p.randomlyGrouped ? '' : ` · led by ${p.name}`}
+                            </div>
                           </>
                         ) : (
                           <>
@@ -1285,6 +1367,11 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
                             )}
                             <span className="text-neutral-400">{m.email}</span>
                             {m.phone && <span className="text-neutral-400">· {m.phone}</span>}
+                            {p.randomlyGrouped && m.paymentStatus && (
+                              <Badge tone={m.paymentStatus === 'paid' || m.paymentStatus === 'free' ? 'green' : 'amber'}>
+                                {m.paymentStatus === 'free' ? 'Free' : m.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
+                              </Badge>
+                            )}
                             {isAdmin && m.role !== 'leader' && (
                               <button
                                 onClick={() => setConfirmAction({ kind: 'removeMember', reg: p, member: m })}
@@ -1375,7 +1462,11 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
       ) : grouped ? (
         // No filter → one section per event, each independently exportable.
         <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
-          {groups.map(([name, list]) => (
+          {groups.map(([name, list]) => {
+            const ev = events.find((e) => e.id === list[0]?.eventId)
+            const isRandomGroup = !!(ev?.isGroup && ev?.randomGrouping)
+            const ungrouped = isRandomGroup ? list.filter((r) => !r.isTeam) : []
+            return (
             <div key={name}>
               <div className="flex flex-wrap items-center justify-between gap-2 bg-neutral-50/60 px-5 py-3 dark:bg-neutral-800/30">
                 <h4 className="text-sm font-semibold tracking-tight">
@@ -1385,9 +1476,36 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
                   <Download className="h-4 w-4" /> Export
                 </Button>
               </div>
+
+              {isRandomGroup && isAdmin && !ev.groupingRanAt && (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-100 bg-violet-50/60 px-5 py-2.5 text-xs dark:border-violet-500/20 dark:bg-violet-500/5">
+                  <span className="flex items-center gap-1.5 text-violet-700 dark:text-violet-300">
+                    <Shuffle className="h-3.5 w-3.5" />
+                    Random Grouping is on — teams form automatically {ev.groupingAt ? `at ${fmtDateTime(ev.groupingAt)}` : 'once registration closes'}.
+                  </span>
+                  <Button size="sm" variant="outline" onClick={() => runGroupingNow(ev.id)} disabled={groupingBusyEventId === ev.id}>
+                    {groupingBusyEventId === ev.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shuffle className="h-3.5 w-3.5" />} Run grouping now
+                  </Button>
+                </div>
+              )}
+              {isRandomGroup && isAdmin && ev.groupingRanAt && ungrouped.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-xs dark:border-amber-500/25 dark:bg-amber-500/10">
+                  <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+                    <AlertTriangle className="h-3.5 w-3.5" /> {ungrouped.length} {ungrouped.length === 1 ? 'person needs' : 'people need'} a team.
+                  </span>
+                  <Button size="sm" variant="outline" onClick={() => setFormTeamFor({ event: ev, ungrouped })}>
+                    <Users className="h-3.5 w-3.5" /> Form team
+                  </Button>
+                </div>
+              )}
+              {groupingErr && ev?.id === groupingErrEventId && (
+                <p className="border-b border-rose-200 bg-rose-50 px-5 py-2 text-xs text-rose-700 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300">{groupingErr}</p>
+              )}
+
               {renderTable(list)}
             </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
         renderTable(filtered)
@@ -1421,7 +1539,95 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
         description="They'll no longer be registered for this event — if registration is still open, they (or someone else) can register for the spot again."
         confirmLabel="Remove"
       />
+
+      <FormTeamModal
+        data={formTeamFor}
+        onClose={() => setFormTeamFor(null)}
+        onDone={async () => { setFormTeamFor(null); await onTeamChanged?.() }}
+      />
     </motion.div>
+  )
+}
+
+function FormTeamModal({ data, onClose, onDone }) {
+  const [picked, setPicked] = useState(new Set())
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  useEffect(() => { setPicked(new Set()); setErr('') }, [data])
+
+  const event = data?.event
+  const ungrouped = data?.ungrouped || []
+  const maxSize = Math.max(1, Number(event?.maxTeamSize) || 1)
+
+  const toggle = (id) => setPicked((s) => {
+    const n = new Set(s)
+    if (n.has(id)) n.delete(id)
+    else if (n.size < maxSize) n.add(id)
+    return n
+  })
+
+  async function submit() {
+    setBusy(true)
+    setErr('')
+    try {
+      await adminTeamAction({ action: 'formGroup', eventId: event.id, registrationIds: [...picked] })
+      onDone()
+    } catch (e) {
+      setErr(e?.message || 'Could not form the team.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={!!data} onClose={busy ? () => {} : onClose} size="md">
+      {event && (
+        <div className="p-6 sm:p-8">
+          <h3 className="text-lg font-bold tracking-tight">Form a team</h3>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+            Pick up to {maxSize} people from {event.name}'s leftover pool to place on a team together.
+          </p>
+          <div className="mt-4 max-h-72 space-y-1.5 overflow-y-auto">
+            {ungrouped.map((p) => (
+              <label
+                key={p.id}
+                className={cn(
+                  'flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-sm transition-colors',
+                  picked.has(p.id) ? 'border-acm-400 bg-acm-50 dark:border-acm-500/50 dark:bg-acm-500/10' : 'border-neutral-200 dark:border-neutral-800',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={picked.has(p.id)}
+                  onChange={() => toggle(p.id)}
+                  disabled={!picked.has(p.id) && picked.size >= maxSize}
+                  className="h-4 w-4 shrink-0 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{p.name}</span>
+                  <span className="block truncate text-xs text-neutral-400">{p.email} · {p.department || '—'}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {err && (
+            <p className="mt-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {err}
+            </p>
+          )}
+          <div className="mt-5 flex items-center justify-between gap-3">
+            <span className="text-xs text-neutral-400">{picked.size} of {maxSize} max selected</span>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
+              <Button size="sm" onClick={submit} disabled={busy || picked.size === 0}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Create team
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Modal>
   )
 }
 
@@ -1469,13 +1675,14 @@ function AddTeammateForm({ onAdd, onCancel }) {
   )
 }
 
-function Switch({ on, onClick }) {
+function Switch({ on, onClick, tone = 'acm' }) {
+  const onBg = tone === 'violet' ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500' : 'bg-acm-600'
   return (
     <button
       onClick={onClick}
       role="switch"
       aria-checked={on}
-      className={cn('relative h-6 w-11 shrink-0 rounded-full transition-colors', on ? 'bg-acm-600' : 'bg-neutral-200 dark:bg-neutral-700')}
+      className={cn('relative h-6 w-11 shrink-0 rounded-full transition-colors', on ? onBg : 'bg-neutral-200 dark:bg-neutral-700')}
     >
       <motion.span
         layout

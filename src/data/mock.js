@@ -291,11 +291,11 @@ export const registrations = [
 
 // ── Admin: sample participant roster ─────────────────────────
 export const participants = [
-  { id: 'p1', name: 'Aparna Menon', email: 'aparna@tkmce.ac.in', event: 'HackTKM 2025', college: 'TKMCE', acmMember: true, status: 'Confirmed' },
-  { id: 'p2', name: 'Rahul Nair', email: 'rahul@tkmce.ac.in', event: 'HackTKM 2025', college: 'TKMCE', acmMember: true, status: 'Confirmed' },
-  { id: 'p3', name: 'Sana Ali', email: 'sana@ceck.ac.in', event: 'Open Source Sprint', college: 'CE Chengannur', acmMember: false, status: 'Pending' },
-  { id: 'p4', name: 'Joel George', email: 'joel@tkmce.ac.in', event: 'Open Source Sprint', college: 'TKMCE', acmMember: false, status: 'Confirmed' },
-  { id: 'p5', name: 'Nimisha R', email: 'nimisha@mgits.ac.in', event: 'HackTKM 2025', college: 'MG Institute', acmMember: true, status: 'Confirmed' },
+  { id: 'p1', name: 'Aparna Menon', email: 'aparna@tkmce.ac.in', event: 'HackTKM 2025', eventId: 'ev1', college: 'TKMCE', acmMember: true, status: 'Confirmed' },
+  { id: 'p2', name: 'Rahul Nair', email: 'rahul@tkmce.ac.in', event: 'HackTKM 2025', eventId: 'ev1', college: 'TKMCE', acmMember: true, status: 'Confirmed' },
+  { id: 'p3', name: 'Sana Ali', email: 'sana@ceck.ac.in', event: 'Open Source Sprint', eventId: 'ev4', college: 'CE Chengannur', acmMember: false, status: 'Pending' },
+  { id: 'p4', name: 'Joel George', email: 'joel@tkmce.ac.in', event: 'Open Source Sprint', eventId: 'ev4', college: 'TKMCE', acmMember: false, status: 'Confirmed' },
+  { id: 'p5', name: 'Nimisha R', email: 'nimisha@mgits.ac.in', event: 'HackTKM 2025', eventId: 'ev1', college: 'MG Institute', acmMember: true, status: 'Confirmed' },
 ]
 
 // ── Gallery ──────────────────────────────────────────────────

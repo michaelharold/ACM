@@ -1,12 +1,14 @@
 // POST /api/admin-team  →  { ok: true } | { ok: true, deleted: true }
 //
 // Admin-only management for a group event's team registrations: remove a
-// member, add one, or delete the whole team. Admin SDK, because these edit a
-// registration doc the caller doesn't own — no grant (not even the
+// member, add one, delete a team, run Random Grouping early, or manually form
+// a team from ungrouped registrants. Admin SDK, because these edit
+// registration docs the caller doesn't own — no grant (not even the
 // Registrations Access permission) unlocks this, only role === 'admin'.
 import { adminDb } from './_lib/firebaseAdmin.js'
 import { getBody, requireAdmin, send } from './_lib/http.js'
 import { findUserByEmail } from './_lib/users.js'
+import { runGroupingForEvent, formGroupFromRegistrations } from './_lib/grouping.js'
 import { FieldValue } from 'firebase-admin/firestore'
 
 export default async function handler(req, res) {
@@ -16,7 +18,31 @@ export default async function handler(req, res) {
     const db = adminDb()
     await requireAdmin(req, body, db)
 
-    const { action, registrationId } = body
+    const { action } = body
+
+    // Event-scoped actions — no existing team doc to fetch first.
+    if (action === 'runGroupingNow') {
+      if (!body.eventId) return send(res, 400, { error: 'Missing event.' })
+      const result = await runGroupingForEvent(db, body.eventId)
+      if (result.skipped && result.reason === 'already-ran') {
+        return send(res, 400, { error: 'Grouping has already run for this event.' })
+      }
+      if (result.skipped && result.reason === 'not-a-random-grouping-event') {
+        return send(res, 400, { error: 'Random Grouping isn’t turned on for this event.' })
+      }
+      return send(res, 200, { ok: true, ...result })
+    }
+
+    if (action === 'formGroup') {
+      if (!body.eventId) return send(res, 400, { error: 'Missing event.' })
+      if (!Array.isArray(body.registrationIds) || body.registrationIds.length === 0) {
+        return send(res, 400, { error: 'Pick at least one person to form a team.' })
+      }
+      const result = await formGroupFromRegistrations(db, body.eventId, body.registrationIds)
+      return send(res, 200, { ok: true, ...result })
+    }
+
+    const { registrationId } = body
     if (!registrationId) return send(res, 400, { error: 'Missing team.' })
 
     const ref = db.collection('registrations').doc(registrationId)

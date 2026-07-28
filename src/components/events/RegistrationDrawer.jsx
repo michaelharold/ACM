@@ -48,6 +48,13 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
   })
 
   const isGroup = !!event?.isGroup
+  // Random Grouping: this is still a "group event" (min/max team size, team
+  // capacity all apply), but the person in front of us registers exactly like
+  // a solo event — normal fee, normal ACM discount — and only gets placed on
+  // a team later, automatically. `isManualTeam` gates every bit of UI/logic
+  // that's specific to signing up WITH a team right now.
+  const isRandomGroup = isGroup && !!event?.randomGrouping
+  const isManualTeam = isGroup && !isRandomGroup
   const minTeammates = Math.max(0, (Number(event?.minTeamSize) || 1) - 1)
   const maxTeammates = Math.max(0, (Number(event?.maxTeamSize) || 1) - 1)
   // Team-slot capacity (maxRegistrations = max TEAMS for a group event, same
@@ -75,8 +82,8 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
       isMember: user?.acmMember || false,
       teamName: '',
     }))
-    // Seed the minimum number of teammate rows for a group event.
-    setTeammates(event?.isGroup ? Array.from({ length: minTeammates }, () => ({ name: '', email: '' })) : [])
+    // Seed the minimum number of teammate rows for a manually-formed team event.
+    setTeammates(isManualTeam ? Array.from({ length: minTeammates }, () => ({ name: '', email: '' })) : [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, event?.id])
 
@@ -108,7 +115,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
   const stepValid = useMemo(() => {
     if (step === 0) return form.name && form.email && form.phone && form.department && form.year
     if (step === 1) {
-      if (isGroup) {
+      if (isManualTeam) {
         if (!form.teamName.trim()) return false
         const filled = teammates.filter((t) => t.email.trim())
         if (!filled.every((t) => t.name.trim() && emailRe.test(t.email.trim()))) return false
@@ -123,14 +130,15 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
     }
     if (step === 2) return form.agree
     return true
-  }, [step, form, canVerify, memberCheck, isGroup, teammates, event])
+  }, [step, form, canVerify, memberCheck, isManualTeam, teammates, event])
 
   if (!event) return null
 
-  // The member discount applies only to a verified, unused id (solo events only;
-  // group events charge a flat team fee).
-  const discountEligible = !isGroup && !!(memberCheck?.valid && !memberCheck?.alreadyUsed && memberCheck?.discount > 0)
-  const payable = isGroup ? (Number(event.fee) || 0) : (discountEligible ? memberCheck.effectiveFee : (Number(event.fee) || 0))
+  // The member discount applies to anyone paying their own fee — solo events
+  // and Random Grouping events alike (a manual-team registration pays one
+  // flat team fee instead, so it doesn't get an individual discount).
+  const discountEligible = !isManualTeam && !!(memberCheck?.valid && !memberCheck?.alreadyUsed && memberCheck?.discount > 0)
+  const payable = isManualTeam ? (Number(event.fee) || 0) : (discountEligible ? memberCheck.effectiveFee : (Number(event.fee) || 0))
   const claimedId = memberCheck?.valid && !memberCheck?.alreadyUsed ? form.membershipId.trim() : ''
   const paid = payable > 0 && isPaymentConfigured
 
@@ -143,7 +151,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
     // a registration that didn't persist.
     let created
     try {
-      if (isGroup) {
+      if (isManualTeam) {
         // The server validates every teammate email against real accounts and
         // creates the whole team as one registration.
         const teammates = teammates_filled()
@@ -222,6 +230,8 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
           <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
             {pendingConfirm ? (
               <>Your payment for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> went through — we’re just confirming it, and your registration will update to paid shortly.</>
+            ) : isRandomGroup ? (
+              <>You're registered for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> — your team will be assigned automatically, and you'll see it on your dashboard once it is.</>
             ) : (
               <>A confirmation for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> has been recorded.</>
             )}
@@ -230,8 +240,8 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
             <Row label="Event" value={event.name} />
             <Row label="Date" value={`${formatDate(event.date)} · ${event.time}`} />
             <Row label="Name" value={form.name} />
-            {isGroup && <Row label="Team" value={form.teamName || 'Team'} />}
-            {isGroup && <Row label="Members" value={String(1 + teammates_filled().length)} />}
+            {isManualTeam && <Row label="Team" value={form.teamName || 'Team'} />}
+            {isManualTeam && <Row label="Members" value={String(1 + teammates_filled().length)} />}
             {claimedId && <Row label="ACM Member" value={claimedId} />}
           </div>
           <Button className="mt-6 w-full" onClick={handleClose}>
@@ -246,7 +256,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
             <h3 className="mt-1 text-lg font-bold tracking-tight">{event.name}</h3>
           </div>
           <div className="mt-5 flex items-center gap-2">
-            {['Your details', isGroup ? 'Your team' : 'Eligibility', 'Confirm'].map((s, i) => (
+            {['Your details', isManualTeam ? 'Your team' : 'Eligibility', 'Confirm'].map((s, i) => (
               <div key={s} className="flex flex-1 flex-col gap-1.5">
                 <div className={cn('h-1 rounded-full transition-colors', i <= step ? 'bg-acm-600' : 'bg-neutral-200 dark:bg-neutral-800')} />
                 <span className={cn('text-[11px]', i === step ? 'font-medium text-neutral-700 dark:text-neutral-300' : 'text-neutral-400')}>{s}</span>
@@ -293,7 +303,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                   </div>
                 )}
 
-                {step === 1 && isGroup && (
+                {step === 1 && isManualTeam && (
                   <div className="grid gap-4">
                     <div>
                       <Input
@@ -356,8 +366,14 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                   </div>
                 )}
 
-                {step === 1 && !isGroup && (
+                {step === 1 && !isManualTeam && (
                   <div className="grid gap-4">
+                    {isRandomGroup && (
+                      <p className="flex items-start gap-2 rounded-xl border border-violet-200 bg-violet-50 p-3.5 text-xs text-violet-800 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-200">
+                        <Users className="mt-0.5 h-4 w-4 shrink-0" />
+                        You're registering solo — you'll be placed on a team automatically once registration closes, and you'll see your teammates on your dashboard then.
+                      </p>
+                    )}
                     <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
                       <input type="checkbox" checked={form.isMember} onChange={toggleMember} className="mt-0.5 h-4 w-4 accent-acm-600" />
                       <span>
@@ -439,15 +455,18 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                       <Row label="Name" value={form.name} />
                       <Row label="Email" value={form.email} />
                       <Row label="Department" value={`${form.department} · ${form.year}`} />
-                      {isGroup ? (
+                      {isManualTeam ? (
                         <>
                           <Row label="Team" value={form.teamName || 'Team'} />
                           <Row label="Members" value={`${1 + teammates_filled().length} (incl. you)`} />
                         </>
                       ) : (
-                        <Row label="Membership" value={claimedId ? `Member · ${claimedId}` : (form.isMember ? 'Member' : 'Non-member')} />
+                        <>
+                          <Row label="Membership" value={claimedId ? `Member · ${claimedId}` : (form.isMember ? 'Member' : 'Non-member')} />
+                          {isRandomGroup && <Row label="Team" value="Assigned automatically after registration closes" />}
+                        </>
                       )}
-                      <Row label="Fee" value={payable > 0 ? `₹${payable}${isGroup ? ' / team' : ''}${discountEligible ? ` (₹${memberCheck.discount} off)` : ''}` : 'Free'} last />
+                      <Row label="Fee" value={payable > 0 ? `₹${payable}${isManualTeam ? ' / team' : ''}${discountEligible ? ` (₹${memberCheck.discount} off)` : ''}` : 'Free'} last />
                     </div>
                     <label className="flex cursor-pointer items-start gap-3 text-sm">
                       <input type="checkbox" checked={form.agree} onChange={set('agree')} className="mt-0.5 h-4 w-4 accent-acm-600" />

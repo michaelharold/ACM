@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users } from 'lucide-react'
+import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Input, Select } from '../components/ui/Input'
@@ -31,6 +31,12 @@ export default function Dashboard() {
   const needProfile = !!location.state?.completeProfile
   const returnTo = location.state?.from
   const [selected, setSelected] = useState(null)
+  const [openTeams, setOpenTeams] = useState(() => new Set())
+  const toggleTeam = (id) => setOpenTeams((s) => {
+    const n = new Set(s)
+    n.has(id) ? n.delete(id) : n.add(id)
+    return n
+  })
   const [editing, setEditing] = useState(needProfile)
   const [saving, setSaving] = useState(false)
   const [membership, setMembership] = useState(null)
@@ -368,38 +374,66 @@ export default function Dashboard() {
               </div>
             ) : (
               <Reveal className="grid gap-4 sm:grid-cols-2" amount={0.1}>
-                {myEvents.map(({ reg, event }) => (
+                {myEvents.map(({ reg, event }) => {
+                  const teamOpen = openTeams.has(reg.id)
+                  return (
                   <Item key={reg.id}>
-                    <button
-                      onClick={() => setSelected(event)}
-                      className="group flex w-full gap-4 rounded-2xl border border-neutral-200 bg-white p-3 text-left transition-colors hover:border-acm-300 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-acm-500/40"
-                    >
-                      <img
-                        src={event.poster || avatarDataUri(event.name || 'Event')}
-                        alt=""
-                        className="h-20 w-20 shrink-0 rounded-xl object-cover"
-                      />
-                      <div className="min-w-0 flex-1 py-0.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="truncate font-semibold tracking-tight">{event.name}</h3>
+                    <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+                      <button
+                        onClick={() => setSelected(event)}
+                        className="group flex w-full gap-4 p-3 text-left transition-colors hover:border-acm-300 dark:hover:border-acm-500/40"
+                      >
+                        <img
+                          src={event.poster || avatarDataUri(event.name || 'Event')}
+                          alt=""
+                          className="h-20 w-20 shrink-0 rounded-xl object-cover"
+                        />
+                        <div className="min-w-0 flex-1 py-0.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="truncate font-semibold tracking-tight">{event.name}</h3>
+                          </div>
+                          <div className="mt-1.5 space-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+                            <p className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> {formatDate(event.date)}</p>
+                            <p className="flex items-center gap-1.5 truncate"><MapPin className="h-3.5 w-3.5 shrink-0" /> {event.venue}</p>
+                            {reg.isTeam && (
+                              <p className="flex items-center gap-1.5 truncate text-acm-600 dark:text-acm-400">
+                                <Users className="h-3.5 w-3.5 shrink-0" /> Team “{reg.teamName || 'Team'}”
+                                {reg.randomlyGrouped ? ' · auto-grouped' : (reg.userId && reg.userId !== user.id && reg.userName ? ` · by ${reg.userName}` : '')}
+                              </p>
+                            )}
+                          </div>
+                          <Badge tone={reg.status === 'Attended' ? 'neutral' : 'green'} dot={reg.status === 'Confirmed'} className="mt-2">
+                            {reg.status}
+                          </Badge>
                         </div>
-                        <div className="mt-1.5 space-y-1 text-xs text-neutral-500 dark:text-neutral-400">
-                          <p className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> {formatDate(event.date)}</p>
-                          <p className="flex items-center gap-1.5 truncate"><MapPin className="h-3.5 w-3.5 shrink-0" /> {event.venue}</p>
-                          {reg.isTeam && (
-                            <p className="flex items-center gap-1.5 truncate text-acm-600 dark:text-acm-400">
-                              <Users className="h-3.5 w-3.5 shrink-0" /> Team “{reg.teamName || 'Team'}”
-                              {reg.userId && reg.userId !== user.id && reg.userName ? ` · by ${reg.userName}` : ''}
-                            </p>
+                      </button>
+
+                      {reg.isTeam && reg.members?.length > 0 && (
+                        <div className="border-t border-neutral-100 dark:border-neutral-800">
+                          <button
+                            onClick={() => toggleTeam(reg.id)}
+                            className="flex w-full items-center justify-between px-3.5 py-2 text-xs font-medium text-acm-600 transition-colors hover:bg-neutral-50 dark:text-acm-400 dark:hover:bg-neutral-800/50"
+                          >
+                            {teamOpen ? 'Hide teammates' : `View ${reg.members.length} teammate${reg.members.length === 1 ? '' : 's'}`}
+                            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', teamOpen && 'rotate-180')} />
+                          </button>
+                          {teamOpen && (
+                            <div className="space-y-2 border-t border-neutral-100 px-3.5 py-3 dark:border-neutral-800">
+                              {reg.members.map((m, i) => (
+                                <div key={i} className="text-xs">
+                                  <span className="font-medium">{m.name || '—'}</span>
+                                  {m.uid === user.id && <span className="text-neutral-400"> (you)</span>}
+                                  <div className="truncate text-neutral-400">{m.department || '—'} · {m.email}</div>
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
-                        <Badge tone={reg.status === 'Attended' ? 'neutral' : 'green'} dot={reg.status === 'Confirmed'} className="mt-2">
-                          {reg.status}
-                        </Badge>
-                      </div>
-                    </button>
+                      )}
+                    </div>
                   </Item>
-                ))}
+                  )
+                })}
               </Reveal>
             )}
           </div>
