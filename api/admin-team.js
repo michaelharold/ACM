@@ -104,10 +104,13 @@ export default async function handler(req, res) {
           }
         }
         const d = doc.data()
-        newMember = { uid: uidCandidate, name: d.name || d.googleName || name || '', email: d.email || target, phone: d.phone || '', role: 'member' }
+        newMember = {
+          uid: uidCandidate, name: d.name || d.googleName || name || '', email: d.email || target, phone: d.phone || '',
+          department: d.department || '', college: d.college || '', year: d.year || '', role: 'member',
+        }
       } else {
         if (!name) return send(res, 400, { error: `Add a name for ${target} — they don't have a website account yet, so we can't look one up.` })
-        newMember = { uid: null, name, email: target, phone: '', role: 'member' }
+        newMember = { uid: null, name, email: target, phone: '', department: '', college: '', year: '', role: 'member' }
       }
 
       const members = [...(reg.members || []), newMember]

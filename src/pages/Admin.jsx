@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
   Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet, AlertCircle,
-  Loader2, UserX, FileText, Shuffle, Info,
+  Loader2, UserX, FileText, Shuffle, Info, MessageCircle, School, UserRound, Mail, Phone, Send,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
@@ -97,10 +97,12 @@ export default function Admin() {
         userId: r.userId || '',
         name: r.userName || '—',
         email: r.userEmail || '—',
+        phone: r.phone || '',
         event: r.eventName || '—',
         eventId: r.eventId || '',
         department: r.department || '—',
         college: r.college || '—',
+        year: r.year || '',
         acmMember: !!r.acmMember,
         isTeam: !!r.isTeam,
         teamName: r.teamName || '',
@@ -370,6 +372,7 @@ function EventEditor({ event, onSave }) {
     guidelinesText: event.guidelinesText || '',
     codeOfConductEnabled: !!event.codeOfConductEnabled,
     codeOfConductText: event.codeOfConductText || '',
+    whatsappLink: event.whatsappLink || '',
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -731,6 +734,20 @@ function EventEditor({ event, onSave }) {
           </Button>
         </div>
       </FormSection>
+
+      {!isExternal && (
+        <FormSection icon={MessageCircle} title="WhatsApp group" hint="Shown to a registrant right after they successfully register, and on their dashboard for this event — so they (and their team) can join.">
+          <Field label="WhatsApp group link" hint="Paste your group's invite link. Leave blank to skip this." className="sm:col-span-2">
+            <input
+              type="url"
+              placeholder="https://chat.whatsapp.com/…"
+              className={cn(inputCls, 'mt-1')}
+              value={draft.whatsappLink}
+              onChange={set('whatsappLink')}
+            />
+          </Field>
+        </FormSection>
+      )}
 
       <FormSection icon={ShieldCheck} title="Guidelines & code of conduct" hint="Rules or expectations for this specific event — shown when someone opens it, beyond the site-wide agreement they accept when registering.">
         <div className="sm:col-span-2">
@@ -1315,6 +1332,8 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
   const [eventFilter, setEventFilter] = useState('all')
   const [member, setMember] = useState('all') // all | member | non-member
   const [msgTo, setMsgTo] = useState(null)
+  const [msgTeam, setMsgTeam] = useState(null)
+  const [detailFor, setDetailFor] = useState(null)
   // Admin-only team editing: which team's "add teammate" row is open, and any
   // pending destructive action (delete team / remove member) awaiting confirm.
   const [addingTo, setAddingTo] = useState(null)
@@ -1385,8 +1404,9 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
     const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n
   })
 
-  // With no filter applied, group the roster by event; each group exports on its own.
-  const grouped = eventFilter === 'all' && dept === 'all' && member === 'all'
+  // Always group the roster by event — even under a department/member filter,
+  // so registrations for the same event stay visually together and each
+  // event's slice still exports on its own.
   const groups = useMemo(() => {
     const m = new Map()
     filtered.forEach((r) => {
@@ -1421,38 +1441,39 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
 
   const renderTable = (list) => (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[860px] text-left text-sm">
+      <table className="w-full min-w-[900px] text-left text-sm">
         <thead className="text-xs uppercase tracking-wide text-neutral-400">
           <tr className="border-b border-neutral-100 dark:border-neutral-800">
-            <th className="px-5 py-3 font-medium">Participant / Team</th>
-            <th className="px-5 py-3 font-medium">Event</th>
-            <th className="px-5 py-3 font-medium">Department</th>
-            <th className="px-5 py-3 font-medium">ACM</th>
-            <th className="px-5 py-3 font-medium">Status</th>
-            <th className="px-5 py-3 font-medium">Payment</th>
+            <th className="px-5 py-3.5 font-medium">Participant / Team</th>
+            <th className="px-5 py-3.5 font-medium">Event</th>
+            <th className="px-5 py-3.5 font-medium">Department</th>
+            <th className="px-5 py-3.5 font-medium">ACM</th>
+            <th className="px-5 py-3.5 font-medium">Status</th>
+            <th className="px-5 py-3.5 font-medium">Payment</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
           {list.map((p) => {
             const isOpen = expanded.has(p.id)
+            const linkedMemberCount = p.isTeam ? (p.members || []).filter((m) => m.uid).length : 0
             return (
               <Fragment key={p.id}>
                 <tr className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-1.5">
                       <div className="min-w-0">
                         {p.isTeam ? (
                           <>
                             <button onClick={() => toggleExpand(p.id)} className="flex items-center gap-1.5 text-left font-medium">
-                              <Users className="h-3.5 w-3.5 text-acm-500" /> {p.teamName || 'Team'}
+                              <Users className="h-3.5 w-3.5 shrink-0 text-acm-500" /> {p.teamName || 'Team'}
                               {p.randomlyGrouped && (
                                 <span title="Formed by Random Grouping" className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
                                   <Shuffle className="h-2.5 w-2.5" /> Auto
                                 </span>
                               )}
-                              <ChevronDown className={cn('h-3.5 w-3.5 text-neutral-400 transition-transform', isOpen && 'rotate-180')} />
+                              <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-neutral-400 transition-transform', isOpen && 'rotate-180')} />
                             </button>
-                            <div className="text-xs text-neutral-400">
+                            <div className="mt-0.5 text-xs text-neutral-400">
                               {p.teamSize} members{p.randomlyGrouped ? '' : ` · led by ${p.name}`}
                             </div>
                           </>
@@ -1463,27 +1484,45 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
                           </>
                         )}
                       </div>
+                      {!p.isTeam && (
+                        <button
+                          onClick={() => setDetailFor(p)}
+                          title="View profile details"
+                          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                        >
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       {canMessage && (
                         <button
                           onClick={() => setMsgTo(p)}
                           disabled={!p.userId}
                           title={p.userId ? 'Message the registrant' : 'No account linked'}
-                          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-acm-300 hover:text-acm-500 disabled:opacity-30 dark:border-neutral-700"
+                          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-500 transition-colors hover:border-acm-300 hover:bg-acm-50 hover:text-acm-600 disabled:opacity-30 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-acm-500/10"
                         >
                           <MessageSquare className="h-3.5 w-3.5" />
                         </button>
                       )}
+                      {canMessage && p.isTeam && linkedMemberCount > 1 && (
+                        <button
+                          onClick={() => setMsgTeam(p)}
+                          title="Message every team member with an account — reaches each of their inboxes"
+                          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-500 transition-colors hover:border-acm-300 hover:bg-acm-50 hover:text-acm-600 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-acm-500/10"
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.event}</td>
-                  <td className="px-5 py-3 text-neutral-600 dark:text-neutral-300">{p.department}</td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3.5 text-neutral-600 dark:text-neutral-300">{p.event}</td>
+                  <td className="px-5 py-3.5 text-neutral-600 dark:text-neutral-300">{p.department}</td>
+                  <td className="px-5 py-3.5">
                     {p.acmMember ? <Badge tone="blue">Member</Badge> : <span className="text-neutral-400">—</span>}
                   </td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3.5">
                     <Badge tone={p.status === 'Confirmed' ? 'green' : 'amber'} dot={p.status === 'Confirmed'}>{p.status}</Badge>
                   </td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3.5">
                     {(p.paymentStatus || '').toLowerCase() === 'paid' ? (
                       <div>
                         <Badge tone="green" dot>Paid</Badge>
@@ -1510,8 +1549,8 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
                 </tr>
                 {p.isTeam && isOpen && (
                   <tr className="bg-neutral-50/60 dark:bg-neutral-800/30">
-                    <td colSpan={6} className="px-5 py-3">
-                      <div className="mb-2 flex items-center justify-between">
+                    <td colSpan={6} className="px-5 py-4">
+                      <div className="mb-3 flex items-center justify-between">
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Team members</span>
                         {isAdmin && (
                           <button
@@ -1522,32 +1561,50 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
                           </button>
                         )}
                       </div>
-                      <div className="grid gap-1.5 sm:grid-cols-2">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         {(p.members || []).map((m, i) => (
-                          <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                            <span className="font-medium">{m.name || '—'}</span>
-                            {m.role === 'leader' && <Badge tone="blue">Leader</Badge>}
-                            {!m.uid && (
-                              <span title="No website account yet — recorded from what the leader entered.">
-                                <Badge tone="amber">No account</Badge>
-                              </span>
-                            )}
-                            <span className="text-neutral-400">{m.email}</span>
-                            {m.phone && <span className="text-neutral-400">· {m.phone}</span>}
-                            {p.randomlyGrouped && m.paymentStatus && (
-                              <Badge tone={m.paymentStatus === 'paid' || m.paymentStatus === 'free' ? 'green' : 'amber'}>
-                                {m.paymentStatus === 'free' ? 'Free' : m.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
-                              </Badge>
-                            )}
-                            {isAdmin && m.role !== 'leader' && (
+                          <div key={i} className="flex items-start justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-2.5 dark:border-neutral-700 dark:bg-neutral-900">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+                                {m.name || '—'}
+                                {m.role === 'leader' && <Badge tone="blue">Leader</Badge>}
+                                {!m.uid && (
+                                  <span title="No website account yet — recorded from what the leader entered.">
+                                    <Badge tone="amber">No account</Badge>
+                                  </span>
+                                )}
+                                {p.randomlyGrouped && m.paymentStatus && (
+                                  <Badge tone={m.paymentStatus === 'paid' || m.paymentStatus === 'free' ? 'green' : 'amber'}>
+                                    {m.paymentStatus === 'free' ? 'Free' : m.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="mt-1 truncate text-[11px] text-neutral-400">
+                                {m.email}{m.phone && ` · ${m.phone}`}
+                              </div>
+                              {m.department && (
+                                <div className="mt-0.5 truncate text-[11px] text-neutral-400">{m.department}</div>
+                              )}
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
                               <button
-                                onClick={() => setConfirmAction({ kind: 'removeMember', reg: p, member: m })}
-                                aria-label={`Remove ${m.name || m.email}`}
-                                className="text-neutral-300 hover:text-rose-500 dark:text-neutral-600"
+                                onClick={() => setDetailFor(m)}
+                                title="View profile details"
+                                className="grid h-7 w-7 place-items-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
                               >
-                                <UserX className="h-3.5 w-3.5" />
+                                <Info className="h-3.5 w-3.5" />
                               </button>
-                            )}
+                              {isAdmin && m.role !== 'leader' && (
+                                <button
+                                  onClick={() => setConfirmAction({ kind: 'removeMember', reg: p, member: m })}
+                                  aria-label={`Remove ${m.name || m.email}`}
+                                  title="Remove from team"
+                                  className="grid h-7 w-7 place-items-center rounded-lg text-neutral-400 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:text-neutral-500 dark:hover:bg-rose-500/10"
+                                >
+                                  <UserX className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1557,7 +1614,7 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
                         ) : (
                           <button
                             onClick={() => setAddingTo(p.id)}
-                            className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-medium text-acm-600 hover:text-acm-700 dark:text-acm-400"
+                            className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-acm-600 hover:text-acm-700 dark:text-acm-400"
                           >
                             <Plus className="h-3 w-3" /> Add teammate
                           </button>
@@ -1626,8 +1683,9 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
         <p className="p-10 text-center text-sm text-neutral-500">
           {rows.length ? 'No registrations match these filters.' : 'No registrations yet.'}
         </p>
-      ) : grouped ? (
-        // No filter → one section per event, each independently exportable.
+      ) : (
+        // One section per event, each independently exportable — registrations
+        // for the same event always stay visually grouped, filters or not.
         <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
           {groups.map(([name, list]) => {
             const ev = events.find((e) => e.id === list[0]?.eventId)
@@ -1674,8 +1732,6 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
             )
           })}
         </div>
-      ) : (
-        renderTable(filtered)
       )}
       <div className="flex items-center justify-between border-t border-neutral-100 p-4 dark:border-neutral-800">
         <span className="text-xs text-neutral-400">{filtered.length} of {rows.length} registrations</span>
@@ -1712,7 +1768,122 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
         onClose={() => setFormTeamFor(null)}
         onDone={async () => { setFormTeamFor(null); await onTeamChanged?.() }}
       />
+
+      <MemberDetailModal data={detailFor} onClose={() => setDetailFor(null)} />
+      <TeamMessageModal team={msgTeam} onClose={() => setMsgTeam(null)} fromName={adminName} />
     </motion.div>
+  )
+}
+
+// A compact read-only card: everything an admin needs to know about one
+// registrant (or team member) without leaving the roster — email, phone and
+// the profile fields (college, department, year) collected at registration.
+function MemberDetailModal({ data, onClose }) {
+  if (!data) return null
+  const rows = [
+    { icon: Mail, label: 'Email', value: data.email },
+    { icon: Phone, label: 'Phone', value: data.phone },
+    { icon: School, label: 'College', value: data.college },
+    { icon: Contact2, label: 'Department', value: data.department },
+    { icon: CalendarDays, label: 'Year', value: data.year },
+  ]
+  return (
+    <Modal open={!!data} onClose={onClose} size="md">
+      <div className="p-6 sm:p-8">
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-acm-500/10 text-acm-600 dark:text-acm-400">
+            <UserRound className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="truncate text-lg font-bold tracking-tight">{data.name || 'Member'}</h3>
+            {data.role === 'leader' && <Badge tone="blue" className="mt-1">Team leader</Badge>}
+          </div>
+        </div>
+        <dl className="mt-5 space-y-3">
+          {rows.map((r) => (
+            <div key={r.label} className="flex items-center gap-3 text-sm">
+              <r.icon className="h-4 w-4 shrink-0 text-neutral-400" />
+              <dt className="sr-only">{r.label}</dt>
+              <dd className="truncate text-neutral-600 dark:text-neutral-300">
+                {r.value || <span className="text-neutral-400">Not set</span>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </Modal>
+  )
+}
+
+// Bulk-compose: sends the SAME message to every team member who has a linked
+// account — each lands in that person's own profile inbox individually,
+// exactly like a one-to-one message, just fanned out to the whole team.
+function TeamMessageModal({ team, onClose, fromName }) {
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+  const [done, setDone] = useState(false)
+  const [err, setErr] = useState('')
+
+  const recipients = (team?.members || []).filter((m) => m.uid)
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!body.trim() || recipients.length === 0) return
+    setSending(true)
+    setErr('')
+    try {
+      await Promise.all(recipients.map((m) => svc.sendAdminMessage({
+        toUid: m.uid, toName: m.name, toEmail: m.email,
+        subject: subject.trim() || `Message from ACM TKMCE — ${team.teamName || 'your team'}`,
+        body: body.trim(), fromName,
+      })))
+      setDone(true)
+      setTimeout(() => { onClose(); setDone(false); setBody(''); setSubject('') }, 1200)
+    } catch (e2) {
+      setErr(e2?.message || 'Could not send the message.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Modal open={!!team} onClose={onClose} size="md">
+      <form onSubmit={submit} className="p-6 sm:p-8">
+        <h3 className="text-lg font-bold tracking-tight">Message {team?.teamName || 'team'}</h3>
+        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          Sent to {recipients.length} member{recipients.length === 1 ? '' : 's'}' own profile inboxes: {recipients.map((m) => m.name || m.email).join(', ')}.
+        </p>
+        {done ? (
+          <p className="mt-6 flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="h-4 w-4" /> Message sent to the whole team.
+          </p>
+        ) : (
+          <>
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Subject (optional)"
+              className="mt-5 h-11 w-full rounded-xl border border-neutral-200 bg-white px-3.5 text-sm outline-none focus:border-acm-500 dark:border-neutral-800 dark:bg-neutral-900"
+            />
+            <textarea
+              rows={4}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Write your message…"
+              className="mt-3 w-full rounded-xl border border-neutral-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-acm-500 focus:ring-4 focus:ring-acm-500/10 dark:border-neutral-800 dark:bg-neutral-900"
+            />
+            {err && <p className="mt-2 flex items-start gap-1.5 text-xs text-rose-600 dark:text-rose-300"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {err}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={sending}>Cancel</Button>
+              <Button type="submit" size="sm" disabled={sending || !body.trim()}>
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send to team
+              </Button>
+            </div>
+          </>
+        )}
+      </form>
+    </Modal>
   )
 }
 

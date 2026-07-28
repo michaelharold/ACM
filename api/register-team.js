@@ -52,15 +52,21 @@ export default async function handler(req, res) {
     // linked by uid — their registration then syncs to their own dashboard. A
     // teammate with no account is still recorded (name + email as entered by
     // the leader), just without that sync — there's no account to sync to.
-    const members = [{ uid, name: leader.name || leader.googleName || '', email: leader.email || '', phone: leader.phone || '', role: 'leader' }]
+    const members = [{
+      uid, name: leader.name || leader.googleName || '', email: leader.email || '', phone: leader.phone || '',
+      department: leader.department || '', college: leader.college || '', year: leader.year || '', role: 'leader',
+    }]
     for (const t of teammateInputs) {
       const doc = await findUserByEmail(db, t.email)
       if (doc) {
         const d = doc.data()
-        members.push({ uid: doc.id, name: d.name || d.googleName || t.name || '', email: d.email || t.email, phone: d.phone || '', role: 'member' })
+        members.push({
+          uid: doc.id, name: d.name || d.googleName || t.name || '', email: d.email || t.email, phone: d.phone || '',
+          department: d.department || '', college: d.college || '', year: d.year || '', role: 'member',
+        })
       } else {
         if (!t.name) return send(res, 400, { error: `Add a name for ${t.email} — they don't have a website account yet, so we can't look one up.` })
-        members.push({ uid: null, name: t.name, email: t.email, phone: '', role: 'member' })
+        members.push({ uid: null, name: t.name, email: t.email, phone: '', department: '', college: '', year: '', role: 'member' })
       }
     }
 

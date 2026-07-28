@@ -17,6 +17,8 @@ export function isProfileComplete(user) {
     isValidPhone(user.phone) &&
     user.phoneVerified &&
     user.department &&
-    user.year
+    user.year &&
+    user.college &&
+    user.gender
   )
 }

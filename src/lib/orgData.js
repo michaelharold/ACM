@@ -13,3 +13,5 @@ export const departments = [
 ]
 
 export const years = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Alumni']
+
+export const genders = ['Male', 'Female', 'Other', 'Rather not say']

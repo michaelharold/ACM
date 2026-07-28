@@ -28,6 +28,8 @@ const defaultProfile = (partial = {}) => ({
   phoneVerified: false,
   department: '',
   year: '',
+  college: '',
+  gender: '',
   acmMember: false,
   role: 'user',
   // Per-section edit grants an admin can hand out: { events, execom, content }

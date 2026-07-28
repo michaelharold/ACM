@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown } from 'lucide-react'
+import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown, School, UserRound, MessageCircle, ExternalLink } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Input, Select } from '../components/ui/Input'
@@ -14,8 +14,8 @@ import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
 import { avatarDataUri } from '../lib/avatar'
 import { cn } from '../lib/cn'
-import { formatDate } from '../lib/format'
-import { years } from '../lib/orgData'
+import { formatDate, normalizeUrl } from '../lib/format'
+import { years, genders } from '../lib/orgData'
 import { isValidPhone, isProfileComplete } from '../lib/profile'
 import { isPhoneOtpEnabled, sendPhoneOtp, confirmPhoneOtp, clearRecaptcha } from '../lib/phoneAuth'
 import { fetchMembership, fetchUserMessages, markThreadRead } from '../services/firestore'
@@ -169,10 +169,15 @@ export default function Dashboard() {
     // valid number is accepted as verified so registration isn't blocked.
     const verified = isPhoneOtpEnabled ? phoneVerifiedLocal : true
     if (isPhoneOtpEnabled && !verified) { setFormErr('Verify your phone number with the OTP first.'); return }
+    if (!data.college?.trim()) { setFormErr('Enter your college name.'); return }
     if (!data.department?.trim()) { setFormErr('Select your department.'); return }
     if (!data.year) { setFormErr('Select your year.'); return }
+    if (!data.gender) { setFormErr('Select your gender.'); return }
     setFormErr('')
-    const next = { name: data.name.trim() || displayName, phone, phoneVerified: verified, department: data.department.trim(), year: data.year }
+    const next = {
+      name: data.name.trim() || displayName, phone, phoneVerified: verified,
+      college: data.college.trim(), department: data.department.trim(), year: data.year, gender: data.gender,
+    }
     setSaving(true)
     try {
       await saveProfile(next)
@@ -202,8 +207,10 @@ export default function Dashboard() {
   const profileRows = [
     { icon: Mail, label: 'Email', value: user.email },
     { icon: Phone, label: 'Phone', value: user.phone },
+    { icon: School, label: 'College', value: user.college },
     { icon: Building2, label: 'Department', value: user.department },
     { icon: GraduationCap, label: 'Year', value: user.year },
+    { icon: UserRound, label: 'Gender', value: user.gender },
   ]
 
   return (
@@ -294,6 +301,7 @@ export default function Dashboard() {
                   )}
                 </div>
 
+                <Input label="College" name="college" defaultValue={user.college || ''} placeholder="e.g. TKM College of Engineering" />
                 <Select label="Department" name="department" defaultValue={user.department || ''}>
                   <option value="">Select department</option>
                   {departments.map((dept) => (
@@ -304,6 +312,12 @@ export default function Dashboard() {
                   <option value="">Select year</option>
                   {years.map((y) => (
                     <option key={y} value={y}>{y}</option>
+                  ))}
+                </Select>
+                <Select label="Gender" name="gender" defaultValue={user.gender || ''}>
+                  <option value="">Select gender</option>
+                  {genders.map((g) => (
+                    <option key={g} value={g}>{g}</option>
                   ))}
                 </Select>
                 {formErr && (
@@ -429,21 +443,40 @@ export default function Dashboard() {
                             onClick={() => toggleTeam(reg.id)}
                             className="flex w-full items-center justify-between px-3.5 py-2 text-xs font-medium text-acm-600 transition-colors hover:bg-neutral-50 dark:text-acm-400 dark:hover:bg-neutral-800/50"
                           >
-                            {teamOpen ? 'Hide teammates' : 'View teammates (name, email & department)'}
+                            {teamOpen ? 'Hide teammates' : 'View teammates'}
                             <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', teamOpen && 'rotate-180')} />
                           </button>
                           {teamOpen && (
-                            <div className="space-y-2 border-t border-neutral-100 px-3.5 py-3 dark:border-neutral-800">
+                            <div className="space-y-2.5 border-t border-neutral-100 px-3.5 py-3 dark:border-neutral-800">
                               {reg.members.map((m, i) => (
-                                <div key={i} className="text-xs">
-                                  <span className="font-medium">{m.name || '—'}</span>
-                                  {m.uid === user.id && <span className="text-neutral-400"> (you)</span>}
-                                  <div className="truncate text-neutral-400">{m.department || '—'} · {m.email}</div>
+                                <div key={i} className="rounded-xl border border-neutral-100 bg-neutral-50/60 p-3 dark:border-neutral-800 dark:bg-neutral-800/30">
+                                  <div className="flex items-center gap-1.5 text-xs font-semibold">
+                                    {m.name || '—'}
+                                    {m.uid === user.id && <span className="rounded-full bg-acm-500/10 px-1.5 py-0.5 text-[10px] font-medium text-acm-600 dark:text-acm-400">You</span>}
+                                  </div>
+                                  <div className="mt-1.5 grid gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                                    <span className="flex items-center gap-1.5 truncate"><Mail className="h-3 w-3 shrink-0" /> {m.email || '—'}</span>
+                                    <span className="flex items-center gap-1.5 truncate"><Building2 className="h-3 w-3 shrink-0" /> {m.department || '—'}</span>
+                                    {m.college && <span className="flex items-center gap-1.5 truncate"><School className="h-3 w-3 shrink-0" /> {m.college}</span>}
+                                    {m.year && <span className="flex items-center gap-1.5 truncate"><GraduationCap className="h-3 w-3 shrink-0" /> {m.year}</span>}
+                                  </div>
                                 </div>
                               ))}
                             </div>
                           )}
                         </div>
+                      )}
+
+                      {event.whatsappLink && (
+                        <a
+                          href={normalizeUrl(event.whatsappLink)}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1.5 border-t border-neutral-100 px-3.5 py-2 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:border-neutral-800 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" /> Event WhatsApp group <ExternalLink className="h-3 w-3" />
+                        </a>
                       )}
                     </div>
                   </Item>

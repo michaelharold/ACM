@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle, ShieldCheck, Users, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle, ShieldCheck, Users, Plus, Trash2, MessageCircle, Copy, Check, ExternalLink } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Input, Select } from '../ui/Input'
 import { Button } from '../ui/Button'
@@ -8,7 +8,7 @@ import { Badge } from '../ui/Badge'
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { years } from '../../lib/orgData'
-import { formatDate } from '../../lib/format'
+import { formatDate, normalizeUrl } from '../../lib/format'
 import { payFor, validateMembership, registerTeam, isPaymentConfigured } from '../../lib/payments'
 import { cn } from '../../lib/cn'
 
@@ -28,6 +28,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
   const [submitting, setSubmitting] = useState(false)
   const [payError, setPayError] = useState('')
   const [pendingConfirm, setPendingConfirm] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   // ACM membership verification: null until checked; then the server's verdict.
   const [memberCheck, setMemberCheck] = useState(null)
   const [verifying, setVerifying] = useState(false)
@@ -38,7 +39,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
     name: user?.name || '',
     email: user?.email || '',
     phone: user?.phone || '',
-    college: 'TKM College of Engineering',
+    college: user?.college || '',
     department: user?.department || '',
     year: user?.year || '',
     isMember: user?.acmMember || false,
@@ -77,6 +78,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
       name: user?.name || '',
       email: user?.email || '',
       phone: user?.phone || '',
+      college: user?.college || '',
       department: user?.department || '',
       year: user?.year || '',
       isMember: user?.acmMember || false,
@@ -244,6 +246,39 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
             {isManualTeam && <Row label="Members" value={String(1 + teammates_filled().length)} />}
             {claimedId && <Row label="ACM Member" value={claimedId} />}
           </div>
+
+          {event.whatsappLink && (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-left dark:border-emerald-500/25 dark:bg-emerald-500/10">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                <MessageCircle className="h-4 w-4" /> Join the event WhatsApp group
+              </div>
+              <p className="mt-1 text-xs text-emerald-700/80 dark:text-emerald-300/70">
+                {isGroup
+                  ? 'If this is a team event, make sure you add your team members to the group, or share this link with them.'
+                  : 'Stay in the loop with announcements and updates for this event.'}
+              </p>
+              <div className="mt-3 flex gap-2">
+                <Button as="a" href={normalizeUrl(event.whatsappLink)} target="_blank" rel="noreferrer noopener" size="sm" className="flex-1">
+                  <ExternalLink className="h-4 w-4" /> Open group
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(normalizeUrl(event.whatsappLink))
+                      setLinkCopied(true)
+                      setTimeout(() => setLinkCopied(false), 1800)
+                    } catch { /* clipboard unavailable — the Open button still works */ }
+                  }}
+                >
+                  {linkCopied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />} {linkCopied ? 'Copied' : 'Copy link'}
+                </Button>
+              </div>
+            </div>
+          )}
+
           <Button className="mt-6 w-full" onClick={handleClose}>
             Done
           </Button>
@@ -285,7 +320,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                       <Input label="Email (from profile)" type="email" value={form.email} disabled readOnly className="cursor-not-allowed opacity-70" />
                       <Input label="Phone (from profile)" value={form.phone} disabled readOnly className="cursor-not-allowed opacity-70" />
                     </div>
-                    <Input label="College" value={form.college} onChange={set('college')} />
+                    <Input label="College (from profile)" value={form.college} disabled readOnly className="cursor-not-allowed opacity-70" />
                     <div className="grid gap-3.5 sm:grid-cols-2">
                       <Select label="Department" value={form.department} onChange={set('department')}>
                         <option value="">Select…</option>

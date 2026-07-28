@@ -60,6 +60,7 @@ export function RegistrationsProvider({ children }) {
       userId: user?.id || 'u_local',
       userName: form.name || user?.name || '',
       userEmail: form.email || user?.email || '',
+      phone: form.phone || user?.phone || '',
       eventId: event.id,
       eventName: event.name,
       college: form.college || '',

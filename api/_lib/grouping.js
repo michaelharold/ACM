@@ -74,7 +74,8 @@ function teamDocFromMembers(ev, members, teamName) {
     isTeam: true,
     teamName,
     members: members.map((m) => ({
-      uid: m.uid, name: m.name || '', email: m.email || '', phone: m.phone || '', department: m.department || '',
+      uid: m.uid, name: m.name || '', email: m.email || '', phone: m.phone || '',
+      department: m.department || '', college: m.college || '', year: m.year || '',
       role: 'member', paymentStatus: m.paymentStatus || '', paymentId: m.paymentId || '', paidAt: m.paidAt || null,
     })),
     memberUids: members.map((m) => m.uid),
@@ -125,6 +126,7 @@ export async function runGroupingForEvent(db, eventId) {
       const r = d.data()
       return {
         regId: d.id, uid: r.userId, name: r.userName, email: r.userEmail, department: r.department,
+        college: r.college || '', year: r.year || '',
         paymentStatus: r.paymentStatus || '', paymentId: r.razorpayPaymentId || '', paidAt: r.paidAt || null,
       }
     }),
@@ -178,6 +180,7 @@ export async function formGroupFromRegistrations(db, eventId, registrationIds) {
       const r = d.data()
       return {
         regId: d.id, uid: r.userId, name: r.userName, email: r.userEmail, department: r.department,
+        college: r.college || '', year: r.year || '',
         paymentStatus: r.paymentStatus || '', paymentId: r.razorpayPaymentId || '', paidAt: r.paidAt || null,
       }
     }),

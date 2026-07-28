@@ -180,8 +180,8 @@ export async function updateUserAccess(uid, permissions) {
 
 // Self-service profile fields only — role and permissions are never writable here.
 export async function updateUserProfile(uid, patch) {
-  const { name = '', googleName = '', phone = '', phoneVerified = false, department = '', year = '', acmMember = false } = patch
-  const clean = { name, googleName, phone, phoneVerified: !!phoneVerified, department, year, acmMember: !!acmMember }
+  const { name = '', googleName = '', phone = '', phoneVerified = false, department = '', year = '', college = '', gender = '', acmMember = false } = patch
+  const clean = { name, googleName, phone, phoneVerified: !!phoneVerified, department, year, college, gender, acmMember: !!acmMember }
   if (isFirebaseConfigured) await updateDoc(doc(db, 'users', uid), clean)
   return clean
 }

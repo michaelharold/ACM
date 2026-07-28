@@ -12,6 +12,7 @@
 // hatch for anyone who doesn't want to wait for the next sweep.
 import { adminDb } from './_lib/firebaseAdmin.js'
 import { runGroupingForEvent } from './_lib/grouping.js'
+import { parseSiteDateTime } from './_lib/siteTime.js'
 import { send } from './_lib/http.js'
 
 export default async function handler(req, res) {
@@ -29,8 +30,8 @@ export default async function handler(req, res) {
       if (!ev.isGroup || ev.groupingRanAt) continue
       const effective = ev.groupingAt || ev.regCloses
       if (!effective) continue
-      const dueAt = new Date(effective).getTime()
-      if (Number.isNaN(dueAt) || now < dueAt) continue
+      const dueAt = parseSiteDateTime(effective)?.getTime()
+      if (!dueAt || Number.isNaN(dueAt) || now < dueAt) continue
 
       try {
         const result = await runGroupingForEvent(db, doc.id)
