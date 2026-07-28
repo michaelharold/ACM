@@ -106,17 +106,6 @@ export function DataProvider({ children }) {
     await svc.updateGalleryImage(id, patch)
   }
 
-  // ── Testimonial mutators (admin) ───────────────────────────
-  async function addTestimonial(data) {
-    const created = await svc.createTestimonial(data)
-    setTestimonials((p) => [...p, created])
-    return created
-  }
-  async function removeTestimonial(id) {
-    await svc.deleteTestimonial(id)
-    setTestimonials((p) => p.filter((t) => t.id !== id))
-  }
-
   return (
     <DataContext.Provider
       value={{
@@ -135,8 +124,6 @@ export function DataProvider({ children }) {
         addEvent,
         editEvent,
         removeEvent,
-        addTestimonial,
-        removeTestimonial,
       }}
     >
       {children}

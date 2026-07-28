@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Wallet, Plus, Trash2, Loader2, Info, KeyRound, Save, Power } from 'lucide-react'
+import { Wallet, Plus, Trash2, Loader2, Info, KeyRound, Save, Power, AlertCircle } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useData } from '../../context/DataContext'
@@ -20,10 +20,12 @@ export function PaymentsPanel() {
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState({ label: '', keyId: '', description: '' })
   const [adding, setAdding] = useState(false)
+  const [acctErr, setAcctErr] = useState('')
 
   const [fee, setFee] = useState(content.membershipFee ?? 0)
   const [memAcct, setMemAcct] = useState(content.membershipPaymentAccountId || '')
   const [savingMem, setSavingMem] = useState(false)
+  const [memErr, setMemErr] = useState('')
 
   useEffect(() => {
     let alive = true
@@ -37,31 +39,53 @@ export function PaymentsPanel() {
   async function addAccount() {
     if (!draft.label.trim() || !draft.keyId.trim()) return
     setAdding(true)
+    setAcctErr('')
     try {
       const created = await svc.createPaymentAccount(draft)
       setAccounts((a) => [created, ...a])
       setDraft({ label: '', keyId: '', description: '' })
+    } catch (err) {
+      setAcctErr(err?.message || 'Could not add that account — please try again.')
     } finally {
       setAdding(false)
     }
   }
 
+  // Optimistic, but reverted with an error if the write fails — otherwise a
+  // failed toggle would silently leave the UI showing a state Firestore
+  // never actually recorded.
   async function toggleActive(acc) {
     const next = !acc.active
+    setAcctErr('')
     setAccounts((a) => a.map((x) => (x.id === acc.id ? { ...x, active: next } : x)))
-    await svc.updatePaymentAccount(acc.id, { active: next })
+    try {
+      await svc.updatePaymentAccount(acc.id, { active: next })
+    } catch (err) {
+      setAccounts((a) => a.map((x) => (x.id === acc.id ? { ...x, active: !next } : x)))
+      setAcctErr(err?.message || `Could not ${next ? 'activate' : 'deactivate'} "${acc.label}" — please try again.`)
+    }
   }
 
   async function remove(acc) {
     if (!confirm(`Delete “${acc.label}”? Events using it will fall back to the default account.`)) return
+    setAcctErr('')
+    const prev = accounts
     setAccounts((a) => a.filter((x) => x.id !== acc.id))
-    await svc.deletePaymentAccount(acc.id)
+    try {
+      await svc.deletePaymentAccount(acc.id)
+    } catch (err) {
+      setAccounts(prev)
+      setAcctErr(err?.message || `Could not delete "${acc.label}" — please try again.`)
+    }
   }
 
   async function saveMembership() {
     setSavingMem(true)
+    setMemErr('')
     try {
       await updateContent({ membershipFee: Math.max(0, Number(fee) || 0), membershipPaymentAccountId: memAcct })
+    } catch (err) {
+      setMemErr(err?.message || 'Could not save — please try again.')
     } finally {
       setSavingMem(false)
     }
@@ -137,6 +161,11 @@ export function PaymentsPanel() {
             {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add
           </Button>
           <input className={cn(inputCls, 'sm:col-span-3')} placeholder="Description (optional)" value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} />
+          {acctErr && (
+            <p className="flex items-start gap-1.5 text-xs text-rose-600 dark:text-rose-300 sm:col-span-3">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {acctErr}
+            </p>
+          )}
         </div>
       </div>
 
@@ -156,10 +185,15 @@ export function PaymentsPanel() {
             </select>
           </label>
         </div>
-        <div className="mt-3">
+        <div className="mt-3 flex items-center gap-3">
           <Button size="sm" onClick={saveMembership} disabled={savingMem || !memDirty}>
             {savingMem ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {memDirty ? 'Save' : 'Saved'}
           </Button>
+          {memErr && (
+            <p className="flex items-start gap-1.5 text-xs text-rose-600 dark:text-rose-300">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {memErr}
+            </p>
+          )}
         </div>
       </div>
     </motion.div>

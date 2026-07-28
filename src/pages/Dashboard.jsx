@@ -159,6 +159,8 @@ export default function Dashboard() {
       // If they were sent here to finish registering, return to that event now
       // that the profile is complete.
       if (returnTo && isProfileComplete({ ...user, ...next })) navigate(returnTo)
+    } catch (err) {
+      setFormErr(err?.message || 'Could not save your profile — please try again.')
     } finally {
       setSaving(false)
     }

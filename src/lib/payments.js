@@ -3,7 +3,7 @@
 // result back to /api to verify. If payments aren't configured (no public key
 // in the env) the whole feature stays dormant and the site behaves exactly as
 // it did before — same graceful-degradation approach as the rest of the app.
-import { auth } from './firebase'
+import { idToken, post } from './api'
 
 // The publishable key id is safe to expose; its presence is our on/off switch.
 export const isPaymentConfigured = !!import.meta.env.VITE_RAZORPAY_KEY_ID
@@ -23,29 +23,6 @@ function loadCheckout() {
     })
   }
   return scriptPromise
-}
-
-async function idToken() {
-  const u = auth?.currentUser
-  if (!u) throw new Error('Please sign in to pay.')
-  return u.getIdToken()
-}
-
-async function post(path, payload, token) {
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
-  })
-  const text = await res.text()
-  let data = {}
-  try { data = text ? JSON.parse(text) : {} } catch { /* non-JSON (crash/HTML) */ }
-  if (!res.ok) {
-    // Surface the status so a server misconfig (500) vs missing route (404) vs
-    // auth (401) is obvious from the message during setup.
-    throw new Error(data.error || `Payment request failed (HTTP ${res.status}).`)
-  }
-  return data
 }
 
 // Checks a claimed ACM membership id against the database for a given event, and

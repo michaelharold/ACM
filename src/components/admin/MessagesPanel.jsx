@@ -49,8 +49,13 @@ export function MessagesPanel({ adminName }) {
     setOpen(m)
     if (isUnread(m)) {
       const wasNew = m.status === 'new'
-      await svc.markThreadRead(m.id, 'admin', { wasNew })
-      setRows((r) => r.map((x) => (x.id === m.id ? { ...x, unreadForAdmin: false, status: wasNew ? 'read' : x.status } : x)))
+      try {
+        await svc.markThreadRead(m.id, 'admin', { wasNew })
+        setRows((r) => r.map((x) => (x.id === m.id ? { ...x, unreadForAdmin: false, status: wasNew ? 'read' : x.status } : x)))
+      } catch {
+        // Non-critical — the thread still opens and reads fine; the unread
+        // dot just won't clear until a retry succeeds. Don't block the modal.
+      }
     }
   }
 

@@ -5,6 +5,7 @@ import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
   Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet, AlertCircle,
+  Loader2, UserX,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
@@ -27,6 +28,8 @@ import { departments as orgDepartments } from '../lib/orgData'
 import { ComposeMessageModal } from '../components/messages/Thread'
 import { MessageSquare, AlertTriangle, Search } from 'lucide-react'
 import { paymentNeedsCheck, countPaymentChecks } from '../lib/paymentHealth'
+import { adminTeamAction } from '../lib/teamAdmin'
+import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { cn } from '../lib/cn'
 
 const statusCycle = ['open', 'coming-soon', 'closed']
@@ -80,41 +83,42 @@ export default function Admin() {
     { key: 'access', label: 'Access', icon: KeyRound, show: isAdmin },
   ].filter((t) => t.show)
 
+  // Pulled out so an admin team edit (add/remove member, delete team) can
+  // refresh the roster on demand, not just on first mount.
+  async function loadRegistrations() {
+    const live = await svc.fetchAllRegistrations()
+    if (!live) return // null → mock mode, keep seedParticipants
+    setRegRows(
+      live.map((r) => ({
+        id: r.id,
+        userId: r.userId || '',
+        name: r.userName || '—',
+        email: r.userEmail || '—',
+        event: r.eventName || '—',
+        eventId: r.eventId || '',
+        department: r.department || '—',
+        college: r.college || '—',
+        acmMember: !!r.acmMember,
+        isTeam: !!r.isTeam,
+        teamName: r.teamName || '',
+        members: r.members || [],
+        teamSize: r.teamSize || (r.members ? r.members.length : 1),
+        status: r.status || 'Confirmed',
+        paymentStatus: r.paymentStatus || '',
+        paymentId: r.razorpayPaymentId || '',
+        // Kept alongside the renamed `paymentId` (used for display/CSV) so
+        // paymentNeedsCheck's razorpayPaymentId check still has a field to read.
+        razorpayPaymentId: r.razorpayPaymentId || '',
+        razorpayOrderId: r.razorpayOrderId || '',
+        paidAt: r.paidAt || null,
+        createdAt: r.createdAt || null,
+      })),
+    )
+  }
+
   useEffect(() => {
-    let alive = true
-    ;(async () => {
-      const live = await svc.fetchAllRegistrations()
-      if (!alive || !live) return // null → mock mode, keep seedParticipants
-      setRegRows(
-        live.map((r) => ({
-          id: r.id,
-          userId: r.userId || '',
-          name: r.userName || '—',
-          email: r.userEmail || '—',
-          event: r.eventName || '—',
-          eventId: r.eventId || '',
-          department: r.department || '—',
-          college: r.college || '—',
-          acmMember: !!r.acmMember,
-          isTeam: !!r.isTeam,
-          teamName: r.teamName || '',
-          members: r.members || [],
-          teamSize: r.teamSize || (r.members ? r.members.length : 1),
-          status: r.status || 'Confirmed',
-          paymentStatus: r.paymentStatus || '',
-          paymentId: r.razorpayPaymentId || '',
-          // Kept alongside the renamed `paymentId` (used for display/CSV) so
-          // paymentNeedsCheck's razorpayPaymentId check still has a field to read.
-          razorpayPaymentId: r.razorpayPaymentId || '',
-          razorpayOrderId: r.razorpayOrderId || '',
-          paidAt: r.paidAt || null,
-          createdAt: r.createdAt || null,
-        })),
-      )
-    })()
-    return () => {
-      alive = false
-    }
+    loadRegistrations()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Unread count for the overview tile; the Messages panel owns the full inbox.
@@ -254,7 +258,9 @@ export default function Admin() {
             {tab === 'membership' && can('membership') && <MembershipPanel canEdit={can('membership')} adminName={user.name} />}
             {tab === 'payments' && isAdmin && <PaymentsPanel />}
             {tab === 'messages' && can('messages') && <MessagesPanel adminName={user.name} />}
-            {tab === 'registrations' && can('registrations') && <RegistrationsPanel rows={regRows} events={events} adminName={user.name} canMessage={can('messages')} />}
+            {tab === 'registrations' && can('registrations') && (
+              <RegistrationsPanel rows={regRows} events={events} adminName={user.name} canMessage={can('messages')} isAdmin={isAdmin} onTeamChanged={loadRegistrations} />
+            )}
             {tab === 'access' && isAdmin && <AccessPanel isLive={isLive} />}
           </div>
         </div>
@@ -640,6 +646,7 @@ function EventEditor({ event, onSave }) {
 
 function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
   const [openId, setOpenId] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex items-center justify-between border-b border-neutral-100 p-5 dark:border-neutral-800">
@@ -686,7 +693,7 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
                 <ChevronDown className={cn('h-4 w-4 transition-transform', openId === e.id && 'rotate-180')} />
               </button>
               <button
-                onClick={() => onDelete(e.id)}
+                onClick={() => setDeleteTarget(e)}
                 aria-label="Delete event"
                 className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-rose-300 hover:text-rose-500 dark:border-neutral-800"
               >
@@ -701,6 +708,15 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
       <p className="border-t border-neutral-100 p-4 text-xs text-neutral-400 dark:border-neutral-800">
         Tip: click a status badge to cycle Open → Coming Soon → Closed. Expand a row to edit details or upload a poster.
       </p>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => onDelete(deleteTarget.id)}
+        title={`Delete "${deleteTarget?.name || 'this event'}"?`}
+        description="This removes the event and its poster from the site. Any existing registrations for it are unaffected but will no longer show an event to link back to. This can't be undone."
+        confirmLabel="Delete event"
+      />
     </motion.div>
   )
 }
@@ -1057,11 +1073,31 @@ function AccessPanel({ isLive }) {
   )
 }
 
-function RegistrationsPanel({ rows, events = [], adminName, canMessage }) {
+function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin, onTeamChanged }) {
   const [dept, setDept] = useState('all')
   const [eventFilter, setEventFilter] = useState('all')
   const [member, setMember] = useState('all') // all | member | non-member
   const [msgTo, setMsgTo] = useState(null)
+  // Admin-only team editing: which team's "add teammate" row is open, and any
+  // pending destructive action (delete team / remove member) awaiting confirm.
+  const [addingTo, setAddingTo] = useState(null)
+  const [confirmAction, setConfirmAction] = useState(null) // { kind: 'deleteTeam'|'removeMember', reg, member? }
+
+  async function addTeammate(reg, { name, email }) {
+    await adminTeamAction({ action: 'addMember', registrationId: reg.id, name, email })
+    setAddingTo(null)
+    await onTeamChanged?.()
+  }
+
+  async function confirmDeleteTeam() {
+    await adminTeamAction({ action: 'delete', registrationId: confirmAction.reg.id })
+    await onTeamChanged?.()
+  }
+
+  async function confirmRemoveMember() {
+    await adminTeamAction({ action: 'removeMember', registrationId: confirmAction.reg.id, email: confirmAction.member.email })
+    await onTeamChanged?.()
+  }
 
   // Events actually present in the roster, for the dropdown.
   const eventOptions = useMemo(() => {
@@ -1211,17 +1247,53 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage }) {
                 {p.isTeam && isOpen && (
                   <tr className="bg-neutral-50/60 dark:bg-neutral-800/30">
                     <td colSpan={6} className="px-5 py-3">
-                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Team members</div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Team members</span>
+                        {isAdmin && (
+                          <button
+                            onClick={() => setConfirmAction({ kind: 'deleteTeam', reg: p })}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-500 hover:text-rose-600"
+                          >
+                            <Trash2 className="h-3 w-3" /> Delete team
+                          </button>
+                        )}
+                      </div>
                       <div className="grid gap-1.5 sm:grid-cols-2">
                         {(p.members || []).map((m, i) => (
                           <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                             <span className="font-medium">{m.name || '—'}</span>
                             {m.role === 'leader' && <Badge tone="blue">Leader</Badge>}
+                            {!m.uid && (
+                              <span title="No website account yet — recorded from what the leader entered.">
+                                <Badge tone="amber">No account</Badge>
+                              </span>
+                            )}
                             <span className="text-neutral-400">{m.email}</span>
                             {m.phone && <span className="text-neutral-400">· {m.phone}</span>}
+                            {isAdmin && m.role !== 'leader' && (
+                              <button
+                                onClick={() => setConfirmAction({ kind: 'removeMember', reg: p, member: m })}
+                                aria-label={`Remove ${m.name || m.email}`}
+                                className="text-neutral-300 hover:text-rose-500 dark:text-neutral-600"
+                              >
+                                <UserX className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
+                      {isAdmin && (
+                        addingTo === p.id ? (
+                          <AddTeammateForm onAdd={(vals) => addTeammate(p, vals)} onCancel={() => setAddingTo(null)} />
+                        ) : (
+                          <button
+                            onClick={() => setAddingTo(p.id)}
+                            className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-medium text-acm-600 hover:text-acm-700 dark:text-acm-400"
+                          >
+                            <Plus className="h-3 w-3" /> Add teammate
+                          </button>
+                        )
+                      )}
                     </td>
                   </tr>
                 )}
@@ -1317,7 +1389,68 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage }) {
         toEmail={msgTo?.email}
         fromName={adminName}
       />
+
+      <ConfirmDialog
+        open={confirmAction?.kind === 'deleteTeam'}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={confirmDeleteTeam}
+        title={`Delete "${confirmAction?.reg?.teamName || 'this team'}"?`}
+        description="This removes the whole team's registration — every member loses their spot, and the payment record (if any) goes with it. This can't be undone."
+        confirmLabel="Delete team"
+      />
+      <ConfirmDialog
+        open={confirmAction?.kind === 'removeMember'}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={confirmRemoveMember}
+        title={`Remove ${confirmAction?.member?.name || confirmAction?.member?.email || 'this member'}?`}
+        description="They'll no longer be registered for this event — if registration is still open, they (or someone else) can register for the spot again."
+        confirmLabel="Remove"
+      />
     </motion.div>
+  )
+}
+
+function AddTeammateForm({ onAdd, onCancel }) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!email.trim()) return
+    setBusy(true)
+    setErr('')
+    try {
+      await onAdd({ name: name.trim(), email: email.trim() })
+    } catch (e2) {
+      setErr(e2?.message || 'Could not add that teammate.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-2.5 flex flex-wrap items-center gap-1.5">
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Name"
+        className={cn(inputCls, 'h-8 max-w-[112px] px-2 text-xs')}
+      />
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        className={cn(inputCls, 'h-8 max-w-[176px] px-2 text-xs')}
+      />
+      <Button type="submit" size="sm" disabled={busy || !email.trim()}>
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add
+      </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>Cancel</Button>
+      {err && <p className="mt-1 w-full text-xs text-rose-600 dark:text-rose-300">{err}</p>}
+    </form>
   )
 }
 

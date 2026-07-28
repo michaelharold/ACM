@@ -10,17 +10,8 @@
 //     on every teammate's dashboard.
 import { adminDb } from './_lib/firebaseAdmin.js'
 import { getBody, requireUser, send } from './_lib/http.js'
+import { findUserByEmail } from './_lib/users.js'
 import { FieldValue } from 'firebase-admin/firestore'
-
-// Resolve one email to a registered user (exact match, then a lowercase retry).
-async function findUserByEmail(db, email) {
-  const e = email.trim()
-  let snap = await db.collection('users').where('email', '==', e).limit(1).get()
-  if (snap.empty && e !== e.toLowerCase()) {
-    snap = await db.collection('users').where('email', '==', e.toLowerCase()).limit(1).get()
-  }
-  return snap.empty ? null : snap.docs[0]
-}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' })
@@ -74,6 +65,9 @@ export default async function handler(req, res) {
     }
 
     const memberUids = members.filter((m) => m.uid).map((m) => m.uid)
+    // Emails that had no account at registration time — queried at sign-up so
+    // a teammate who joins the site later gets linked to this team automatically.
+    const unregisteredEmails = members.filter((m) => !m.uid).map((m) => m.email.toLowerCase())
 
     // One registration per person per event — solo or within any team.
     const existing = await db.collection('registrations').where('eventId', '==', eventId).get()
@@ -104,6 +98,7 @@ export default async function handler(req, res) {
       teamName: (teamName || '').trim() || 'Team',
       members,
       memberUids,
+      unregisteredEmails,
       teamSize: size,
       acmMember: false,
       membershipId: '',

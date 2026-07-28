@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ImagePlus, Trash2, Loader2, AlertCircle, Shuffle, Images, Check, Pencil } from 'lucide-react'
 import { Button } from '../ui/Button'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { useData } from '../../context/DataContext'
 import { cropToCard } from '../../lib/imagePrep'
 import { StorageMeter } from './StorageMeter'
@@ -13,6 +14,7 @@ export function GalleryPanel() {
   const [progress, setProgress] = useState('')
   const [errors, setErrors] = useState([])
   const [drag, setDrag] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const inputRef = useRef(null)
 
   async function handleFiles(fileList) {
@@ -136,12 +138,21 @@ export function GalleryPanel() {
                 key={g.id}
                 item={g}
                 onRename={(caption) => updateGalleryImage(g.id, { caption })}
-                onRemove={() => removeGalleryImage(g.id)}
+                onRemove={() => setDeleteTarget(g)}
               />
             ))}
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => removeGalleryImage(deleteTarget.id)}
+        title="Remove this image?"
+        description={deleteTarget?.caption ? `"${deleteTarget.caption}" comes off the site immediately. This can't be undone.` : "It comes off the site immediately. This can't be undone."}
+        confirmLabel="Remove"
+      />
     </motion.div>
   )
 }

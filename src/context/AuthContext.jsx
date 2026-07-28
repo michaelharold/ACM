@@ -12,6 +12,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db, googleProvider, isFirebaseConfigured } from '../lib/firebase'
 import { updateUserProfile } from '../services/firestore'
+import { linkTeamRegistrations } from '../lib/teamAdmin'
 
 const AuthContext = createContext(null)
 
@@ -36,6 +37,11 @@ const defaultProfile = (partial = {}) => ({
 
 // ── Firestore profile helpers (live mode) ────────────────────
 async function ensureProfile(fbUser, extra = {}) {
+  // Fire-and-forget: if this email was entered as an unregistered teammate on
+  // some team before this account existed, link it now. Never blocks or fails
+  // sign-in — a link that doesn't happen this time will happen the next.
+  linkTeamRegistrations().catch(() => {})
+
   const ref = doc(db, 'users', fbUser.uid)
   const snap = await getDoc(ref)
   if (snap.exists()) {

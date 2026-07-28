@@ -50,6 +50,11 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
   const isGroup = !!event?.isGroup
   const minTeammates = Math.max(0, (Number(event?.minTeamSize) || 1) - 1)
   const maxTeammates = Math.max(0, (Number(event?.maxTeamSize) || 1) - 1)
+  // Team-slot capacity (maxRegistrations = max TEAMS for a group event, same
+  // field solo events use for max registrants — 0 means unlimited).
+  const teamCapacity = Number(event?.maxRegistrations) || 0
+  const teamsTaken = Number(event?.registeredCount) || 0
+  const teamsLeft = Math.max(0, teamCapacity - teamsTaken)
   const addTeammate = () => setTeammates((t) => (t.length < maxTeammates ? [...t, { name: '', email: '' }] : t))
   const removeTeammate = (i) => setTeammates((t) => t.filter((_, j) => j !== i))
   const setTeammate = (i, k, v) => setTeammates((t) => t.map((m, j) => (j === i ? { ...m, [k]: v } : m)))
@@ -290,12 +295,20 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
 
                 {step === 1 && isGroup && (
                   <div className="grid gap-4">
-                    <Input
-                      label="Team name"
-                      value={form.teamName}
-                      onChange={set('teamName')}
-                      placeholder="Your team's name"
-                    />
+                    <div>
+                      <Input
+                        label="Team name"
+                        value={form.teamName}
+                        onChange={set('teamName')}
+                        placeholder="Your team's name"
+                      />
+                      {teamCapacity > 0 && (
+                        <p className="mt-1.5 text-xs text-neutral-400">
+                          {teamsTaken} of {teamCapacity} team spots taken
+                          {teamsLeft > 0 ? ` · ${teamsLeft} left` : ' · last chance, spots fill fast'}
+                        </p>
+                      )}
+                    </div>
                     <div>
                       <div className="mb-2 flex items-center justify-between">
                         <span className="flex items-center gap-2 text-sm font-medium">

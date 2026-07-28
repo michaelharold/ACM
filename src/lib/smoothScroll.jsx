@@ -48,11 +48,6 @@ export function resetScroll() {
   requestAnimationFrame(settle)
 }
 
-// Re-measure after content that changes page height (route swap, data load).
-export function refreshScroll() {
-  lenis?.resize()
-}
-
 // Mount once near the app root. Drives Lenis inertial scrolling on its own
 // rAF loop; no-ops entirely for users preferring reduced motion.
 export function SmoothScroll() {

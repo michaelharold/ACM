@@ -151,15 +151,6 @@ export async function fetchTestimonials() {
   return snap.empty ? [] : map(snap)
 }
 
-export async function createTestimonial(data) {
-  if (!isFirebaseConfigured) return { id: `t_${Date.now()}`, ...data }
-  const ref = await addDoc(collection(db, 'testimonials'), stripId(data))
-  return { id: ref.id, ...data }
-}
-
-export async function deleteTestimonial(id) {
-  if (isFirebaseConfigured) await deleteDoc(doc(db, 'testimonials', id))
-}
 
 // ── Registrations ────────────────────────────────────────────
 export async function fetchUserRegistrations(uid) {
@@ -503,6 +494,3 @@ export async function deletePaymentAccount(id) {
   }
   await deleteDoc(doc(db, 'paymentAccounts', id))
 }
-
-// Seed helper reused by the seed script signature (documents live in mock).
-export { setDoc, doc }
