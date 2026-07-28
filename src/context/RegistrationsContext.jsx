@@ -29,6 +29,18 @@ export function RegistrationsProvider({ children }) {
     }
   }, [user])
 
+  // Exposed so pages can pull a fresh copy on demand — e.g. Dashboard refetches
+  // when the tab regains focus, since Random Grouping can turn a solo
+  // registration into a team registration in the background (daily cron) while
+  // the user already has the page open, and that swap won't show up otherwise.
+  async function refetch() {
+    if (!user) return
+    try {
+      const data = await svc.fetchUserRegistrations(user.id)
+      setRegs(data)
+    } catch { /* keep showing the last known state */ }
+  }
+
   const isRegistered = (eventId) => regs.some((r) => r.eventId === eventId)
 
   async function register(event, form = {}) {
@@ -98,7 +110,7 @@ export function RegistrationsProvider({ children }) {
   }
 
   return (
-    <RegistrationsContext.Provider value={{ regs, isRegistered, register, addTeamRegistration, markRegistrationPaid, unregister }}>
+    <RegistrationsContext.Provider value={{ regs, isRegistered, register, addTeamRegistration, markRegistrationPaid, unregister, refetch }}>
       {children}
     </RegistrationsContext.Provider>
   )

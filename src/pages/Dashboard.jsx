@@ -23,7 +23,7 @@ import { fetchMembership, fetchUserMessages, markThreadRead } from '../services/
 export default function Dashboard() {
   const { user, loading, logout, saveProfile } = useAuth()
   const { events, departments } = useData()
-  const { regs } = useRegistrations()
+  const { regs, refetch: refetchRegs } = useRegistrations()
   const navigate = useNavigate()
   const location = useLocation()
   // Arriving here from a "register" click on an incomplete profile: open the
@@ -131,6 +131,21 @@ export default function Dashboard() {
       .finally(() => { if (alive) setMembershipLoaded(true) })
     return () => { alive = false }
   }, [user])
+
+  // Random Grouping can turn a solo registration into a team registration in
+  // the background (daily cron), so a tab left open across that window won't
+  // see it until something refetches — do that whenever the user comes back
+  // to this tab, not just on the initial page load.
+  useEffect(() => {
+    if (!user) return
+    const onFocus = () => { if (document.visibilityState !== 'hidden') refetchRegs?.() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [user, refetchRegs])
 
   if (loading)
     return (
@@ -414,7 +429,7 @@ export default function Dashboard() {
                             onClick={() => toggleTeam(reg.id)}
                             className="flex w-full items-center justify-between px-3.5 py-2 text-xs font-medium text-acm-600 transition-colors hover:bg-neutral-50 dark:text-acm-400 dark:hover:bg-neutral-800/50"
                           >
-                            {teamOpen ? 'Hide teammates' : `View ${reg.members.length} teammate${reg.members.length === 1 ? '' : 's'}`}
+                            {teamOpen ? 'Hide teammates' : 'View teammates (name, email & department)'}
                             <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', teamOpen && 'rotate-180')} />
                           </button>
                           {teamOpen && (

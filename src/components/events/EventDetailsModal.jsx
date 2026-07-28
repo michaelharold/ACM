@@ -49,7 +49,9 @@ export function EventDetailsModal({ event, open, onClose, onRegister, registered
     <Modal open={open} onClose={onClose} size="xl">
       {/* Banner — full poster (uncropped), blurred fill behind for any ratio */}
       <PosterImage src={event.poster} alt={event.name} className="h-[54vh] max-h-[540px] w-full">
-        <div className="absolute inset-0 z-20 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+        {/* Decorative only — pointer-events-none so it doesn't sit on top of
+            the modal's close button, which shares this stacking context. */}
+        <div className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between gap-4 p-6">
           <div>
             <Badge tone={meta.tone} dot={status === 'open'} className="mb-3 bg-white/90 dark:bg-neutral-900/90">
