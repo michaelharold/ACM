@@ -15,7 +15,7 @@ import { useRegistrations } from '../context/RegistrationsContext'
 import { avatarDataUri } from '../lib/avatar'
 import { cn } from '../lib/cn'
 import { formatDate, normalizeUrl } from '../lib/format'
-import { years, genders } from '../lib/orgData'
+import { years, genders, TKM_COLLEGE, isTkmCollege } from '../lib/orgData'
 import { isValidPhone, isProfileComplete } from '../lib/profile'
 import { isPhoneOtpEnabled, sendPhoneOtp, confirmPhoneOtp, clearRecaptcha } from '../lib/phoneAuth'
 import { fetchMembership, fetchUserMessages, markThreadRead } from '../services/firestore'
@@ -49,6 +49,9 @@ export default function Dashboard() {
   const [phoneInput, setPhoneInput] = useState('')
   const [phoneVerifiedLocal, setPhoneVerifiedLocal] = useState(false)
   const [otp, setOtp] = useState({ confirmation: null, sent: false, code: '', busy: false, err: '' })
+  // College — a dropdown of TKM vs "Other" (+ free text when Other is picked).
+  const [collegeChoice, setCollegeChoice] = useState('')
+  const [otherCollege, setOtherCollege] = useState('')
 
   // Load the member's inbox threads.
   useEffect(() => {
@@ -81,6 +84,10 @@ export default function Dashboard() {
     setPhoneInput(user?.phone || '')
     setPhoneVerifiedLocal(!!user?.phoneVerified)
     setOtp({ confirmation: null, sent: false, code: '', busy: false, err: '' })
+    // College is a two-part choice (TKM / Other) — seed both from whatever's
+    // already on the profile, whichever the value actually is.
+    setCollegeChoice(isTkmCollege(user?.college) ? 'tkm' : (user?.college ? 'other' : ''))
+    setOtherCollege(isTkmCollege(user?.college) ? '' : (user?.college || ''))
     return () => clearRecaptcha()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing])
@@ -169,7 +176,7 @@ export default function Dashboard() {
     // valid number is accepted as verified so registration isn't blocked.
     const verified = isPhoneOtpEnabled ? phoneVerifiedLocal : true
     if (isPhoneOtpEnabled && !verified) { setFormErr('Verify your phone number with the OTP first.'); return }
-    if (!data.college?.trim()) { setFormErr('Enter your college name.'); return }
+    if (!data.college?.trim()) { setFormErr(collegeChoice === 'other' ? 'Enter your college name.' : 'Select your college.'); return }
     if (!data.department?.trim()) { setFormErr('Select your department.'); return }
     if (!data.year) { setFormErr('Select your year.'); return }
     if (!data.gender) { setFormErr('Select your gender.'); return }
@@ -301,7 +308,24 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                <Input label="College" name="college" defaultValue={user.college || ''} placeholder="e.g. TKM College of Engineering" />
+                <div>
+                  <Select label="College" value={collegeChoice} onChange={(e) => setCollegeChoice(e.target.value)}>
+                    <option value="">Select college</option>
+                    <option value="tkm">{TKM_COLLEGE}</option>
+                    <option value="other">Other</option>
+                  </Select>
+                  {collegeChoice === 'tkm' && <input type="hidden" name="college" value={TKM_COLLEGE} />}
+                  {collegeChoice === 'other' && (
+                    <div className="mt-2">
+                      <Input
+                        name="college"
+                        value={otherCollege}
+                        onChange={(e) => setOtherCollege(e.target.value)}
+                        placeholder="Enter your college name"
+                      />
+                    </div>
+                  )}
+                </div>
                 <Select label="Department" name="department" defaultValue={user.department || ''}>
                   <option value="">Select department</option>
                   {departments.map((dept) => (

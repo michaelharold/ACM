@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { BadgeCheck, CreditCard, ShieldCheck, AlertCircle, Mail, Fingerprint, Loader2 } from 'lucide-react'
+import { BadgeCheck, CreditCard, ShieldCheck, AlertCircle, Mail, Fingerprint, Loader2, UserCog, GraduationCap } from 'lucide-react'
 import { SectionHeading } from '../components/SectionHeading'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
@@ -10,6 +10,8 @@ import { useData } from '../context/DataContext'
 import { fetchMembership, createMembership, probeWritable } from '../services/firestore'
 import { payFor, isPaymentConfigured } from '../lib/payments'
 import { avatarDataUri } from '../lib/avatar'
+import { isProfileComplete } from '../lib/profile'
+import { isTkmCollege } from '../lib/orgData'
 
 const fullName = (m) => [m.firstName, m.middleName, m.lastName].filter(Boolean).join(' ')
 
@@ -20,7 +22,7 @@ export default function Membership() {
   const membershipFee = Number(content?.membershipFee) || 0
   const chargesFee = membershipFee > 0 && isPaymentConfigured
 
-  // phase: 'loading' | 'form' | 'status' | 'blocked'
+  // phase: 'loading' | 'incomplete-profile' | 'not-tkm' | 'form' | 'status' | 'blocked'
   const [phase, setPhase] = useState('loading')
   const [membership, setMembership] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -36,6 +38,11 @@ export default function Membership() {
   // write before we let them fill the form out.
   useEffect(() => {
     if (!user) return
+    // Membership needs a real, complete profile first — same bar as event
+    // registration (name, phone, department, year, college, gender) — and
+    // then it's TKM-only: the site can only vouch for its own chapter's roster.
+    if (!isProfileComplete(user)) { setPhase('incomplete-profile'); return }
+    if (!isTkmCollege(user.college)) { setPhase('not-tkm'); return }
     let alive = true
     ;(async () => {
       try {
@@ -133,6 +140,8 @@ export default function Membership() {
           description="Become a member of the chapter — unlock member-only events, workshops and a spot in the community."
         />
 
+        {phase === 'incomplete-profile' && <IncompleteProfile />}
+        {phase === 'not-tkm' && <NotTkm />}
         {phase === 'blocked' && <Blocked />}
 
         {phase === 'form' && (
@@ -301,6 +310,46 @@ function StatusCard({ membership, user, chargesFee, fee, onPay, error, confirmin
           </div>
         </div>
       </div>
+    </motion.div>
+  )
+}
+
+function IncompleteProfile() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-10 flex flex-col items-center rounded-2xl border border-neutral-200 bg-white p-10 text-center dark:border-neutral-800 dark:bg-neutral-900"
+    >
+      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-acm-500/10 text-acm-600 dark:text-acm-400">
+        <UserCog className="h-6 w-6" />
+      </span>
+      <h3 className="mt-5 text-lg font-bold tracking-tight">Complete your profile first</h3>
+      <p className="mt-2 max-w-md text-sm text-neutral-600 dark:text-neutral-300">
+        We need your phone, college, department, year and gender on file before you can join — it's the same profile
+        events use, so you only fill it in once.
+      </p>
+      <Button as={Link} to="/dashboard" state={{ completeProfile: true, from: '/membership' }} size="lg" className="mt-6">
+        <UserCog className="h-4 w-4" /> Complete your profile
+      </Button>
+    </motion.div>
+  )
+}
+
+function NotTkm() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-10 flex flex-col items-center rounded-2xl border border-amber-200 bg-amber-50 p-10 text-center dark:border-amber-500/25 dark:bg-amber-500/10"
+    >
+      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-amber-500 shadow-sm dark:bg-neutral-900">
+        <GraduationCap className="h-6 w-6" />
+      </span>
+      <h3 className="mt-5 text-lg font-bold tracking-tight">Please contact your college ACM student chapter</h3>
+      <p className="mt-2 max-w-md text-sm text-neutral-600 dark:text-neutral-300">
+        The membership service on this site is available for TKM College of Engineering students only.
+      </p>
     </motion.div>
   )
 }

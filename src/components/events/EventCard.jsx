@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, ArrowUpRight, Timer, Radio, ExternalLink, CheckCircle2, Users } from 'lucide-react'
+import { CalendarDays, MapPin, ArrowUpRight, Timer, Radio, ExternalLink, CheckCircle2, Users, Globe, GraduationCap } from 'lucide-react'
 import { Badge } from '../ui/Badge'
 import { PosterImage } from './PosterImage'
 import { fadeUp } from '../ui/Reveal'
@@ -101,6 +101,17 @@ export function EventCard({ event, onOpen, registered = false, muted = false }) 
             <span className="inline-flex items-center gap-1.5 font-medium text-acm-600 dark:text-acm-400">
               <ExternalLink className="h-3.5 w-3.5" /> External event
             </span>
+          )}
+          {!event.external && (
+            event.interCollege ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-500/10 px-2 py-0.5 font-medium text-sky-600 dark:text-sky-400">
+                <Globe className="h-3.5 w-3.5" /> Inter-College Event
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-500/10 px-2 py-0.5 font-medium text-neutral-500 dark:text-neutral-400">
+                <GraduationCap className="h-3.5 w-3.5" /> TKM Students Only
+              </span>
+            )
           )}
           {isLive && (
             <span className="inline-flex items-center gap-1.5 font-semibold text-red-600 dark:text-red-500">

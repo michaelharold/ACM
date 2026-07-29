@@ -11,6 +11,7 @@
 import { adminDb } from './_lib/firebaseAdmin.js'
 import { getBody, requireUser, send } from './_lib/http.js'
 import { findUserByEmail } from './_lib/users.js'
+import { isTkmCollege } from './_lib/college.js'
 import { FieldValue } from 'firebase-admin/firestore'
 
 export default async function handler(req, res) {
@@ -67,6 +68,16 @@ export default async function handler(req, res) {
       } else {
         if (!t.name) return send(res, 400, { error: `Add a name for ${t.email} — they don't have a website account yet, so we can't look one up.` })
         members.push({ uid: null, name: t.name, email: t.email, phone: '', department: '', college: '', year: '', role: 'member' })
+      }
+    }
+
+    // TKM-only events (the default) don't accept other colleges — checked for
+    // every member who has a linked account; one entered without an account
+    // can't be checked, so (as elsewhere) that's trusted to the leader.
+    if (!ev.interCollege) {
+      const nonTkm = members.find((m) => m.uid && !isTkmCollege(m.college))
+      if (nonTkm) {
+        return send(res, 400, { error: `${nonTkm.name || nonTkm.email} isn't a TKM College student — this event is limited to TKM College of Engineering students.` })
       }
     }
 

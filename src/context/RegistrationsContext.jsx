@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useAuth } from './AuthContext'
 import * as svc from '../services/firestore'
+import { isTkmCollege } from '../lib/orgData'
 
 const RegistrationsContext = createContext(null)
 
@@ -45,6 +46,12 @@ export function RegistrationsProvider({ children }) {
 
   async function register(event, form = {}) {
     if (!event || isRegistered(event.id)) return null
+    // TKM-only events (the default) don't accept other colleges — checked
+    // again here (not just in the UI) since this is what actually writes the
+    // registration.
+    if (!event.interCollege && !isTkmCollege(form.college || user?.college)) {
+      throw new Error('This event is only open to TKM College of Engineering students.')
+    }
     // Capacity: when the event caps registrations, refuse once it's full. Read
     // the count fresh so we don't admit past the cap on stale data.
     const max = Number(event.maxRegistrations) || 0

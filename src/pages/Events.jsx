@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CalendarClock } from 'lucide-react'
+import { CalendarClock, GraduationCap } from 'lucide-react'
 import { SectionHeading } from '../components/SectionHeading'
 import { stagger } from '../components/ui/Reveal'
 import { EventCard } from '../components/events/EventCard'
@@ -14,7 +14,10 @@ import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
 import { effectiveStatus, eventStart, LIVE_WINDOW_MS } from '../lib/eventClock'
 import { isProfileComplete } from '../lib/profile'
+import { isTkmCollege } from '../lib/orgData'
 import { cn } from '../lib/cn'
+import { Modal } from '../components/ui/Modal'
+import { Button } from '../components/ui/Button'
 
 const filters = [
   { key: 'all', label: 'All' },
@@ -35,6 +38,7 @@ const isLiveNow = (e, now) => now >= startMs(e) && now <= startMs(e) + LIVE_WIND
 export default function Events() {
   const [filter, setFilter] = useState('all')
   const [registering, setRegistering] = useState(null)
+  const [notEligible, setNotEligible] = useState(null)
   const navigate = useNavigate()
   const { eventId } = useParams()
   const { isAuthed, user } = useAuth()
@@ -95,6 +99,12 @@ export default function Events() {
     // then straight back to this event.
     if (!isProfileComplete(user)) {
       navigate('/dashboard', { state: { completeProfile: true, from: `/events/${event.id}` } })
+      return
+    }
+    // TKM-only events (the default) don't accept registrants from other
+    // colleges — the event stays visible to everyone, just not registerable.
+    if (!event.interCollege && !isTkmCollege(user.college)) {
+      setNotEligible(event)
       return
     }
     navigate('/events')
@@ -206,6 +216,20 @@ export default function Events() {
         onPaid={markRegistrationPaid}
         onCancelPay={unregister}
       />
+
+      <Modal open={!!notEligible} onClose={() => setNotEligible(null)} size="md">
+        <div className="p-6 text-center sm:p-8">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+            <GraduationCap className="h-6 w-6" />
+          </span>
+          <h3 className="mt-5 text-lg font-bold tracking-tight">This event is for TKM College students</h3>
+          <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
+            <strong className="text-neutral-800 dark:text-neutral-200">{notEligible?.name}</strong> isn't an Inter-College
+            Event, so registration is limited to TKM College of Engineering students.
+          </p>
+          <Button className="mt-6 w-full" onClick={() => setNotEligible(null)}>Got it</Button>
+        </div>
+      </Modal>
     </div>
   )
 }

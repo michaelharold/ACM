@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
   Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet, AlertCircle,
-  Loader2, UserX, FileText, Shuffle, Info, MessageCircle, School, UserRound, Mail, Phone, Send,
+  Loader2, UserX, FileText, Shuffle, Info, MessageCircle, School, UserRound, Mail, Phone, Send, Globe, GraduationCap,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
@@ -373,6 +373,8 @@ function EventEditor({ event, onSave }) {
     codeOfConductEnabled: !!event.codeOfConductEnabled,
     codeOfConductText: event.codeOfConductText || '',
     whatsappLink: event.whatsappLink || '',
+    // Defaults closed (TKM-only) — an admin has to deliberately open it up.
+    interCollege: !!event.interCollege,
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -596,6 +598,34 @@ function EventEditor({ event, onSave }) {
 
       {!isExternal && (
         <FormSection icon={Wallet} title="Registration & pricing" hint="What it costs, how many can join, and where the money goes.">
+          {/* Deliberately loud — this decides who's even allowed to register,
+              not just a preference, so it shouldn't blend in with the rest. */}
+          <div className={cn(
+            'flex items-center justify-between gap-3 rounded-xl border p-4 shadow-sm sm:col-span-2',
+            draft.interCollege
+              ? 'border-sky-200 bg-gradient-to-br from-sky-50 via-blue-50/50 to-white dark:border-sky-500/30 dark:from-sky-500/10 dark:via-blue-500/5 dark:to-transparent'
+              : 'border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800/60',
+          )}>
+            <div className="flex items-center gap-3">
+              <span className={cn(
+                'grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white shadow-sm',
+                draft.interCollege ? 'bg-gradient-to-br from-sky-500 to-blue-500 shadow-sky-500/30' : 'bg-neutral-400 dark:bg-neutral-600',
+              )}>
+                {draft.interCollege ? <Globe className="h-4.5 w-4.5" /> : <GraduationCap className="h-4.5 w-4.5" />}
+              </span>
+              <div>
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+                  Inter-College Event
+                  <InfoHint text="Off (default): only TKM College of Engineering students can register — anyone can still see the event. On: students from any college can register." />
+                </span>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  {draft.interCollege ? 'Open to students from any college' : 'Registration limited to TKM College students'}
+                </p>
+              </div>
+            </div>
+            <Switch tone="sky" on={!!draft.interCollege} onClick={() => setDraft((d) => ({ ...d, interCollege: !d.interCollege }))} />
+          </div>
+
           <Field label="Registration fee (₹)" hint="What each registrant pays. Leave at 0 for a free event.">
             <input type="number" min="0" className={cn(inputCls, 'mt-1')} value={draft.fee} onChange={set('fee')} placeholder="0 = free" />
           </Field>
@@ -2014,7 +2044,7 @@ function AddTeammateForm({ onAdd, onCancel }) {
 }
 
 function Switch({ on, onClick, tone = 'acm' }) {
-  const onBg = tone === 'violet' ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500' : 'bg-acm-600'
+  const onBg = tone === 'violet' ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500' : tone === 'sky' ? 'bg-gradient-to-r from-sky-500 to-blue-500' : 'bg-acm-600'
   return (
     <button
       onClick={onClick}
