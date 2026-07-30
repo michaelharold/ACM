@@ -3,6 +3,7 @@
 // These run with the Admin SDK, which is the only way to look a membership up by
 // its admin-assigned id (security rules forbid a member reading anyone else's).
 import { adminDb } from './firebaseAdmin.js'
+import { isTkmCollege } from './college.js'
 
 const nameOf = (d) => [d.firstName, d.middleName, d.lastName].filter(Boolean).join(' ')
 
@@ -40,6 +41,14 @@ export async function memberAdjustedAmount({ event, membershipId, selfUid, selfR
   const discount = Number(event.get('acmDiscount')) || 0
   const id = (membershipId || '').trim()
   if (!id || fee <= 0 || discount <= 0) return { amount: fee, discountApplied: 0, memberValid: false }
+  // ACM membership only exists for TKM College students — an Inter-College
+  // Event can admit anyone, but a non-TKM registrant can never benefit from
+  // the discount, even with a real (e.g. borrowed) id. Checked against the
+  // PAYER's own profile, not the id's owner.
+  const payerSnap = selfUid ? await adminDb().collection('users').doc(selfUid).get() : null
+  if (!payerSnap?.exists || !isTkmCollege(payerSnap.data().college)) {
+    return { amount: fee, discountApplied: 0, memberValid: false }
+  }
   const member = await memberByMembershipId(id)
   if (!member) return { amount: fee, discountApplied: 0, memberValid: false }
   const used = await membershipUsedForEvent(id, event.id, { selfUid, selfRegId })

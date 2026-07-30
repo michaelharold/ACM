@@ -8,6 +8,7 @@
 import { adminDb } from './_lib/firebaseAdmin.js'
 import { memberByMembershipId, membershipUsedForEvent } from './_lib/membership.js'
 import { getBody, requireUser, send } from './_lib/http.js'
+import { isTkmCollege } from './_lib/college.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' })
@@ -17,6 +18,15 @@ export default async function handler(req, res) {
     const { eventId, membershipId } = body
     const id = (membershipId || '').trim()
     if (!id) return send(res, 400, { error: 'Enter a membership ID.' })
+
+    // ACM membership only exists for TKM College students — an Inter-College
+    // Event can admit anyone, but nobody outside TKM can ever hold (or
+    // benefit from) a real membership id, borrowed or not. The UI already
+    // hides this option for them; this is the server-side backstop.
+    const callerSnap = await adminDb().collection('users').doc(uid).get()
+    if (!isTkmCollege(callerSnap.exists ? callerSnap.data().college : '')) {
+      return send(res, 200, { valid: false, notTkm: true })
+    }
 
     const member = await memberByMembershipId(id)
     if (!member) return send(res, 200, { valid: false })

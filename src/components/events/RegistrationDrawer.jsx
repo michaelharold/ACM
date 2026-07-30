@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle, ShieldCheck, Users, Plus, Trash2, MessageCircle, Copy, Check, ExternalLink } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle, ShieldCheck, Users, Plus, Trash2, MessageCircle, Copy, Check, ExternalLink, Lock } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Input, Select } from '../ui/Input'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
-import { years } from '../../lib/orgData'
+import { years, isTkmCollege } from '../../lib/orgData'
 import { formatDate, normalizeUrl } from '../../lib/format'
 import { payFor, validateMembership, registerTeam, isPaymentConfigured } from '../../lib/payments'
 import { cn } from '../../lib/cn'
@@ -56,6 +56,11 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
   // that's specific to signing up WITH a team right now.
   const isRandomGroup = isGroup && !!event?.randomGrouping
   const isManualTeam = isGroup && !isRandomGroup
+  // ACM membership records only exist for TKM College students — an
+  // Inter-College Event can admit anyone, but only a TKM registrant can ever
+  // claim the member discount (there's no membership data for other colleges
+  // to check against).
+  const isTkmVisitor = isTkmCollege(user?.college)
   const minTeammates = Math.max(0, (Number(event?.minTeamSize) || 1) - 1)
   const maxTeammates = Math.max(0, (Number(event?.maxTeamSize) || 1) - 1)
   // Team-slot capacity (maxRegistrations = max TEAMS for a group event, same
@@ -138,8 +143,11 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
 
   // The member discount applies to anyone paying their own fee — solo events
   // and Random Grouping events alike (a manual-team registration pays one
-  // flat team fee instead, so it doesn't get an individual discount).
-  const discountEligible = !isManualTeam && !!(memberCheck?.valid && !memberCheck?.alreadyUsed && memberCheck?.discount > 0)
+  // flat team fee instead, so it doesn't get an individual discount) — but
+  // never to a non-TKM registrant, since there's no membership data for other
+  // colleges to verify against (the UI never lets one reach a verified
+  // memberCheck at all; this is the belt-and-braces backstop).
+  const discountEligible = !isManualTeam && isTkmVisitor && !!(memberCheck?.valid && !memberCheck?.alreadyUsed && memberCheck?.discount > 0)
   const payable = isManualTeam ? (Number(event.fee) || 0) : (discountEligible ? memberCheck.effectiveFee : (Number(event.fee) || 0))
   const claimedId = memberCheck?.valid && !memberCheck?.alreadyUsed ? form.membershipId.trim() : ''
   const paid = payable > 0 && isPaymentConfigured
@@ -409,21 +417,35 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                         You're registering solo — you'll be placed on a team automatically once registration closes, and you'll see your teammates on your dashboard then.
                       </p>
                     )}
-                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
-                      <input type="checkbox" checked={form.isMember} onChange={toggleMember} className="mt-0.5 h-4 w-4 accent-acm-600" />
-                      <span>
-                        <span className="flex items-center gap-2 text-sm font-medium">
-                          <BadgeCheck className="h-4 w-4 text-acm-500" /> I'm an ACM member
+                    {isTkmVisitor ? (
+                      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+                        <input type="checkbox" checked={form.isMember} onChange={toggleMember} className="mt-0.5 h-4 w-4 accent-acm-600" />
+                        <span>
+                          <span className="flex items-center gap-2 text-sm font-medium">
+                            <BadgeCheck className="h-4 w-4 text-acm-500" /> I'm an ACM member
+                          </span>
+                          <span className="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">
+                            {event.acmDiscount > 0
+                              ? `Verify your membership ID to get ₹${event.acmDiscount} off.`
+                              : 'Verify your membership ID.'}
+                          </span>
                         </span>
-                        <span className="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">
-                          {event.acmDiscount > 0
-                            ? `Verify your membership ID to get ₹${event.acmDiscount} off.`
-                            : 'Verify your membership ID.'}
+                      </label>
+                    ) : (
+                      <div className="flex items-start gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4 opacity-70 dark:border-neutral-800 dark:bg-neutral-900/60">
+                        <Lock className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" />
+                        <span>
+                          <span className="flex items-center gap-2 text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                            ACM member discount unavailable
+                          </span>
+                          <span className="mt-1 block text-xs text-neutral-400 dark:text-neutral-500">
+                            The discount is valid for TKMCE Student Chapter students only, for now.
+                          </span>
                         </span>
-                      </span>
-                    </label>
+                      </div>
+                    )}
                     <AnimatePresence initial={false}>
-                      {form.isMember && (
+                      {isTkmVisitor && form.isMember && (
                         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
                           <div className="flex items-end gap-2">
                             <div className="flex-1">
