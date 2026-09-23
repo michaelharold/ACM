@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle, ShieldCheck, Users, Plus, Trash2, MessageCircle, Copy, Check, ExternalLink, Lock } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, PartyPopper, BadgeCheck, CreditCard, Loader2, AlertCircle, ShieldCheck, Users, Plus, Trash2, MessageCircle, Copy, Check, ExternalLink, Lock, ReceiptText } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Input, Select } from '../ui/Input'
 import { Button } from '../ui/Button'
@@ -9,7 +9,12 @@ import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { years, isTkmCollege } from '../../lib/orgData'
 import { formatDate, normalizeUrl } from '../../lib/format'
-import { payFor, validateMembership, registerTeam, isPaymentConfigured } from '../../lib/payments'
+import { payFor, validateMembership, registerTeam, isRazorpayMode, isApiAvailable } from '../../lib/payments'
+import { attachReceipt } from '../../services/payments'
+import { receiptReady, normalizeUtr } from '../../lib/manualPay'
+import { PayToCard } from '../payments/PayToCard'
+import { ReceiptUploader } from '../payments/ReceiptUploader'
+import { useUpiAccount } from '../payments/useUpiAccount'
 import { cn } from '../../lib/cn'
 
 const emailRe = /\S+@\S+\.\S+/
@@ -35,6 +40,10 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
   const [verifyErr, setVerifyErr] = useState('')
   // Team state for group events.
   const [teammates, setTeammates] = useState([])
+  // Manual payment: the receipt being attached, and a warning if a team's
+  // registration went through but its receipt upload didn't.
+  const [receipt, setReceipt] = useState({ image: '', utr: '' })
+  const [receiptWarning, setReceiptWarning] = useState('')
   const [form, setForm] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -99,7 +108,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
 
   // Membership verification is only possible with the backend deployed. Without
   // it, the ID stays a free-text, informational field (the old behaviour).
-  const canVerify = isPaymentConfigured
+  const canVerify = isApiAvailable
   // Editing the id (or toggling the checkbox) invalidates any prior verdict.
   const setMemberId = (e) => { setMemberCheck(null); setVerifyErr(''); setForm((f) => ({ ...f, membershipId: e.target.value })) }
   const toggleMember = (e) => { setMemberCheck(null); setVerifyErr(''); setForm((f) => ({ ...f, isMember: e.target.checked })) }
@@ -119,6 +128,23 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
     }
   }
 
+  // The member discount applies to anyone paying their own fee — solo events
+  // and Random Grouping events alike (a manual-team registration pays one
+  // flat team fee instead, so it doesn't get an individual discount) — but
+  // never to a non-TKM registrant, since there's no membership data for other
+  // colleges to verify against (the UI never lets one reach a verified
+  // memberCheck at all; this is the belt-and-braces backstop).
+  const discountEligible = !isManualTeam && isTkmVisitor && !!(memberCheck?.valid && !memberCheck?.alreadyUsed && memberCheck?.discount > 0)
+  const baseFee = Number(event?.fee) || 0
+  const payable = isManualTeam ? baseFee : (discountEligible ? memberCheck.effectiveFee : baseFee)
+  // Manual mode inserts a Payment step (pay to the QR + upload the receipt)
+  // before Confirm whenever something is actually owed.
+  const manualPay = !isRazorpayMode && payable > 0
+  const stepLabels = ['Your details', isManualTeam ? 'Your team' : 'Eligibility', ...(manualPay ? ['Payment'] : []), 'Confirm']
+  const paymentStep = manualPay ? 2 : -1
+  const lastStep = stepLabels.length - 1
+  const { account: payAccount, loading: payAccountLoading } = useUpiAccount(event?.upiAccountId || '', !!open && manualPay)
+
   const stepValid = useMemo(() => {
     if (step === 0) return form.name && form.email && form.phone && form.department && form.year
     if (step === 1) {
@@ -135,22 +161,16 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
       if (!canVerify) return form.membershipId.trim().length > 0 // no backend → old behaviour
       return memberCheck?.valid === true // must verify a real member (used or not)
     }
-    if (step === 2) return form.agree
+    if (step === paymentStep) return !!payAccount && receiptReady(receipt)
+    if (step === lastStep) return form.agree
     return true
-  }, [step, form, canVerify, memberCheck, isManualTeam, teammates, event])
+  }, [step, form, canVerify, memberCheck, isManualTeam, teammates, event, paymentStep, lastStep, payAccount, receipt])
 
   if (!event) return null
 
-  // The member discount applies to anyone paying their own fee — solo events
-  // and Random Grouping events alike (a manual-team registration pays one
-  // flat team fee instead, so it doesn't get an individual discount) — but
-  // never to a non-TKM registrant, since there's no membership data for other
-  // colleges to verify against (the UI never lets one reach a verified
-  // memberCheck at all; this is the belt-and-braces backstop).
-  const discountEligible = !isManualTeam && isTkmVisitor && !!(memberCheck?.valid && !memberCheck?.alreadyUsed && memberCheck?.discount > 0)
-  const payable = isManualTeam ? (Number(event.fee) || 0) : (discountEligible ? memberCheck.effectiveFee : (Number(event.fee) || 0))
   const claimedId = memberCheck?.valid && !memberCheck?.alreadyUsed ? form.membershipId.trim() : ''
-  const paid = payable > 0 && isPaymentConfigured
+  // Razorpay mode only: charge through hosted checkout after saving.
+  const razorpayCharge = payable > 0 && isRazorpayMode
 
   async function submit() {
     setPayError('')
@@ -167,15 +187,34 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
         const teammates = teammates_filled()
         const res = await registerTeam({ eventId: event.id, teamName: form.teamName.trim(), teammates })
         created = { id: res.id }
-        onTeamCreated?.({
+        const counted = (Number(event.maxRegistrations) || 0) > 0
+        let teamReg = {
           id: res.id, eventId: event.id, eventName: event.name, isTeam: true,
           teamName: form.teamName.trim(), paymentStatus: res.paymentStatus, userId: user?.id,
-          counted: (Number(event.maxRegistrations) || 0) > 0,
-        })
+          counted, seatHeld: counted, amountDue: payable,
+        }
+        if (manualPay) {
+          // The team exists now; attach the receipt. If this part fails the team
+          // stays "awaiting receipt" and the leader can upload from the dashboard.
+          try {
+            const applied = await attachReceipt({ kind: 'event', refId: res.id, userId: user.id, ...receipt, amount: payable })
+            teamReg = { ...teamReg, ...applied }
+          } catch (err) {
+            setReceiptWarning(`Your team is registered, but the receipt didn’t upload (${err?.message || 'unknown error'}). Upload it from your dashboard.`)
+          }
+        }
+        onTeamCreated?.(teamReg)
       } else {
         // Only a verified, unused id is claimed — the server re-checks it and
         // applies the discount, so an unverified/used id gets no benefit.
-        created = await onComplete?.(event, { ...form, membershipId: claimedId, isMember: form.isMember, chargeAmount: payable })
+        created = await onComplete?.(event, {
+          ...form,
+          membershipId: claimedId,
+          isMember: form.isMember,
+          chargeAmount: payable,
+          receipt: manualPay ? receipt : null,
+          upiAccountId: payAccount?.id || '',
+        })
       }
     } catch (err) {
       // Show the real reason when it's a meaningful one (e.g. "registration is
@@ -188,7 +227,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
     // 2) Collect payment if there's a fee. A cancel/failure leaves the record
     // 'pending'; a capture we couldn't confirm is treated as "received".
     try {
-      if (paid && created?.id) {
+      if (razorpayCharge && created?.id) {
         const result = await payFor({
           type: 'event',
           refId: created.id,
@@ -202,7 +241,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
       // Payment cancelled/failed (no money taken) → remove the just-created
       // pending registration so the user isn't shown as "Registered" without
       // having paid. They can retry from a clean slate.
-      if (paid && created?.id) onCancelPay?.(created.id)
+      if (razorpayCharge && created?.id) onCancelPay?.(created.id)
       setPayError(err?.message || 'Could not complete the payment.')
     } finally {
       setSubmitting(false)
@@ -219,6 +258,8 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
       setPendingConfirm(false)
       setMemberCheck(null)
       setVerifyErr('')
+      setReceipt({ image: '', utr: '' })
+      setReceiptWarning('')
     }, 250)
   }
 
@@ -235,11 +276,13 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
             <PartyPopper className="h-8 w-8" />
           </motion.div>
           <h3 className="mt-6 text-xl font-bold tracking-tight">
-            {pendingConfirm ? 'Payment received' : "You're registered!"}
+            {pendingConfirm ? 'Payment received' : manualPay ? 'Receipt submitted' : "You're registered!"}
           </h3>
           <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
             {pendingConfirm ? (
               <>Your payment for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> went through — we’re just confirming it, and your registration will update to paid shortly.</>
+            ) : manualPay ? (
+              <>Your registration for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> is saved. The team will verify your payment shortly — your ticket{event.whatsappLink ? ' and the event WhatsApp group' : ''} appear on your dashboard once it’s verified.</>
             ) : isRandomGroup ? (
               <>You're registered for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> — your team will be assigned automatically, and you'll see it on your dashboard once it is.</>
             ) : (
@@ -253,9 +296,16 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
             {isManualTeam && <Row label="Team" value={form.teamName || 'Team'} />}
             {isManualTeam && <Row label="Members" value={String(1 + teammates_filled().length)} />}
             {claimedId && <Row label="ACM Member" value={claimedId} />}
+            {manualPay && <Row label="Payment" value={`Under review · UTR ${normalizeUtr(receipt.utr)}`} />}
           </div>
 
-          {event.whatsappLink && (
+          {receiptWarning && (
+            <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-xs text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {receiptWarning}
+            </p>
+          )}
+
+          {event.whatsappLink && !manualPay && (
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-left dark:border-emerald-500/25 dark:bg-emerald-500/10">
               <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
                 <MessageCircle className="h-4 w-4" /> Join the event WhatsApp group
@@ -299,7 +349,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
             <h3 className="mt-1 text-lg font-bold tracking-tight">{event.name}</h3>
           </div>
           <div className="mt-5 flex items-center gap-2">
-            {['Your details', isManualTeam ? 'Your team' : 'Eligibility', 'Confirm'].map((s, i) => (
+            {stepLabels.map((s, i) => (
               <div key={s} className="flex flex-1 flex-col gap-1.5">
                 <div className={cn('h-1 rounded-full transition-colors', i <= step ? 'bg-acm-600' : 'bg-neutral-200 dark:bg-neutral-800')} />
                 <span className={cn('text-[11px]', i === step ? 'font-medium text-neutral-700 dark:text-neutral-300' : 'text-neutral-400')}>{s}</span>
@@ -495,16 +545,23 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                       </div>
                       {event.fee > 0 && (
                         <p className="mt-2 text-xs text-neutral-400">
-                          {isPaymentConfigured
+                          {isRazorpayMode
                             ? 'Paid securely via Razorpay when you submit.'
-                            : 'Payment is collected separately by the organisers.'}
+                            : 'Pay by UPI on the next step and upload your receipt — the team verifies it before your ticket is issued.'}
                         </p>
                       )}
                     </div>
                   </div>
                 )}
 
-                {step === 2 && (
+                {step === paymentStep && (
+                  <div className="grid gap-4">
+                    <PayToCard account={payAccount} loading={payAccountLoading} amount={payable} note={event.name} />
+                    <ReceiptUploader value={receipt} onChange={setReceipt} />
+                  </div>
+                )}
+
+                {step === lastStep && (
                   <div className="grid gap-4">
                     <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 text-sm dark:border-neutral-800 dark:bg-neutral-900/50">
                       <Row label="Event" value={event.name} />
@@ -523,6 +580,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                           {isRandomGroup && <Row label="Team" value="Assigned automatically after registration closes" />}
                         </>
                       )}
+                      {manualPay && <Row label="Payment" value={`UPI · UTR ${normalizeUtr(receipt.utr)}`} />}
                       <Row label="Fee" value={payable > 0 ? `₹${payable}${isManualTeam ? ' / team' : ''}${discountEligible ? ` (₹${memberCheck.discount} off)` : ''}` : 'Free'} last />
                     </div>
                     <label className="flex cursor-pointer items-start gap-3 text-sm">
@@ -548,16 +606,18 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
             <Button variant="ghost" size="sm" disabled={submitting} onClick={() => (step === 0 ? handleClose() : go(step - 1))}>
               <ArrowLeft className="h-4 w-4" /> {step === 0 ? 'Cancel' : 'Back'}
             </Button>
-            {step < 2 ? (
+            {step < lastStep ? (
               <Button disabled={!stepValid} onClick={() => go(step + 1)}>
                 Continue <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
               <Button disabled={!stepValid || submitting} onClick={submit}>
                 {submitting ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> {paid ? 'Processing…' : 'Submitting…'}</>
-                ) : paid ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> {razorpayCharge ? 'Processing…' : 'Submitting…'}</>
+                ) : razorpayCharge ? (
                   <><CreditCard className="h-4 w-4" /> Pay ₹{payable} & register</>
+                ) : manualPay ? (
+                  <><ReceiptText className="h-4 w-4" /> Submit registration & receipt</>
                 ) : (
                   <><CheckCircle2 className="h-4 w-4" /> Submit registration</>
                 )}

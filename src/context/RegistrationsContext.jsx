@@ -1,7 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useAuth } from './AuthContext'
 import * as svc from '../services/firestore'
+import * as pay from '../services/payments'
 import { isTkmCollege } from '../lib/orgData'
+import { isRazorpayMode } from '../lib/payments'
+import { holdsSeat } from '../lib/manualPay'
 
 const RegistrationsContext = createContext(null)
 
@@ -63,6 +66,10 @@ export function RegistrationsProvider({ children }) {
     // discount, so a fully-discounted registration is correctly 'free', not a
     // 'pending' that can never be paid.
     const chargeAmount = form.chargeAmount != null ? Number(form.chargeAmount) : (Number(event.fee) || 0)
+    // Manual mode: a paid registration is only ever written together with its
+    // receipt (one atomic batch), so there's no "registered but never paid" limbo.
+    const manual = chargeAmount > 0 && !isRazorpayMode
+    if (manual && !form.receipt) throw new Error('Upload your payment receipt to register.')
     const regDoc = {
       userId: user?.id || 'u_local',
       userName: form.name || user?.name || '',
@@ -77,17 +84,21 @@ export function RegistrationsProvider({ children }) {
       membershipId: form.membershipId || '',
       date: new Date().toISOString().slice(0, 10),
       status: 'Confirmed',
-      // Paid registrations start 'pending' and flip to 'paid' once the server
-      // verifies the Razorpay payment; nothing-to-pay registrations are 'free'.
+      // 'pending' until verified (by an admin, or Razorpay's server); 'free'
+      // when there's nothing to pay.
       paymentStatus: chargeAmount > 0 ? 'pending' : 'free',
-      // Remember whether this event tracks capacity, so a later cleanup knows to
-      // release the slot (and we never decrement an uncapped event's counter).
+      amountDue: chargeAmount,
+      upiAccountId: manual ? (form.upiAccountId || '') : '',
+      // Remember whether this event tracks capacity, and whether this record is
+      // holding one of its seats right now (a rejected payment releases it).
       counted: max > 0,
+      seatHeld: max > 0,
     }
-    const created = await svc.createRegistration(regDoc)
+    const created = manual
+      ? await pay.createRegistrationWithReceipt(regDoc, { ...form.receipt, amount: chargeAmount })
+      : await svc.createRegistration(regDoc)
     setRegs((prev) => [...prev, created])
-    // Reserve the slot. For paid events this holds the place through checkout;
-    // a cancelled/failed payment releases it via unregister().
+    // Reserve the slot — held through review; a rejection or cancel releases it.
     if (max > 0) svc.bumpEventCount(event.id, 1)
     return created
   }
@@ -106,19 +117,41 @@ export function RegistrationsProvider({ children }) {
     setRegs((prev) => prev.map((r) => (r.id === id ? { ...r, paymentStatus: 'paid' } : r)))
   }
 
-  // Drop an unpaid registration (e.g. its payment was cancelled/failed), so the
-  // user isn't left "registered" without paying and can try again.
+  // Upload a receipt for an existing registration: a team leader whose receipt
+  // didn't go through, or a payer whose receipt was rejected. A rejection
+  // released the seat, so re-taking it re-checks capacity first.
+  async function resubmitReceipt(reg, receipt, event) {
+    const max = Number(event?.maxRegistrations) || 0
+    const needsSeat = max > 0 && !!reg.counted && !holdsSeat(reg)
+    if (needsSeat && (await svc.fetchEventCount(reg.eventId)) >= max) {
+      throw new Error('Sorry — this event filled up while your payment was being reviewed. Please contact the organisers.')
+    }
+    const applied = await pay.attachReceipt({
+      kind: 'event',
+      refId: reg.id,
+      userId: user.id,
+      ...receipt,
+      amount: reg.amountDue ?? (Number(event?.fee) || 0),
+      patch: needsSeat ? { seatHeld: true } : {},
+    })
+    if (needsSeat) svc.bumpEventCount(reg.eventId, 1)
+    setRegs((prev) => prev.map((r) => (r.id === reg.id ? { ...r, ...applied } : r)))
+  }
+
+  // Drop an unverified registration (a cancelled Razorpay checkout, or the user
+  // withdrawing one under review), release its seat, and free its receipt's
+  // transaction ID so it can be used again.
   async function unregister(id) {
     if (!id) return
     const reg = regs.find((r) => r.id === id)
     try { await svc.deleteRegistration(id) } catch { /* best-effort cleanup */ }
-    // Release the capacity slot this registration was holding.
-    if (reg?.counted && reg?.eventId) svc.bumpEventCount(reg.eventId, -1)
+    if (reg) pay.discardReceipt(reg).catch(() => {})
+    if (reg && holdsSeat(reg) && reg.eventId) svc.bumpEventCount(reg.eventId, -1)
     setRegs((prev) => prev.filter((r) => r.id !== id))
   }
 
   return (
-    <RegistrationsContext.Provider value={{ regs, isRegistered, register, addTeamRegistration, markRegistrationPaid, unregister, refetch }}>
+    <RegistrationsContext.Provider value={{ regs, isRegistered, register, addTeamRegistration, markRegistrationPaid, resubmitReceipt, unregister, refetch }}>
       {children}
     </RegistrationsContext.Provider>
   )
