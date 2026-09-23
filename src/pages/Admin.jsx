@@ -13,6 +13,9 @@ import { ExecomPanel } from '../components/admin/ExecomPanel'
 import { MembershipPanel } from '../components/admin/MembershipPanel'
 import { PaymentsPanel } from '../components/admin/PaymentsPanel'
 import { StorageMeter } from '../components/admin/StorageMeter'
+import { UpiAccountForm } from '../components/payments/UpiAccountForm'
+import * as pay from '../services/payments'
+import { isRazorpayMode } from '../lib/payments'
 import { downloadCsv } from '../lib/csv'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -363,6 +366,7 @@ function EventEditor({ event, onSave }) {
     groupingMode: event.groupingMode || 'pureRandom',
     groupingAt: event.groupingAt || '',
     paymentAccountId: event.paymentAccountId || '',
+    upiAccountId: event.upiAccountId || '',
     deadline: event.deadline || '',
     regOpens: event.regOpens || '',
     regCloses: event.regCloses || '',
@@ -380,6 +384,10 @@ function EventEditor({ event, onSave }) {
   const [saved, setSaved] = useState(false)
   const [formErr, setFormErr] = useState('')
   const [accounts, setAccounts] = useState([])
+  const { content } = useData()
+  const [upiAccounts, setUpiAccounts] = useState([])
+  const [addingUpi, setAddingUpi] = useState(false)
+  const defaultUpi = upiAccounts.find((a) => a.id === content.defaultUpiAccountId)
   const fileRef = useRef(null)
 
   // Guideline images live in their own collection (api parity with gallery —
@@ -392,7 +400,8 @@ function EventEditor({ event, onSave }) {
 
   useEffect(() => {
     let alive = true
-    svc.fetchPaymentAccounts().then((l) => alive && setAccounts((l || []).filter((a) => a.active !== false))).catch(() => {})
+    pay.fetchUpiAccounts().then((l) => alive && setUpiAccounts((l || []).filter((a) => a.active !== false))).catch(() => {})
+    if (isRazorpayMode) svc.fetchPaymentAccounts().then((l) => alive && setAccounts((l || []).filter((a) => a.active !== false))).catch(() => {})
     svc.fetchEventGuidelineImages(event.id).then((l) => alive && setGuideImages(l || [])).catch(() => {})
     return () => { alive = false }
   }, [event.id])
@@ -649,7 +658,20 @@ function EventEditor({ event, onSave }) {
             </Field>
           )}
           {Number(draft.fee) > 0 && (
-            <Field label="Credit payment to" hint="Which Razorpay account profile this event's payments are credited to.">
+            <Field label="Collect payment to" hint="The UPI QR registrants pay to. “Default” follows whichever account is the default in the Payments tab.">
+              <select
+                className={cn(inputCls, 'mt-1')}
+                value={draft.upiAccountId}
+                onChange={(e) => (e.target.value === '__new__' ? setAddingUpi(true) : setDraft((d) => ({ ...d, upiAccountId: e.target.value })))}
+              >
+                <option value="">Default account{defaultUpi ? ` (${defaultUpi.label})` : ' (not set yet)'}</option>
+                {upiAccounts.map((a) => <option key={a.id} value={a.id}>{a.label} · {a.upiId}</option>)}
+                <option value="__new__">+ Add new QR account…</option>
+              </select>
+            </Field>
+          )}
+          {Number(draft.fee) > 0 && isRazorpayMode && (
+            <Field label="Razorpay account" hint="Which Razorpay account profile this event's payments are credited to.">
               <select className={cn(inputCls, 'mt-1')} value={draft.paymentAccountId} onChange={set('paymentAccountId')}>
                 <option value="">Default account</option>
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
@@ -907,6 +929,23 @@ function EventEditor({ event, onSave }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Modal open={addingUpi} onClose={() => setAddingUpi(false)} size="md">
+        <div className="p-6 sm:p-8">
+          <h3 className="text-lg font-bold tracking-tight">New QR account</h3>
+          <p className="mt-1 text-xs text-neutral-400">It’s saved to the Payments tab too, so you can reuse it for other events.</p>
+          <div className="mt-5">
+            <UpiAccountForm
+              onCancel={() => setAddingUpi(false)}
+              onSaved={(acc) => {
+                setUpiAccounts((l) => [acc, ...l])
+                setDraft((d) => ({ ...d, upiAccountId: acc.id }))
+                setAddingUpi(false)
+              }}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
