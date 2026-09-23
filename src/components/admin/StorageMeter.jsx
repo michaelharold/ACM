@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { HardDrive, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useData } from '../../context/DataContext'
 import {
@@ -8,6 +8,7 @@ import {
   STORAGE_BUDGET_BYTES,
   GALLERY_MAX_IMAGES,
 } from '../../lib/storageBudget'
+import { fetchUpiAccounts, fetchReceiptBytes } from '../../services/payments'
 
 const TONE = {
   ok:       { bar: 'bg-emerald-500', ring: 'border-neutral-200 dark:border-neutral-800', Icon: CheckCircle2, iconCls: 'text-emerald-500' },
@@ -29,10 +30,25 @@ const MESSAGE = {
 export function StorageMeter({ compact = false }) {
   const { gallery, events, execomGroups } = useData()
 
+  // Receipts and QR codes live outside the app-wide data load; fetch their
+  // share once. Non-admins can't sum receipts — that part just counts as 0.
+  const [extra, setExtra] = useState({ upiAccounts: [], receiptBytes: 0 })
+  useEffect(() => {
+    let alive = true
+    Promise.allSettled([fetchUpiAccounts(), fetchReceiptBytes()]).then(([u, r]) => {
+      if (!alive) return
+      setExtra({
+        upiAccounts: u.status === 'fulfilled' ? u.value || [] : [],
+        receiptBytes: r.status === 'fulfilled' ? r.value : 0,
+      })
+    })
+    return () => { alive = false }
+  }, [])
+
   const { bytes, status, pct } = useMemo(() => {
-    const b = estimateImageBytes({ gallery, events, execomGroups })
+    const b = estimateImageBytes({ gallery, events, execomGroups, ...extra })
     return { bytes: b, status: storageStatus(b), pct: Math.min(100, (b / STORAGE_BUDGET_BYTES) * 100) }
-  }, [gallery, events, execomGroups])
+  }, [gallery, events, execomGroups, extra])
 
   const t = TONE[status]
   const used = `${formatBytes(bytes)} of ${formatBytes(STORAGE_BUDGET_BYTES)}`

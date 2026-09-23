@@ -26,13 +26,16 @@ export const EVENT_GUIDELINE_MAX_IMAGES = 6
 
 const len = (s) => (typeof s === 'string' && s.startsWith('data:') ? s.length : 0)
 
-// Best-effort byte estimate of every inline image across the site.
-export function estimateImageBytes({ gallery = [], events = [], execomGroups = [] } = {}) {
+// Best-effort byte estimate of every inline image across the site. Receipts
+// aren't loaded app-wide, so their total arrives pre-summed (`receiptBytes`,
+// from a server-side sum of each receipt's stored `bytes`).
+export function estimateImageBytes({ gallery = [], events = [], execomGroups = [], upiAccounts = [], receiptBytes = 0 } = {}) {
   let bytes = 0
   for (const g of gallery) bytes += len(g.image)
   for (const e of events) bytes += len(e.poster)
   for (const grp of execomGroups) for (const m of grp.members || []) bytes += len(m.photo)
-  return bytes
+  for (const a of upiAccounts) bytes += len(a.qrImage)
+  return bytes + (Number(receiptBytes) || 0)
 }
 
 // ok < 60% · warn 60–80% · critical 80–100% · full ≥ 100%
