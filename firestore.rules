@@ -22,13 +22,57 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions', {}).get(key, false) == true;
     }
 
+    // Who may review a payment receipt of a given kind ('event' | 'membership').
+    function isVerifierFor(kind) {
+      return isAdmin()
+        || (kind == 'event' && hasPerm('registrations'))
+        || (kind == 'membership' && hasPerm('membership'));
+    }
+
+    function isPaidDoc(path) {
+      return exists(path) && get(path).data.get('paymentStatus', '') == 'paid';
+    }
+
+    // True when the registration/membership a receipt belongs to is already
+    // verified — its receipt and transaction ID must then stay on record, so a
+    // single payment can't be freed up and reused.
+    function refIsPaid(kind, refId) {
+      return (kind == 'membership' && isPaidDoc(/databases/$(database)/documents/memberships/$(refId)))
+          || (kind == 'event' && isPaidDoc(/databases/$(database)/documents/registrations/$(refId)));
+    }
+
+    // A self-created registration may only be 'free' (the event really costs
+    // nothing, or a claimed member discount covers it) or 'pending' owing at
+    // least the fee minus the member discount. 'paid' only ever comes from a
+    // verifier (or the Razorpay server, which bypasses rules).
+    function validNewRegistrationPayment(d) {
+      let ev = get(/databases/$(database)/documents/events/$(d.eventId)).data;
+      let minDue = ev.get('fee', 0) - ev.get('acmDiscount', 0);
+      return (d.paymentStatus == 'free'
+               && (ev.get('fee', 0) <= 0 || (d.get('membershipId', '') != '' && minDue <= 0)))
+          || (d.paymentStatus == 'pending' && d.get('amountDue', 0) >= minDue);
+    }
+
+    function membershipFeeIsZero() {
+      return !exists(/databases/$(database)/documents/siteContent/main)
+        || get(/databases/$(database)/documents/siteContent/main).data.get('membershipFee', 0) <= 0;
+    }
+
     // User profiles — a user manages their own; only admins set roles/grants.
+    // A new profile must start as a plain user. acmMember is granted when a
+    // membership payment is verified, so a user can't set it on themselves;
+    // membership verifiers may flip only that field.
     match /users/{uid} {
       allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
-      allow create: if request.auth.uid == uid;
+      allow create: if request.auth.uid == uid
+        && request.resource.data.get('role', 'user') == 'user'
+        && request.resource.data.get('permissions', {}).size() == 0
+        && request.resource.data.get('acmMember', false) == false;
       allow update: if isAdmin()
         || (request.auth.uid == uid
-            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions']));
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions', 'acmMember']))
+        || (hasPerm('membership')
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acmMember']));
       allow delete: if isAdmin();
     }
 
@@ -101,8 +145,21 @@ service cloud.firestore {
         || isAdmin()
         || hasPerm('registrations')
       );
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && validNewRegistrationPayment(request.resource.data);
+      // Admins edit anything. A 'registrations' verifier may only record a
+      // payment review. The owner (team leader for a team) may only attach or
+      // re-attach a receipt, moving an unverified record back to 'pending'.
+      allow update: if isAdmin()
+        || (hasPerm('registrations')
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['paymentStatus', 'paidAt', 'reviewedBy', 'reviewedAt', 'rejectReason', 'seatHeld', 'receiptId', 'utr']))
+        || (isSignedIn() && resource.data.userId == request.auth.uid
+            && resource.data.get('paymentStatus', '') in ['pending', 'rejected']
+            && request.resource.data.paymentStatus == 'pending'
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['receiptId', 'utr', 'receiptSubmittedAt', 'paymentStatus', 'rejectReason', 'seatHeld']));
       // A user may remove their OWN registration only while it's unpaid — this
       // lets the app clean up a registration whose payment was cancelled/failed,
       // without ever letting someone delete a paid record.
@@ -112,20 +169,72 @@ service cloud.firestore {
 
     // ACM memberships — one document per user (id == uid). The member fills and
     // reads their own application; admins (or holders of the 'membership' grant)
-    // read every application and assign the membershipId. Critically, a member
-    // can NEVER set or change their own membershipId — it must stay '' on create
-    // and unchanged on any self-update, so a member can't mint their own id.
+    // read every application, verify payment, and assign the membershipId. A
+    // member can NEVER set their own membershipId, mark themselves paid, or edit
+    // the review fields / amount owed.
     match /memberships/{uid} {
       allow read: if isSignedIn()
         && (request.auth.uid == uid || isAdmin() || hasPerm('membership'));
       allow create: if isSignedIn()
         && request.auth.uid == uid
         && request.resource.data.userId == request.auth.uid
-        && request.resource.data.membershipId == '';
+        && request.resource.data.membershipId == ''
+        && (request.resource.data.paymentStatus == 'pending'
+            || (request.resource.data.paymentStatus == 'free' && membershipFeeIsZero()));
       allow update: if isAdmin() || hasPerm('membership')
         || (request.auth.uid == uid
-            && request.resource.data.membershipId == resource.data.membershipId);
+            && request.resource.data.membershipId == resource.data.membershipId
+            && (request.resource.data.paymentStatus == resource.data.paymentStatus
+                || (request.resource.data.paymentStatus == 'pending'
+                    && resource.data.get('paymentStatus', '') in ['pending', 'rejected']))
+            && !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['reviewedBy', 'reviewedAt', 'paidAt', 'userId', 'amountDue']));
       allow delete: if isAdmin();
+    }
+
+    // UPI / QR payment accounts shown to payers — public, since the QR and UPI
+    // ID are exactly what a payer needs. Event editors may add one while
+    // creating an event; only admins delete.
+    match /upiAccounts/{id} {
+      allow read: if true;
+      allow create, update: if isAdmin() || hasPerm('events');
+      allow delete: if isAdmin();
+    }
+
+    // Payment receipts — one screenshot per document (inline data URI, capped
+    // well under the 1 MB document limit). Readable by the payer and by whoever
+    // may verify that kind of payment. Never edited: a new upload is a new doc.
+    match /receipts/{id} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isVerifierFor(resource.data.kind));
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.kind in ['event', 'membership']
+        && request.resource.data.image is string
+        && request.resource.data.image.size() < 400000
+        && request.resource.data.utr is string
+        && request.resource.data.utr.matches('^[0-9]{12}$');
+      allow delete: if isSignedIn()
+        && (isVerifierFor(resource.data.kind)
+            || (resource.data.userId == request.auth.uid && !refIsPaid(resource.data.kind, resource.data.refId)));
+    }
+
+    // One document per UPI transaction ID (the doc id IS the 12-digit UTR).
+    // Creating one that already exists is an update, which is never allowed —
+    // so each payment can back exactly one registration or membership. A get
+    // on your own or a nonexistent UTR succeeds; on someone else's it's denied,
+    // which the app turns into a clear "already used" message.
+    match /utrs/{utr} {
+      allow get: if isSignedIn()
+        && (resource == null
+            || resource.data.userId == request.auth.uid
+            || isAdmin() || hasPerm('registrations') || hasPerm('membership'));
+      allow create: if isSignedIn()
+        && utr.matches('^[0-9]{12}$')
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn()
+        && (isAdmin() || hasPerm('registrations') || hasPerm('membership')
+            || (resource.data.userId == request.auth.uid && !refIsPaid(resource.data.kind, resource.data.refId)));
     }
 
     // Payment account profiles — the NON-SECRET half of a Razorpay account

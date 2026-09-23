@@ -1,0 +1,213 @@
+// Firestore rules tests — run with `npm run test:rules` (starts the emulator).
+import { test, before, after, beforeEach } from 'node:test'
+import { readFileSync } from 'node:fs'
+import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing'
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore'
+
+let env
+const as = (uid) => env.authenticatedContext(uid, { email: `${uid}@example.com` }).firestore()
+const anon = () => env.unauthenticatedContext().firestore()
+const seed = (fn) => env.withSecurityRulesDisabled((ctx) => fn(ctx.firestore()))
+
+const UTR = '412345678901'
+const UTR2 = '998877665544'
+const IMG = 'data:image/jpeg;base64,AAAA'
+
+before(async () => {
+  env = await initializeTestEnvironment({
+    projectId: 'demo-acm-rules',
+    firestore: { rules: readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8') },
+  })
+})
+after(async () => { await env?.cleanup() })
+
+beforeEach(async () => {
+  await env.clearFirestore()
+  await seed(async (db) => {
+    await setDoc(doc(db, 'users/admin'), { role: 'admin' })
+    await setDoc(doc(db, 'users/regEditor'), { role: 'user', permissions: { registrations: true } })
+    await setDoc(doc(db, 'users/memEditor'), { role: 'user', permissions: { membership: true } })
+    await setDoc(doc(db, 'users/eventsEditor'), { role: 'user', permissions: { events: true } })
+    await setDoc(doc(db, 'users/alice'), { role: 'user', acmMember: false, name: 'Alice' })
+    await setDoc(doc(db, 'users/bob'), { role: 'user', acmMember: false, name: 'Bob' })
+    await setDoc(doc(db, 'events/paid'), { name: 'Paid', fee: 200, acmDiscount: 50, registeredCount: 1 })
+    await setDoc(doc(db, 'events/free'), { name: 'Free', fee: 0 })
+    await setDoc(doc(db, 'siteContent/main'), { membershipFee: 100 })
+  })
+})
+
+const reg = (over = {}) => ({ userId: 'alice', eventId: 'paid', paymentStatus: 'pending', amountDue: 200, counted: true, seatHeld: true, ...over })
+
+async function seedPending(status = 'pending') {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'registrations/r1'), reg({ paymentStatus: status, receiptId: 'rc1', utr: UTR }))
+    await setDoc(doc(db, 'receipts/rc1'), { kind: 'event', refId: 'r1', userId: 'alice', image: IMG, utr: UTR, amount: 200, bytes: 27 })
+    await setDoc(doc(db, `utrs/${UTR}`), { userId: 'alice', kind: 'event', refId: 'r1', receiptId: 'rc1' })
+  })
+}
+
+// ── users ────────────────────────────────────────────────────
+test('a new user cannot create themselves as admin', async () => {
+  await assertFails(setDoc(doc(as('carol'), 'users/carol'), { role: 'admin', permissions: {}, acmMember: false }))
+  await assertFails(setDoc(doc(as('carol'), 'users/carol'), { role: 'user', permissions: { events: true }, acmMember: false }))
+  await assertSucceeds(setDoc(doc(as('carol'), 'users/carol'), { role: 'user', permissions: {}, acmMember: false, name: 'C' }))
+})
+
+test('a user cannot set their own acmMember, but can edit their profile', async () => {
+  await assertFails(updateDoc(doc(as('alice'), 'users/alice'), { acmMember: true }))
+  await assertSucceeds(updateDoc(doc(as('alice'), 'users/alice'), { name: 'Alice B' }))
+})
+
+test('a membership editor may set acmMember only', async () => {
+  await assertSucceeds(updateDoc(doc(as('memEditor'), 'users/alice'), { acmMember: true }))
+  await assertFails(updateDoc(doc(as('memEditor'), 'users/alice'), { name: 'X' }))
+  await assertFails(updateDoc(doc(as('regEditor'), 'users/alice'), { acmMember: true }))
+})
+
+// ── registrations: create ────────────────────────────────────
+test('free registration only for a free event', async () => {
+  await assertSucceeds(setDoc(doc(as('alice'), 'registrations/f1'), reg({ eventId: 'free', paymentStatus: 'free', amountDue: 0 })))
+  await assertFails(setDoc(doc(as('alice'), 'registrations/f2'), reg({ paymentStatus: 'free', amountDue: 0 })))
+})
+
+test('nobody self-creates a paid registration', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'registrations/p1'), reg({ paymentStatus: 'paid' })))
+})
+
+test('pending registration must owe at least fee minus discount', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'registrations/p2'), reg({ amountDue: 100 })))
+  await assertSucceeds(setDoc(doc(as('alice'), 'registrations/p3'), reg({ amountDue: 150 })))
+})
+
+test('registration + receipt + utr in one batch succeeds', async () => {
+  const db = as('alice')
+  const b = writeBatch(db)
+  b.set(doc(db, 'registrations/r9'), reg({ receiptId: 'rc9', utr: UTR }))
+  b.set(doc(db, 'receipts/rc9'), { kind: 'event', refId: 'r9', userId: 'alice', image: IMG, utr: UTR, amount: 200, bytes: 27 })
+  b.set(doc(db, `utrs/${UTR}`), { userId: 'alice', kind: 'event', refId: 'r9', receiptId: 'rc9' })
+  await assertSucceeds(b.commit())
+})
+
+// ── utrs ─────────────────────────────────────────────────────
+test('a UTR can only be used once', async () => {
+  await seedPending()
+  await assertFails(setDoc(doc(as('bob'), `utrs/${UTR}`), { userId: 'bob', kind: 'event', refId: 'x', receiptId: 'y' }))
+  await assertFails(setDoc(doc(as('alice'), `utrs/${UTR}`), { userId: 'alice', kind: 'event', refId: 'x', receiptId: 'y' }))
+})
+
+test('utr pre-check: own or unknown readable, someone else\'s denied', async () => {
+  await seedPending()
+  await assertSucceeds(getDoc(doc(as('alice'), `utrs/${UTR}`)))
+  await assertSucceeds(getDoc(doc(as('bob'), `utrs/${UTR2}`)))
+  await assertFails(getDoc(doc(as('bob'), `utrs/${UTR}`)))
+})
+
+test('utr id must be 12 digits and owned by the writer', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'utrs/123'), { userId: 'alice', kind: 'event', refId: 'x', receiptId: 'y' }))
+  await assertFails(setDoc(doc(as('alice'), `utrs/${UTR2}`), { userId: 'bob', kind: 'event', refId: 'x', receiptId: 'y' }))
+})
+
+// ── receipts ─────────────────────────────────────────────────
+test('receipt read: owner and matching verifier only', async () => {
+  await seedPending()
+  await assertSucceeds(getDoc(doc(as('alice'), 'receipts/rc1')))
+  await assertSucceeds(getDoc(doc(as('regEditor'), 'receipts/rc1')))
+  await assertSucceeds(getDoc(doc(as('admin'), 'receipts/rc1')))
+  await assertFails(getDoc(doc(as('bob'), 'receipts/rc1')))
+  await assertFails(getDoc(doc(as('memEditor'), 'receipts/rc1')))
+})
+
+test('receipt create validates shape', async () => {
+  const base = { kind: 'event', refId: 'r1', userId: 'alice', image: IMG, utr: UTR, amount: 200, bytes: 27 }
+  await assertFails(setDoc(doc(as('alice'), 'receipts/x1'), { ...base, userId: 'bob' }))
+  await assertFails(setDoc(doc(as('alice'), 'receipts/x2'), { ...base, utr: '12' }))
+  await assertFails(setDoc(doc(as('alice'), 'receipts/x3'), { ...base, kind: 'other' }))
+  await assertFails(setDoc(doc(as('alice'), 'receipts/x4'), { ...base, image: 'x'.repeat(400001) }))
+  await assertSucceeds(setDoc(doc(as('alice'), 'receipts/x5'), base))
+})
+
+// ── registrations: review ────────────────────────────────────
+test('owner cannot verify their own registration', async () => {
+  await seedPending()
+  await assertFails(updateDoc(doc(as('alice'), 'registrations/r1'), { paymentStatus: 'paid' }))
+})
+
+test('registrations editor approves; events-only editor cannot', async () => {
+  await seedPending()
+  await assertFails(updateDoc(doc(as('eventsEditor'), 'registrations/r1'), { paymentStatus: 'paid' }))
+  await assertSucceeds(updateDoc(doc(as('regEditor'), 'registrations/r1'), { paymentStatus: 'paid', reviewedBy: 'R' }))
+})
+
+test('registrations editor cannot touch non-review fields', async () => {
+  await seedPending()
+  await assertFails(updateDoc(doc(as('regEditor'), 'registrations/r1'), { amountDue: 1 }))
+})
+
+test('reject then resubmit; never resubmit over a paid one', async () => {
+  await seedPending()
+  const ed = as('regEditor')
+  const b = writeBatch(ed)
+  b.update(doc(ed, 'registrations/r1'), { paymentStatus: 'rejected', rejectReason: 'blurry', receiptId: '', utr: '', seatHeld: false })
+  b.delete(doc(ed, 'receipts/rc1'))
+  b.delete(doc(ed, `utrs/${UTR}`))
+  await assertSucceeds(b.commit())
+
+  const db = as('alice')
+  const r = writeBatch(db)
+  r.set(doc(db, 'receipts/rc2'), { kind: 'event', refId: 'r1', userId: 'alice', image: IMG, utr: UTR, amount: 200, bytes: 27 })
+  r.set(doc(db, `utrs/${UTR}`), { userId: 'alice', kind: 'event', refId: 'r1', receiptId: 'rc2' })
+  r.update(doc(db, 'registrations/r1'), { paymentStatus: 'pending', receiptId: 'rc2', utr: UTR, rejectReason: '', seatHeld: true })
+  await assertSucceeds(r.commit())
+  // …but not smuggling in another field
+  await assertFails(updateDoc(doc(db, 'registrations/r1'), { amountDue: 1 }))
+
+  await seed((sdb) => updateDoc(doc(sdb, 'registrations/r1'), { paymentStatus: 'paid' }))
+  await assertFails(updateDoc(doc(db, 'registrations/r1'), { paymentStatus: 'pending', receiptId: 'rc3' }))
+})
+
+test('owner may discard receipt+utr of an unpaid (or deleted) registration only', async () => {
+  await seedPending('paid')
+  await assertFails(deleteDoc(doc(as('alice'), `utrs/${UTR}`)))
+  await assertFails(deleteDoc(doc(as('alice'), 'receipts/rc1')))
+  await seed((sdb) => deleteDoc(doc(sdb, 'registrations/r1')))
+  await assertSucceeds(deleteDoc(doc(as('alice'), `utrs/${UTR}`)))
+  await assertSucceeds(deleteDoc(doc(as('alice'), 'receipts/rc1')))
+})
+
+// ── memberships ──────────────────────────────────────────────
+const mem = (over = {}) => ({ userId: 'alice', membershipId: '', paymentStatus: 'pending', amountDue: 100, ...over })
+
+test('membership: free only when the fee is zero; pending ok', async () => {
+  await assertFails(setDoc(doc(as('alice'), 'memberships/alice'), mem({ paymentStatus: 'free' })))
+  await assertFails(setDoc(doc(as('alice'), 'memberships/alice'), mem({ paymentStatus: 'paid' })))
+  await assertSucceeds(setDoc(doc(as('alice'), 'memberships/alice'), mem()))
+})
+
+test('membership: owner cannot mark paid or lower amountDue; editor can verify', async () => {
+  await seed((sdb) => setDoc(doc(sdb, 'memberships/alice'), mem({ receiptId: 'rc1', utr: UTR })))
+  await assertFails(updateDoc(doc(as('alice'), 'memberships/alice'), { paymentStatus: 'paid' }))
+  await assertFails(updateDoc(doc(as('alice'), 'memberships/alice'), { amountDue: 1 }))
+  await assertFails(updateDoc(doc(as('alice'), 'memberships/alice'), { reviewedBy: 'me' }))
+  await assertSucceeds(updateDoc(doc(as('memEditor'), 'memberships/alice'), { paymentStatus: 'paid', reviewedBy: 'M' }))
+})
+
+test('membership: owner can resubmit after rejection', async () => {
+  await seed((sdb) => setDoc(doc(sdb, 'memberships/alice'), mem({ paymentStatus: 'rejected', rejectReason: 'wrong amount' })))
+  await assertSucceeds(updateDoc(doc(as('alice'), 'memberships/alice'), { paymentStatus: 'pending', receiptId: 'rc5', utr: UTR2, rejectReason: '' }))
+})
+
+test('membership verifier queries pending memberships; plain user cannot', async () => {
+  await seed((sdb) => setDoc(doc(sdb, 'memberships/alice'), mem({ receiptId: 'rc1' })))
+  await assertSucceeds(getDocs(query(collection(as('memEditor'), 'memberships'), where('paymentStatus', '==', 'pending'))))
+  await assertFails(getDocs(query(collection(as('bob'), 'memberships'), where('paymentStatus', '==', 'pending'))))
+})
+
+// ── upiAccounts ──────────────────────────────────────────────
+test('upiAccounts: public read, admin/events editors write, admin deletes', async () => {
+  await seed((sdb) => setDoc(doc(sdb, 'upiAccounts/u1'), { label: 'Main', upiId: 'a@b', active: true }))
+  await assertSucceeds(getDoc(doc(anon(), 'upiAccounts/u1')))
+  await assertSucceeds(setDoc(doc(as('eventsEditor'), 'upiAccounts/u2'), { label: 'E', upiId: 'e@b', active: true }))
+  await assertFails(setDoc(doc(as('alice'), 'upiAccounts/u3'), { label: 'X', upiId: 'x@b', active: true }))
+  await assertFails(deleteDoc(doc(as('eventsEditor'), 'upiAccounts/u1')))
+  await assertSucceeds(deleteDoc(doc(as('admin'), 'upiAccounts/u1')))
+})
