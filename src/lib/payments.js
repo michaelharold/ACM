@@ -1,12 +1,24 @@
 // Client side of the Razorpay flow. It never sees the secret key: it asks our
 // own /api to create an order, opens Razorpay's hosted checkout, and hands the
-// result back to /api to verify. If payments aren't configured (no public key
-// in the env) the whole feature stays dormant and the site behaves exactly as
-// it did before — same graceful-degradation approach as the rest of the app.
+// result back to /api to verify.
 import { idToken, post } from './api'
 
-// The publishable key id is safe to expose; its presence is our on/off switch.
-export const isPaymentConfigured = !!import.meta.env.VITE_RAZORPAY_KEY_ID
+// Which payment flow the site runs:
+//   'manual'   — the payer scans a UPI QR, uploads the receipt, and an admin
+//                verifies it (src/lib/manualPay.js, src/services/payments.js).
+//   'razorpay' — hosted Razorpay checkout through our /api. Everything in this
+//                file is kept intact for when the Razorpay account is approved;
+//                flip this constant (and set VITE_RAZORPAY_KEY_ID) to use it.
+export const PAYMENT_MODE = 'manual'
+
+const razorpayKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID
+export const isRazorpayMode = PAYMENT_MODE === 'razorpay' && !!razorpayKeyId
+// Older name still imported in places: "is Razorpay checkout live".
+export const isPaymentConfigured = isRazorpayMode
+// Whether our Vercel /api is deployed — membership-ID verification and team
+// registration need it in either payment mode. The Razorpay key used to be the
+// only signal; VITE_API_ENABLED=1 states it explicitly.
+export const isApiAvailable = !!razorpayKeyId || import.meta.env.VITE_API_ENABLED === '1'
 
 const CHECKOUT_SRC = 'https://checkout.razorpay.com/v1/checkout.js'
 let scriptPromise = null
