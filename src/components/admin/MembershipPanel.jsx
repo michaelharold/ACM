@@ -93,6 +93,12 @@ export function MembershipPanel({ canEdit = true, adminName }) {
       await svc.updateMembership(m.id, { membershipId: value })
       setRows((rs) => rs.map((r) => (r.id === m.id ? { ...r, membershipId: value } : r)))
       setDrafts((d) => { const n = { ...d }; delete n[m.id]; return n })
+      // Assigning an ID means they're a member — also flip the profile flag the
+      // rest of the site reads (covers free memberships, which skip payment
+      // review). Best-effort: the ID itself is already saved.
+      if (value) svc.setMemberFlag(m.userId || m.id, true).catch(() => {})
+    } catch (err) {
+      alert(err?.message || 'Could not save that membership ID — please try again.')
     } finally {
       setSavingId(null)
     }

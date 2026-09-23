@@ -27,6 +27,17 @@ function friendlyError(err) {
   return err?.message?.replace('Firebase: ', '') || 'Something went wrong. Please try again.'
 }
 
+const RETURN_KEY = 'acm-auth-return'
+const readReturnTo = () => {
+  try { return sessionStorage.getItem(RETURN_KEY) } catch { return null }
+}
+const rememberReturnTo = (path) => {
+  try { sessionStorage.setItem(RETURN_KEY, path) } catch { /* private mode — falls back to /dashboard */ }
+}
+const clearReturnTo = () => {
+  try { sessionStorage.removeItem(RETURN_KEY) } catch { /* nothing to clear */ }
+}
+
 const perks = [
   { icon: CalendarCheck, text: 'Register for workshops, talks and hackathons' },
   { icon: Ticket, text: 'Track every registration in one dashboard' },
@@ -36,19 +47,33 @@ const perks = [
 export default function Auth() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const { signInWithGoogle, isAuthed, loading: authLoading, isLive } = useAuth()
+  const { signInWithGoogle, isAuthed, loading: authLoading, isLive, authError, clearAuthError } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const redirectTo = location.state?.from || '/dashboard'
+  // Where to go after signing in. Kept in sessionStorage too, because the
+  // Safari/mobile redirect fallback leaves the page and loses router state.
+  const redirectTo = location.state?.from || readReturnTo() || '/dashboard'
 
   // Already signed in (or the session restores while sitting here) — move on.
   useEffect(() => {
-    if (!authLoading && isAuthed) navigate(redirectTo, { replace: true })
+    if (!authLoading && isAuthed) {
+      clearReturnTo()
+      navigate(redirectTo, { replace: true })
+    }
   }, [authLoading, isAuthed, navigate, redirectTo])
+
+  // A sign-in that failed during the full-page redirect comes back here.
+  useEffect(() => {
+    if (authError) {
+      setError(friendlyError(authError))
+      clearAuthError()
+    }
+  }, [authError, clearAuthError])
 
   async function handleGoogle() {
     setError('')
     setLoading(true)
+    rememberReturnTo(redirectTo)
     try {
       await signInWithGoogle()
       navigate(redirectTo, { replace: true })

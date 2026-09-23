@@ -94,7 +94,9 @@ async function commitReceiptBatch(batch) {
     await batch.commit()
   } catch (err) {
     if (err?.code === 'permission-denied') {
-      throw new Error('We couldn’t save your receipt. If this transaction ID was used before, enter the ID of this payment; otherwise please try again.')
+      // The UTR was already checked above, so this is something else — e.g. the
+      // fee changed while the form was open, or registration just closed.
+      throw new Error('We couldn’t save your receipt — the event’s details may have just changed. Refresh the page and try again, or contact the organisers.')
     }
     throw err
   }

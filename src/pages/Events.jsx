@@ -12,7 +12,7 @@ import { BrandBackdrop } from '../components/sections/BrandBackdrop'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
-import { effectiveStatus, eventStart, LIVE_WINDOW_MS } from '../lib/eventClock'
+import { effectiveStatus, startMs, isEnded, isLiveNow, useNow } from '../lib/eventClock'
 import { isProfileComplete } from '../lib/profile'
 import { isTkmCollege } from '../lib/orgData'
 import { cn } from '../lib/cn'
@@ -30,11 +30,6 @@ const filters = [
   { key: 'past', label: 'Past' },
 ]
 
-// Time helpers shared by the filters and the ordering below.
-const startMs = (e) => eventStart(e).getTime()
-const isEnded = (e, now) => now > startMs(e) + LIVE_WINDOW_MS
-const isLiveNow = (e, now) => now >= startMs(e) && now <= startMs(e) + LIVE_WINDOW_MS
-
 export default function Events() {
   const [filter, setFilter] = useState('all')
   const [registering, setRegistering] = useState(null)
@@ -42,14 +37,16 @@ export default function Events() {
   const navigate = useNavigate()
   const { eventId } = useParams()
   const { isAuthed, user } = useAuth()
-  const { events, loaded } = useData()
+  const { publicEvents: events, loaded } = useData()
   const { isRegistered, register, addTeamRegistration, markRegistrationPaid, unregister } = useRegistrations()
+  // Ticks, so filters, ordering and badges move on their own as windows open,
+  // close and events start or end while the page is open.
+  const now = useNow(30000)
 
   const list = useMemo(() => {
-    const now = Date.now()
     // Filter first.
     const match = (e) => {
-      const status = effectiveStatus(e)
+      const status = effectiveStatus(e, now)
       switch (filter) {
         case 'latest': return !isEnded(e, now)
         case 'open': return status === 'open' && !isEnded(e, now)
@@ -67,15 +64,13 @@ export default function Events() {
     const rank = (e) => {
       if (isEnded(e, now)) return 3
       if (isRegistered(e.id)) return 1
-      if (effectiveStatus(e) === 'closed') return 2
+      if (effectiveStatus(e, now) === 'closed') return 2
       return 0
     }
     return events
       .filter(match)
       .sort((a, b) => rank(a) - rank(b) || startMs(b) - startMs(a))
-  }, [filter, events, isRegistered])
-
-  const now = Date.now()
+  }, [filter, events, isRegistered, now])
 
   // The open event is derived from the URL, so /events/:id is shareable and the
   // back button closes the details view.

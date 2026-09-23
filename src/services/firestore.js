@@ -178,6 +178,12 @@ export async function updateUserAccess(uid, permissions) {
   if (isFirebaseConfigured) await updateDoc(doc(db, 'users', uid), { permissions })
 }
 
+// Admins / membership editors only (the rules allow them to touch just this
+// field on someone else's profile).
+export async function setMemberFlag(uid, acmMember) {
+  if (isFirebaseConfigured && uid) await updateDoc(doc(db, 'users', uid), { acmMember: !!acmMember })
+}
+
 // Self-service profile fields only — role, permissions and acmMember are never
 // writable here (acmMember is granted when a membership payment is verified).
 export async function updateUserProfile(uid, patch) {

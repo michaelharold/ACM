@@ -5,6 +5,7 @@ import * as pay from '../services/payments'
 import { isTkmCollege } from '../lib/orgData'
 import { isRazorpayMode } from '../lib/payments'
 import { holdsSeat } from '../lib/manualPay'
+import { effectiveStatus } from '../lib/eventClock'
 
 const RegistrationsContext = createContext(null)
 
@@ -49,6 +50,9 @@ export function RegistrationsProvider({ children }) {
 
   async function register(event, form = {}) {
     if (!event || isRegistered(event.id)) return null
+    // The form may have been open for a while — re-check the window now, so a
+    // submit after registration closed (or before it opened) is refused.
+    if (effectiveStatus(event) !== 'open') throw new Error('Registration for this event is closed.')
     // TKM-only events (the default) don't accept other colleges — checked
     // again here (not just in the UI) since this is what actually writes the
     // registration.
@@ -80,8 +84,11 @@ export function RegistrationsProvider({ children }) {
       college: form.college || '',
       department: form.department || '',
       year: form.year || '',
-      acmMember: !!form.isMember,
+      // Member only when the ID was actually verified; an unverified one is
+      // kept as a claim for the payment reviewer to check.
+      acmMember: !!form.membershipId,
       membershipId: form.membershipId || '',
+      claimedMembershipId: form.claimedMembershipId || '',
       date: new Date().toISOString().slice(0, 10),
       status: 'Confirmed',
       // 'pending' until verified (by an admin, or Razorpay's server); 'free'

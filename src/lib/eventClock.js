@@ -46,12 +46,31 @@ export function isFull(event) {
   return max > 0 && (Number(event?.registeredCount) || 0) >= max
 }
 
-// registrationStatus, but a full event always reads as 'closed' — same badge,
-// same filtering/sorting, same everything a normally-closed event gets. Use
-// this (not registrationStatus) anywhere that needs to know if people can
-// still register right now.
+// Time helpers shared by the events page, the home page and the admin lists.
+export const startMs = (event) => eventStart(event).getTime()
+export const isLiveNow = (event, now = Date.now()) => now >= startMs(event) && now <= startMs(event) + LIVE_WINDOW_MS
+export const isEnded = (event, now = Date.now()) => now > startMs(event) + LIVE_WINDOW_MS
+
+// registrationStatus, but a full event — or one that's already over — always
+// reads as 'closed': same badge, same filtering/sorting, same everything a
+// normally-closed event gets. (Without the "over" check, an event whose window
+// was left open past its date, or a manual 'open' status, stayed registerable
+// forever.) Use this (not registrationStatus) anywhere that needs to know if
+// people can still register right now.
 export function effectiveStatus(event, now = Date.now()) {
-  return isFull(event) ? 'closed' : registrationStatus(event, now)
+  if (isFull(event) || isEnded(event, now)) return 'closed'
+  return registrationStatus(event, now)
+}
+
+// A clock that re-renders its component every `ms`, so a page left open flips
+// badges and buttons by itself when a registration window opens or closes.
+export function useNow(ms = 15000) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), ms)
+    return () => clearInterval(t)
+  }, [ms])
+  return now
 }
 
 // Ticking clock for an event card: countdown until start, live flag afterwards.

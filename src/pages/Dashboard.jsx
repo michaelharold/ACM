@@ -254,7 +254,7 @@ export default function Dashboard() {
 
         <TicketCarousel items={ticketItems} holderName={displayName} />
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-[320px_1fr]">
+        <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
           {/* Profile */}
           <motion.aside
             initial={{ opacity: 0, y: 14 }}
@@ -442,7 +442,7 @@ export default function Dashboard() {
                 <Button as={Link} to="/events" size="sm" className="mt-4">Explore events</Button>
               </div>
             ) : (
-              <Reveal className="grid gap-4 sm:grid-cols-2" amount={0.1}>
+              <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2" amount={0.1}>
                 {myEvents.map(({ reg, event }) => {
                   const teamOpen = openTeams.has(reg.id)
                   return (

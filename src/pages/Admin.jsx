@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
   Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet, AlertCircle,
-  Loader2, UserX, FileText, Shuffle, Info, MessageCircle, School, UserRound, Mail, Phone, Send, Globe, GraduationCap, ReceiptText,
+  Loader2, UserX, FileText, Shuffle, Info, MessageCircle, School, UserRound, Mail, Phone, Send, Globe, GraduationCap, ReceiptText, Eye, EyeOff,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
@@ -19,7 +19,7 @@ import { ReceiptReviewModal } from '../components/payments/ReceiptReviewModal'
 import { fetchPendingReviews, fetchUpiAccounts } from '../services/payments'
 import { paymentState, PAYMENT_STATE_META } from '../lib/manualPay'
 import * as pay from '../services/payments'
-import { isRazorpayMode } from '../lib/payments'
+import { isRazorpayMode, isApiAvailable } from '../lib/payments'
 import { downloadCsv } from '../lib/csv'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -31,7 +31,7 @@ import { avatarDataUri } from '../lib/avatar'
 import { fitPoster } from '../lib/imagePrep'
 import { EVENT_GUIDELINE_MAX_IMAGES } from '../lib/storageBudget'
 import { formatDate, to24h, to12h } from '../lib/format'
-import { effectiveStatus, hasRegWindow, eventStart } from '../lib/eventClock'
+import { effectiveStatus, hasRegWindow, eventStart, isEnded, startMs } from '../lib/eventClock'
 import { departments as orgDepartments } from '../lib/orgData'
 import { ComposeMessageModal } from '../components/messages/Thread'
 import { MessageSquare, AlertTriangle, Search } from 'lucide-react'
@@ -72,7 +72,9 @@ export default function Admin() {
   const { events, addEvent, editEvent, removeEvent } = useData()
   const navigate = useNavigate()
   const [tab, setTab] = useState('overview')
-  const [regRows, setRegRows] = useState(seedParticipants)
+  // Demo mode shows sample rows; live mode starts empty and loads the real
+  // roster (only for those allowed to read it — see loadRegistrations).
+  const [regRows, setRegRows] = useState(() => (isLive ? [] : seedParticipants))
   const [unreadMsgs, setUnreadMsgs] = useState(0)
   // Receipts waiting for verification — drives the tab dot and Overview banner.
   const [pendingReviews, setPendingReviews] = useState(0)
@@ -101,7 +103,15 @@ export default function Admin() {
   // Pulled out so an admin team edit (add/remove member, delete team) can
   // refresh the roster on demand, not just on first mount.
   async function loadRegistrations() {
-    const live = await svc.fetchAllRegistrations()
+    // Only registrations readers can list them — for anyone else the rules deny
+    // the query, which used to surface as an unhandled rejection.
+    if (!can('registrations')) return
+    let live
+    try {
+      live = await svc.fetchAllRegistrations()
+    } catch {
+      return // keep whatever is showing; the Registrations tab has its own state
+    }
     if (!live) return // null → mock mode, keep seedParticipants
     setRegRows(
       live.map((r) => ({
@@ -134,6 +144,7 @@ export default function Admin() {
         amountDue: r.amountDue,
         upiAccountId: r.upiAccountId || '',
         membershipId: r.membershipId || '',
+        claimedMembershipId: r.claimedMembershipId || '',
         rejectReason: r.rejectReason || '',
         reviewedBy: r.reviewedBy || '',
         reviewedAt: r.reviewedAt || null,
@@ -148,7 +159,12 @@ export default function Admin() {
   useEffect(() => {
     loadRegistrations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [user?.id, can('registrations')])
+
+  // Signed-out visitors go to sign in, then come straight back here.
+  useEffect(() => {
+    if (isLive && !loading && !user) navigate('/auth', { replace: true, state: { from: '/admin' } })
+  }, [isLive, loading, user, navigate])
 
   // Unread count for the overview tile; the Messages panel owns the full inbox.
   // Editors without the admin role can't read the inbox — the rules deny it —
@@ -203,25 +219,32 @@ export default function Admin() {
 
   const cycleStatus = (e) =>
     editEvent(e.id, { status: statusCycle[(statusCycle.indexOf(e.status) + 1) % 3] })
-  const handleAdd = () =>
-    addEvent({
+      .catch((err) => alert(err?.message || 'Could not change the status — please try again.'))
+  const handleAdd = () => {
+    // Two weeks out at 10:00 local time; registration opens now and closes when
+    // the event starts. It's saved as a DRAFT — hidden from the public site
+    // until the admin fills it in and switches on "Show on website".
+    const start = new Date(Date.now() + 12096e5)
+    start.setHours(10, 0, 0, 0)
+    return addEvent({
       name: 'Untitled Event',
       poster: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=800&auto=format&fit=crop',
-      date: new Date(Date.now() + 12096e5).toISOString().slice(0, 10),
+      date: toLocalInput(start).slice(0, 10),
       time: '10:00 AM',
       venue: 'TBD',
       shortDescription: 'Draft event — edit details.',
       description: '',
       status: 'coming-soon',
       fee: 0,
-      deadline: new Date(Date.now() + 6048e5).toISOString().slice(0, 10),
+      draft: true,
       // Registration window drives the Open/Coming Soon/Closed badge on its own.
       regOpens: toLocalInput(new Date()),
-      regCloses: toLocalInput(new Date(Date.now() + 12096e5)),
+      regCloses: toLocalInput(start),
       speakers: [],
       external: false,
       externalUrl: '',
     })
+  }
 
   // Registrations whose payment is stuck 'pending' (possible money-taken-but-
   // -not-recorded case) — surfaced so an admin reconciles them with Razorpay.
@@ -326,7 +349,8 @@ const inputCls =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-acm-400 dark:border-neutral-700 dark:bg-neutral-800'
 
 function Overview({ stats, events, paymentAlerts = 0, onReviewAlerts, reviewCount = 0, onOpenReviews }) {
-  const upcoming = [...events].sort((a, b) => (a.date || '').localeCompare(b.date || '')).slice(0, 4)
+  // Soonest first, finished events left out.
+  const upcoming = events.filter((e) => !isEnded(e)).sort((a, b) => startMs(a) - startMs(b)).slice(0, 4)
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       {reviewCount > 0 && (
@@ -433,6 +457,8 @@ function EventEditor({ event, onSave }) {
     whatsappLink: event.whatsappLink || '',
     // Defaults closed (TKM-only) — an admin has to deliberately open it up.
     interCollege: !!event.interCollege,
+    // Saved as the event's `draft` flag — drafts are hidden from the public site.
+    isDraft: !!event.draft,
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -513,7 +539,7 @@ function EventEditor({ event, onSave }) {
   function validate(d) {
     if (!d.name?.trim()) return 'Give the event a name.'
     if (!d.date) return 'Pick an event date.'
-    const todayStr = new Date().toISOString().slice(0, 10)
+    const todayStr = toLocalInput(new Date()).slice(0, 10) // local date, not UTC
     if (d.date !== event.date && d.date < todayStr) return 'The event date can’t be in the past.'
     if (d.external) {
       if (!d.externalUrl?.trim()) return 'An external event needs its registration URL.'
@@ -541,9 +567,10 @@ function EventEditor({ event, onSave }) {
     const opens = d.regOpens ? new Date(d.regOpens).getTime() : null
     const closes = d.regCloses ? new Date(d.regCloses).getTime() : null
     if (opens && closes && opens > closes) return 'Registration “Opens” must be before “Closes”.'
-    if (opens && d.date) {
+    if (d.date) {
       const start = eventStart(d).getTime()
-      if (!Number.isNaN(start) && start < opens) return 'The event start time should be after registration opens.'
+      if (opens && !Number.isNaN(start) && start < opens) return 'The event start time should be after registration opens.'
+      if (closes && !Number.isNaN(start) && closes > start) return 'Registration should close by the time the event starts — set “Closes” to the start time or earlier.'
     }
     if (d.guidelinesEnabled && !d.guidelinesText?.trim()) {
       return 'Guidelines are empty — add the text, or turn off "Publish guidelines".'
@@ -562,8 +589,10 @@ function EventEditor({ event, onSave }) {
     try {
       // Numbers are clamped so a stray "-" or blank can't be saved (and a fee
       // never reaches Razorpay negative). Max 0 = unlimited.
+      const { isDraft, ...fields } = draft
       await onSave({
-        ...draft,
+        ...fields,
+        draft: !!isDraft,
         fee: Math.max(0, Number(draft.fee) || 0),
         acmDiscount: Math.max(0, Number(draft.acmDiscount) || 0),
         maxRegistrations: Math.max(0, Math.floor(Number(draft.maxRegistrations) || 0)),
@@ -576,6 +605,8 @@ function EventEditor({ event, onSave }) {
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      setFormErr(err?.message || 'Could not save the event — please try again.')
     } finally {
       setSaving(false)
     }
@@ -588,9 +619,11 @@ function EventEditor({ event, onSave }) {
     // any aspect ratio, and a raw phone photo is megabytes once base64-encoded,
     // which would push the event document past Firestore's 1 MB cap.
     try {
-      onSave({ poster: await fitPoster(file) })
-    } catch {
-      /* not a readable image — leave the existing poster in place */
+      await onSave({ poster: await fitPoster(file) })
+      setFormErr('')
+    } catch (err) {
+      // Unreadable image or a failed save — say so, and keep the old poster.
+      setFormErr(err?.message || 'Could not update the poster — please try another image.')
     } finally {
       e.target.value = ''
     }
@@ -598,6 +631,29 @@ function EventEditor({ event, onSave }) {
 
   return (
     <div className="space-y-3.5 border-t border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-950/40">
+      {/* Publish switch — a new event starts as a hidden draft. */}
+      <div className={cn(
+        'flex items-center justify-between gap-3 rounded-xl border p-4',
+        draft.isDraft
+          ? 'border-amber-200 bg-amber-50 dark:border-amber-500/25 dark:bg-amber-500/10'
+          : 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/25 dark:bg-emerald-500/10',
+      )}>
+        <div className="flex min-w-0 items-center gap-3">
+          {draft.isDraft
+            ? <EyeOff className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            : <Eye className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />}
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">{draft.isDraft ? 'Draft — hidden from the website' : 'Published — visible on the website'}</div>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              {draft.isDraft
+                ? 'Fill in the details, switch this on, then Save details to publish.'
+                : 'Visitors see this event; registration opens and closes with the window below.'}
+            </p>
+          </div>
+        </div>
+        <Switch on={!draft.isDraft} onClick={() => setDraft((d) => ({ ...d, isDraft: !d.isDraft }))} />
+      </div>
+
       <FormSection icon={CalendarDays} title="Basics" hint="The core facts shown on the event card and details page.">
         <Field label="Event name" hint="The name shown everywhere — the events page, posters, and registration." className="sm:col-span-2">
           <input className={cn(inputCls, 'mt-1')} value={draft.name} onChange={set('name')} />
@@ -747,6 +803,12 @@ function EventEditor({ event, onSave }) {
               />
               <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200">Group event (register as a team)</span>
             </label>
+            {draft.isGroup && !isApiAvailable && (
+              <p className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Team registration and Random Grouping run on the website’s server (/api), which isn’t deployed on this site yet — until it is, people can’t register teams for this event online.
+              </p>
+            )}
             {draft.isGroup && (
               <div className="mt-3 grid gap-3.5 rounded-lg border border-neutral-200 bg-neutral-50 p-3 sm:grid-cols-2 dark:border-neutral-700 dark:bg-neutral-800/60">
                 <Field label="Minimum members per team" hint="Counts include the person registering.">
@@ -1032,7 +1094,10 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
             <div className="flex flex-wrap items-center gap-4 p-4">
               <img src={e.poster} alt="" className="h-12 w-12 rounded-lg object-cover" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{e.name}</p>
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <span className="truncate">{e.name}</span>
+                  {e.draft && <Badge tone="amber">Draft</Badge>}
+                </p>
                 <p className="text-xs text-neutral-400">{formatDate(e.date)} · {e.time} · {e.venue}</p>
               </div>
               {auto ? (
@@ -1087,7 +1152,24 @@ function SiteContentPanel() {
   const { content, updateContent } = useData()
   const [draft, setDraft] = useState(content)
   const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveErr, setSaveErr] = useState('')
   const mark = (next) => { setDraft(next); setDirty(true) }
+
+  async function save() {
+    // Clean the department list on the way out: trim, drop blanks, de-dupe.
+    const cleaned = [...new Set((draft.departments || []).map((d) => d.trim()).filter(Boolean))]
+    setSaving(true)
+    setSaveErr('')
+    try {
+      await updateContent({ ...draft, departments: cleaned })
+      setDirty(false)
+    } catch (err) {
+      setSaveErr(err?.message || 'Could not save — please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const setStat = (i, p) => mark({ ...draft, stats: draft.stats.map((s, j) => (j === i ? { ...s, ...p } : s)) })
   const setGoal = (i, p) => mark({ ...draft, goals: draft.goals.map((g, j) => (j === i ? { ...g, ...p } : g)) })
@@ -1110,14 +1192,14 @@ function SiteContentPanel() {
           <h3 className="font-semibold tracking-tight">Site content</h3>
           <p className="mt-1 text-xs text-neutral-400">Edit the front-page copy — headline, vision/mission/values, why-join cards, stats and the ticker. Live on the site, no code.</p>
         </div>
-        <Button size="sm" disabled={!dirty} onClick={() => {
-          // Clean the department list on the way out: trim, drop blanks, de-dupe.
-          const cleaned = [...new Set((draft.departments || []).map((d) => d.trim()).filter(Boolean))]
-          updateContent({ ...draft, departments: cleaned })
-          setDirty(false)
-        }}>
-          <Save className="h-4 w-4" /> {dirty ? 'Save changes' : 'Saved'}
+        <Button size="sm" disabled={!dirty || saving} onClick={save}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
         </Button>
+        {saveErr && (
+          <p className="flex w-full items-start gap-1.5 text-xs text-rose-600 dark:text-rose-300">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {saveErr}
+          </p>
+        )}
       </div>
 
       <div className="space-y-8 p-5">
@@ -1358,12 +1440,22 @@ function AccessPanel({ isLive }) {
   const [q, setQ] = useState('')
   const [grant, setGrant] = useState('all') // all | any | none | <grantKey>
 
-  function toggle(u, key) {
+  async function toggle(u, key) {
     const permissions = { ...(u.permissions || {}), [key]: !u.permissions?.[key] }
+    const prev = rows
     const next = rows.map((r) => (r.id === u.id ? { ...r, permissions } : r))
     setRows(next)
-    if (isLive) svc.updateUserAccess(u.id, permissions)
-    else localStorage.setItem('acm-demo-users', JSON.stringify(next))
+    if (!isLive) {
+      localStorage.setItem('acm-demo-users', JSON.stringify(next))
+      return
+    }
+    try {
+      await svc.updateUserAccess(u.id, permissions)
+    } catch (err) {
+      // Optimistic, but never leave a grant looking given when it wasn't.
+      setRows(prev)
+      alert(err?.message || 'Could not change that access — please try again.')
+    }
   }
 
   const members = rows.filter((u) => u.role !== 'admin')
@@ -1649,7 +1741,13 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
                   <td className="px-5 py-3.5 text-neutral-600 dark:text-neutral-300">{p.event}</td>
                   <td className="px-5 py-3.5 text-neutral-600 dark:text-neutral-300">{p.department}</td>
                   <td className="px-5 py-3.5">
-                    {p.acmMember ? <Badge tone="blue">Member</Badge> : <span className="text-neutral-400">—</span>}
+                    {p.acmMember ? (
+                      <Badge tone="blue">Member</Badge>
+                    ) : p.claimedMembershipId ? (
+                      <span title={`Claimed ID ${p.claimedMembershipId} — not verified`}><Badge tone="amber">Claimed</Badge></span>
+                    ) : (
+                      <span className="text-neutral-400">—</span>
+                    )}
                   </td>
                   <td className="px-5 py-3.5">
                     <Badge tone={p.status === 'Confirmed' ? 'green' : 'amber'} dot={p.status === 'Confirmed'}>{p.status}</Badge>

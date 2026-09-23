@@ -16,9 +16,10 @@ export const isRazorpayMode = PAYMENT_MODE === 'razorpay' && !!razorpayKeyId
 // Older name still imported in places: "is Razorpay checkout live".
 export const isPaymentConfigured = isRazorpayMode
 // Whether our Vercel /api is deployed — membership-ID verification and team
-// registration need it in either payment mode. The Razorpay key used to be the
-// only signal; VITE_API_ENABLED=1 states it explicitly.
-export const isApiAvailable = !!razorpayKeyId || import.meta.env.VITE_API_ENABLED === '1'
+// registration need it. Razorpay mode can't work without it; otherwise it's
+// opt-in (VITE_API_ENABLED=1), since a plain static host (Firebase Hosting)
+// has no /api and the UI must fall back instead of calling it.
+export const isApiAvailable = isRazorpayMode || import.meta.env.VITE_API_ENABLED === '1'
 
 const CHECKOUT_SRC = 'https://checkout.razorpay.com/v1/checkout.js'
 let scriptPromise = null
@@ -50,6 +51,7 @@ export async function validateMembership({ eventId, membershipId }) {
 // against real accounts and creates one registration for the whole team.
 // Resolves with { id, paymentStatus }; rejects with a readable error otherwise.
 export async function registerTeam({ eventId, teamName, teammates }) {
+  if (!isApiAvailable) throw new Error('Online team registration isn’t available yet — please contact the organisers to register your team.')
   const token = await idToken()
   return post('/api/register-team', { eventId, teamName, teammates }, token)
 }

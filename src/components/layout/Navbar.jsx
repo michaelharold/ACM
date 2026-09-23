@@ -37,7 +37,7 @@ export function Navbar() {
   const userMenuRef = useRef(null)
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { user, logout, isAuthed } = useAuth()
+  const { user, logout, isAuthed, loading: authLoading } = useAuth()
   // Surface the two most-wanted shortcuts right in the bar: an admin/editor can
   // jump straight to their panel, and a signed-in non-member sees a Join ACM CTA.
   const isPrivileged = isAuthed && (user?.role === 'admin' || Object.values(user?.permissions || {}).some(Boolean))
@@ -189,7 +189,11 @@ export function Navbar() {
             </Button>
           )}
 
-          {!isAuthed ? (
+          {authLoading ? (
+            // Session still restoring — show a placeholder, not "Login / Sign Up"
+            // flashing up for someone who's actually signed in.
+            <span className="hidden h-9 w-24 animate-pulse rounded-xl bg-neutral-100 sm:block dark:bg-neutral-800" />
+          ) : !isAuthed ? (
             <Button as={Link} to="/auth" size="sm" className="hidden sm:inline-flex">
               Login / Sign Up
             </Button>
@@ -338,7 +342,7 @@ export function Navbar() {
 
             <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3 dark:border-neutral-800">
               <SocialLinks size="sm" />
-              {!isAuthed && (
+              {!isAuthed && !authLoading && (
                 <Button as={Link} to="/auth" size="sm" onClick={() => setOpen(false)}>
                   Login / Sign Up
                 </Button>

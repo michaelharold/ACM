@@ -5,7 +5,7 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { PosterImage } from './PosterImage'
 import { statusMeta } from '../../data/mock'
-import { effectiveStatus } from '../../lib/eventClock'
+import { effectiveStatus, hasRegWindow, useNow } from '../../lib/eventClock'
 import { formatDateLong, formatDateTime, normalizeUrl } from '../../lib/format'
 import { fetchEventGuidelineImages } from '../../services/firestore'
 import { useAuth } from '../../context/AuthContext'
@@ -27,6 +27,9 @@ function Fact({ icon: Icon, label, value }) {
 
 export function EventDetailsModal({ event, open, onClose, onRegister, registered }) {
   const { user } = useAuth()
+  // Re-render as time passes, so "Register Now" enables/disables by itself when
+  // the registration window opens or closes while the modal is open.
+  const now = useNow()
   // Guideline images live in their own collection, so they're fetched per
   // event rather than arriving on the event object itself. This effect must
   // run before the `!event` early return below (hooks can't be conditional).
@@ -40,7 +43,7 @@ export function EventDetailsModal({ event, open, onClose, onRegister, registered
 
   if (!event) return null
   // A full event reads exactly like a normally-closed one — see EventCard.
-  const status = effectiveStatus(event)
+  const status = effectiveStatus(event, now)
   const meta = statusMeta[status]
   const isExternal = !!event.external
   const externalHref = normalizeUrl(event.externalUrl)
@@ -50,8 +53,10 @@ export function EventDetailsModal({ event, open, onClose, onRegister, registered
   // profile (Events.jsx's handleRegister), same order as every other gate.
   const ineligible = !isExternal && !event.interCollege && !!user?.college && !isTkmCollege(user.college)
   const canRegister = status === 'open' && !registered && !ineligible
-  // Prefer the registration window's close time; fall back to the legacy deadline.
-  const deadlineLabel = event.regCloses ? formatDateTime(event.regCloses) : formatDateLong(event.deadline)
+  // The registration window's close time. The legacy `deadline` is only shown
+  // for old events with no window at all — it was never enforced, so showing it
+  // beside a real window just contradicted it.
+  const deadlineLabel = event.regCloses ? formatDateTime(event.regCloses) : (hasRegWindow(event) ? '' : formatDateLong(event.deadline))
 
   return (
     <Modal open={open} onClose={onClose} size="xl">

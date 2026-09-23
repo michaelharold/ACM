@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import * as mock from '../data/mock'
 import * as svc from '../services/firestore'
 import { isFirebaseConfigured } from '../lib/firebase'
@@ -33,6 +33,14 @@ export function DataProvider({ children }) {
   const [gallery, setGallery] = useState([])
   const [content, setContent] = useState(defaultContent)
   const [loaded, setLoaded] = useState(!isFirebaseConfigured)
+  // Set when the site-content read fails: saving then would write the built-in
+  // defaults over the real settings, so saves are refused until a reload.
+  const [contentLoadFailed, setContentLoadFailed] = useState(false)
+
+  // What visitors see: everything except events an admin is still drafting
+  // (a new event starts as a draft, so a half-filled "Untitled Event" is never
+  // public or registerable). Admin screens keep using `events`.
+  const publicEvents = useMemo(() => events.filter((e) => !e.draft), [events])
 
   // The single source of truth for department options across the whole app
   // (profile, event registration, …). Admin-managed via Site Content; falls
@@ -50,7 +58,9 @@ export function DataProvider({ children }) {
       svc.fetchExecomGroups().then(set(setExecomGroups)),
       svc.fetchTestimonials().then(set(setTestimonials)),
       svc.fetchGallery().then(set(setGallery)),
-      svc.fetchSiteContent().then((sc) => { if (alive && sc) setContent((c) => ({ ...c, ...sc })) }),
+      svc.fetchSiteContent()
+        .then((sc) => { if (alive && sc) setContent((c) => ({ ...c, ...sc })) })
+        .catch((err) => { if (alive) setContentLoadFailed(true); throw err }),
     ].map((p) => p.catch((err) => {
       // eslint-disable-next-line no-console
       console.warn('[ACM] Firestore fetch failed for one source.', err)
@@ -80,9 +90,18 @@ export function DataProvider({ children }) {
 
   // ── Site content + execom mutators (admin / editors) ───────
   async function updateContent(patch) {
+    if (contentLoadFailed) {
+      throw new Error('The current site settings didn’t load, so saving now could overwrite them. Refresh the page and try again.')
+    }
+    const prev = content
     const next = { ...content, ...patch }
     setContent(next)
-    await svc.saveSiteContent(next)
+    try {
+      await svc.saveSiteContent(next)
+    } catch (err) {
+      setContent(prev) // don't leave the screen showing something that wasn't saved
+      throw err
+    }
   }
   async function updateExecom(groups) {
     setExecomGroups(groups) // paint immediately with the local (base64) photos
@@ -110,6 +129,7 @@ export function DataProvider({ children }) {
     <DataContext.Provider
       value={{
         events,
+        publicEvents,
         execomGroups,
         testimonials,
         gallery,

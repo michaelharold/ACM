@@ -7,19 +7,25 @@ import { Button } from '../ui/Button'
 import { Reveal } from '../ui/Reveal'
 import SplitText from '../reactbits/SplitText'
 import { useData } from '../../context/DataContext'
+import { effectiveStatus, isEnded, startMs, useNow } from '../../lib/eventClock'
 
 // Home-page preview of what's next — the three most relevant events,
 // with the full catalogue one click away.
 export function UpcomingEvents() {
-  const { events } = useData()
+  const { publicEvents: events } = useData()
   const navigate = useNavigate()
+  const now = useNow(60000)
 
+  // Live status (from the registration window), finished events left out,
+  // then soonest first — the stored `status` field is only a fallback for
+  // events without a window, so ranking by it surfaced stale events.
   const featured = useMemo(() => {
     const rank = { open: 0, 'coming-soon': 1, closed: 2 }
-    return [...events]
-      .sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3) || new Date(a.date) - new Date(b.date))
+    return events
+      .filter((e) => !isEnded(e, now))
+      .sort((a, b) => rank[effectiveStatus(a, now)] - rank[effectiveStatus(b, now)] || startMs(a) - startMs(b))
       .slice(0, 3)
-  }, [events])
+  }, [events, now])
 
   return (
     <section id="upcoming" className="scroll-mt-24 py-24 sm:py-28">

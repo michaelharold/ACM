@@ -88,6 +88,9 @@ export function AuthProvider({ children }) {
     }
   })
   const [loading, setLoading] = useState(isFirebaseConfigured)
+  // A sign-in error that happened during a full-page redirect (Safari/mobile
+  // fallback) — there's no caller left to catch it, so the Auth page shows it.
+  const [authError, setAuthError] = useState(null)
 
   // Live mode: subscribe to Firebase auth state and hydrate the profile.
   useEffect(() => {
@@ -95,14 +98,22 @@ export function AuthProvider({ children }) {
     // Complete any sign-in that used the redirect fallback (Safari/mobile).
     // onAuthStateChanged below then hydrates the profile; this just settles the
     // pending redirect and swallows the "no redirect in progress" case.
-    getRedirectResult(auth).catch(() => {})
+    getRedirectResult(auth).catch((err) => setAuthError(err))
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
+        // Hold route guards in "loading" while the profile loads, so a fresh
+        // sign-in doesn't bounce /dashboard → /auth → /dashboard.
+        setLoading(true)
+        let profile
         try {
-          setUser(await ensureProfile(fbUser))
+          profile = await ensureProfile(fbUser)
         } catch {
-          setUser({ id: fbUser.uid, ...defaultProfile({ name: fbUser.displayName, email: fbUser.email, avatar: fbUser.photoURL }) })
+          profile = { id: fbUser.uid, ...defaultProfile({ name: fbUser.displayName, email: fbUser.email, avatar: fbUser.photoURL }) }
         }
+        // A slow profile load must never overwrite a newer session (sign-out,
+        // or a different account signing in meanwhile).
+        if (auth.currentUser?.uid !== fbUser.uid) return
+        setUser(profile)
       } else {
         setUser(null)
       }
@@ -205,6 +216,8 @@ export function AuthProvider({ children }) {
       value={{
         user,
         loading,
+        authError,
+        clearAuthError: () => setAuthError(null),
         isAuthed: !!user,
         isLive: isFirebaseConfigured,
         signInWithGoogle,

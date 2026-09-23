@@ -4,14 +4,15 @@ import { ArrowRight, CalendarDays, Users, MessageSquare } from 'lucide-react'
 import { SectionHeading } from '../SectionHeading'
 import { Reveal, Item } from '../ui/Reveal'
 import { useData } from '../../context/DataContext'
+import { effectiveStatus } from '../../lib/eventClock'
 
 // The three sections that live on their own routes. Everything else on the home
 // page is a scroll target; these are the doors out of it.
 export function ExploreMore() {
-  const { events, execomGroups } = useData()
+  const { publicEvents: events, execomGroups } = useData()
 
   const memberCount = execomGroups.reduce((n, g) => n + (g.members?.length || 0), 0)
-  const openCount = events.filter((e) => e.status === 'open').length
+  const openCount = events.filter((e) => effectiveStatus(e) === 'open').length
 
   const cards = [
     {

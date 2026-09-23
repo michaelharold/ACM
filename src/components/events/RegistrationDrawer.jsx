@@ -16,6 +16,7 @@ import { PayToCard } from '../payments/PayToCard'
 import { ReceiptUploader } from '../payments/ReceiptUploader'
 import { useUpiAccount } from '../payments/useUpiAccount'
 import { cn } from '../../lib/cn'
+import { effectiveStatus } from '../../lib/eventClock'
 
 const emailRe = /\S+@\S+\.\S+/
 
@@ -174,6 +175,12 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
 
   async function submit() {
     setPayError('')
+    // Re-check the window at submit time (the drawer may have sat open past
+    // the close time) — covers team registrations too.
+    if (effectiveStatus(event) !== 'open') {
+      setPayError('Registration for this event has closed.')
+      return
+    }
     setSubmitting(true)
 
     // 1) Save the registration FIRST. If this write fails (backend/quota/rules
@@ -210,6 +217,9 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
         created = await onComplete?.(event, {
           ...form,
           membershipId: claimedId,
+          // Without the /api check, keep what they typed as a *claim* — the
+          // reviewer cross-checks it; it never grants the member flag itself.
+          claimedMembershipId: !claimedId && form.isMember ? form.membershipId.trim() : '',
           isMember: form.isMember,
           chargeAmount: payable,
           receipt: manualPay ? receipt : null,

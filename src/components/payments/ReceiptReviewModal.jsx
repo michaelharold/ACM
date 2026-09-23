@@ -40,8 +40,9 @@ export function ReceiptReviewModal({ open, onClose, kind, record, title, personN
     } else {
       setReceipt(false)
     }
-    if (canCheckMember && record.membershipId) {
-      findMemberByMembershipId(record.membershipId).then((m) => alive && setMember(m)).catch(() => {})
+    const claimed = record.membershipId || record.claimedMembershipId
+    if (canCheckMember && claimed) {
+      findMemberByMembershipId(claimed).then((m) => alive && setMember(m)).catch(() => {})
     }
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,11 +118,11 @@ export function ReceiptReviewModal({ open, onClose, kind, record, title, personN
                 <dd className={cn('break-words font-medium', k === 'UTR' && 'font-mono')}>{v}</dd>
               </div>
             ))}
-            {record.membershipId && (
+            {(record.membershipId || record.claimedMembershipId) && (
               <div>
-                <dt className="text-xs text-neutral-400">Claimed membership ID</dt>
+                <dt className="text-xs text-neutral-400">{record.membershipId ? 'Membership ID (verified at registration)' : 'Claimed membership ID (not verified)'}</dt>
                 <dd className="font-medium">
-                  {record.membershipId}
+                  {record.membershipId || record.claimedMembershipId}
                   {member === null && <span className="ml-1.5 text-rose-600 dark:text-rose-400">✗ no member with this ID</span>}
                   {member && <span className="ml-1.5 text-emerald-600 dark:text-emerald-400">✓ {member.name || 'member found'}</span>}
                 </dd>
