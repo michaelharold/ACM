@@ -15,11 +15,13 @@ const razorpayKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID
 export const isRazorpayMode = PAYMENT_MODE === 'razorpay' && !!razorpayKeyId
 // Older name still imported in places: "is Razorpay checkout live".
 export const isPaymentConfigured = isRazorpayMode
-// Whether our Vercel /api is deployed — membership-ID verification and team
-// registration need it. Razorpay mode can't work without it; otherwise it's
-// opt-in (VITE_API_ENABLED=1), since a plain static host (Firebase Hosting)
-// has no /api and the UI must fall back instead of calling it.
-export const isApiAvailable = isRazorpayMode || import.meta.env.VITE_API_ENABLED === '1'
+// Whether our Vercel /api is deployed — membership-ID verification, team
+// registration and Random Grouping need it. VITE_API_ENABLED ('1' / '0') says
+// so explicitly; without it, the Vercel project's Razorpay key (set alongside
+// the server's env) is the signal, as it always was. A static-only host must
+// build with VITE_API_ENABLED=0 so the UI falls back instead of calling /api.
+const apiFlag = import.meta.env.VITE_API_ENABLED
+export const isApiAvailable = isRazorpayMode || (apiFlag ? apiFlag === '1' : !!razorpayKeyId)
 
 const CHECKOUT_SRC = 'https://checkout.razorpay.com/v1/checkout.js'
 let scriptPromise = null
