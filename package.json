@@ -10,6 +10,8 @@
     "seed": "node scripts/seed.mjs",
     "verify": "node scripts/verify.mjs",
     "test": "node --test 'tests/unit/*.test.mjs'",
+    "dev:emu": "VITE_FIREBASE_EMULATORS=1 VITE_FIREBASE_PROJECT_ID=demo-acm-e2e vite --port 5174 --strictPort",
+    "test:e2e": "firebase emulators:exec --only auth,firestore --project demo-acm-e2e \"node scripts/e2e-payments.mjs\"",
     "test:rules": "firebase emulators:exec --only firestore --project demo-acm-rules \"node --test 'tests/rules/*.test.mjs'\""
   },
   "dependencies": {

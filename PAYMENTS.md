@@ -1,4 +1,51 @@
-# Payments (Razorpay) — complete setup, test & deploy guide
+# Payments
+
+## Current mode: manual UPI verification
+
+`PAYMENT_MODE` in `src/lib/payments.js` is `'manual'`:
+
+1. **Admin → Payments** — add one or more UPI/QR accounts (QR image + UPI ID).
+   The first one becomes the ★ default. Set the membership fee and which
+   account it's collected to.
+2. **Admin → Events → (event)** — when the event has a fee, pick
+   "Collect payment to": the default, another account, or
+   "+ Add new QR account…".
+3. **Payers** pay to the QR shown in the registration / membership form, then
+   upload the screenshot and the 12-digit UPI transaction ID (UTR). Each UTR
+   can be used only once. A paid registration holds its seat while it's under
+   review.
+4. **Admin → Verify payments** (admins; editors with the Registrations or
+   Membership grant) — open a receipt, check the UTR and amount against the
+   account statement, then **Approve** or **Reject** with a reason.
+   - Approving issues the ticket (dashboard carousel + WhatsApp link) or makes
+     them a member (assign the Membership ID in the Membership tab as before).
+   - Rejecting frees the seat and the UTR, and the payer can upload again.
+
+Receipts are compressed in the browser and stored inline in Firestore (one per
+document), so everything stays on the free Spark plan; the admin storage meter
+counts them.
+
+**The rules enforcing all of this live in `firestore.rules` and must be deployed**
+(`firebase deploy --only firestore:rules`) together with the new front-end build,
+or the live site will reject receipt uploads.
+
+Tests:
+
+| command | what it checks |
+|---|---|
+| `npm test` | pure helpers (UTR, UPI link, payment states…) |
+| `npm run test:rules` | security rules on the Firestore emulator |
+| `npm run test:e2e` | the full flow in Chromium against the Auth + Firestore emulators |
+
+`npm run dev:emu` runs the site against the emulators (start them with
+`firebase emulators:start --only auth,firestore --project demo-acm-e2e`).
+
+To switch back to Razorpay once it's approved: set `PAYMENT_MODE = 'razorpay'`
+in `src/lib/payments.js` and follow the Razorpay guide below.
+
+---
+
+# Razorpay (switched off) — complete setup, test & deploy guide
 
 Secure Razorpay payments for **event registrations** and **ACM membership**, with
 **no paid Firebase plan**. The frontend + a few tiny backend endpoints run

@@ -16,9 +16,9 @@ export function TicketCard({ reg, event, holderName }) {
           <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-amber-400/15 blur-3xl" />
 
           <div className="relative p-5">
-            <div className="flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-300/90">
-              <span>ACM TKMCE · Event pass</span>
-              <span className="font-mono tracking-normal text-amber-200/80">{code}</span>
+            <div className="flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300/90 sm:tracking-[0.25em]">
+              <span className="min-w-0 truncate">ACM TKMCE · Event pass</span>
+              <span className="shrink-0 whitespace-nowrap font-mono tracking-normal text-amber-200/80">{code}</span>
             </div>
             <h3 className="mt-3 line-clamp-2 text-xl font-bold leading-tight tracking-tight">{event.name}</h3>
 
