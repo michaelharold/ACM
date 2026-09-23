@@ -137,7 +137,7 @@ export default function Membership() {
         <SectionHeading
           eyebrow="Membership"
           title="Join ACM TKMCE"
-          description="Become a member of the chapter — unlock member-only events, workshops and a spot in the community."
+          description="Become a member of the chapter — get member discounts on events and workshops, and a spot in the community."
         />
 
         {phase === 'incomplete-profile' && <IncompleteProfile />}

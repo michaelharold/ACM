@@ -7,6 +7,7 @@ import { SocialLinks } from '../SocialLinks'
 import { Magnetic } from '../ui/Magnetic'
 import { scrollToTop } from '../../lib/smoothScroll'
 import { chapter } from '../../data/mock'
+import { useData } from '../../context/DataContext'
 
 const cols = [
   {
@@ -43,6 +44,8 @@ function FooterLink({ to, children }) {
 
 export function Footer() {
   const ref = useRef(null)
+  // Same admin-editable founding year the About section shows.
+  const { content } = useData()
   // Wordmark drifts sideways and lifts as the footer scrolls into view.
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end end'] })
   const markX = useTransform(scrollYProgress, [0, 1], [60, -30])
@@ -90,7 +93,7 @@ export function Footer() {
         </motion.div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-neutral-200 pt-6 text-sm text-neutral-500 sm:flex-row dark:border-neutral-800">
-          <p>© {new Date().getFullYear()} {chapter.name}. Est. {chapter.established}.</p>
+          <p>© {new Date().getFullYear()} {chapter.name}. Est. {content.established || chapter.established}.</p>
           <div className="flex items-center gap-4">
             <a href={`mailto:${chapter.socials.email}`} className="inline-flex items-center gap-2 hover:text-acm-600 dark:hover:text-acm-400">
               <Mail className="h-4 w-4" /> {chapter.socials.email}

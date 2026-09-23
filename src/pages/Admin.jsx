@@ -160,8 +160,8 @@ export default function Admin() {
             : 'This control center is restricted to chapter administrators and members with edit access.'}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
-          {!isLive && <Button onClick={() => loginAsAdmin()}>Continue as Admin (demo)</Button>}
-          {!isLive && <Button variant="secondary" onClick={() => loginAsEditor()}>Continue as Editor (demo)</Button>}
+          {!isLive && import.meta.env.DEV && <Button onClick={() => loginAsAdmin()}>Continue as Admin (demo)</Button>}
+          {!isLive && import.meta.env.DEV && <Button variant="secondary" onClick={() => loginAsEditor()}>Continue as Editor (demo)</Button>}
           <Button as={Link} to="/" variant="outline">Back home</Button>
         </div>
       </div>

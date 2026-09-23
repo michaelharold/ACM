@@ -26,7 +26,7 @@ export function ExploreMore() {
       to: '/execom',
       icon: Users,
       title: 'Execom',
-      copy: 'The students who plan, build and run everything — organised department by department.',
+      copy: 'The students who plan, build and run everything — organised team by team.',
       meta: `${memberCount} members across ${execomGroups.length} teams`,
       accent: 'from-violet-600 to-violet-400',
     },

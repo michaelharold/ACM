@@ -439,7 +439,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                             ACM member discount unavailable
                           </span>
                           <span className="mt-1 block text-xs text-neutral-400 dark:text-neutral-500">
-                            The discount is valid for TKMCE Student Chapter students only, for now.
+                            The discount is valid for TKM College of Engineering students only, for now.
                           </span>
                         </span>
                       </div>

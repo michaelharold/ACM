@@ -254,7 +254,7 @@ export default function Dashboard() {
               <img src={avatar} alt="" className="h-16 w-16 shrink-0 rounded-2xl object-cover" />
               <div className="min-w-0">
                 <h2 className="truncate font-semibold tracking-tight">{displayName}</h2>
-                {membership && (
+                {membership && membership.paymentStatus !== 'pending' && (
                   <Badge tone="blue" className="mt-1">
                     <BadgeCheck className="h-3.5 w-3.5" /> ACM Member
                   </Badge>
@@ -266,7 +266,7 @@ export default function Dashboard() {
               <form onSubmit={handleSave} className="mt-6 grid gap-4">
                 {needProfile && (
                   <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300">
-                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Complete your profile to register for events — we need a valid phone, department and year.
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Complete your profile to register for events — we need your college, department, year, gender and a verified phone number.
                   </p>
                 )}
                 <Input label="Full name" name="name" defaultValue={user.name || ''} required />
@@ -395,7 +395,7 @@ export default function Dashboard() {
                     <div className="text-sm">
                       <div className="font-semibold">Not a member yet</div>
                       <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-                        Join the chapter to unlock member-only events.
+                        Join the chapter to get member discounts on events.
                       </p>
                       <Button as={Link} to="/membership" size="sm" className="mt-3 w-full">
                         <BadgeCheck className="h-4 w-4" /> Join ACM

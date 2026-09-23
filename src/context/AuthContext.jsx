@@ -16,6 +16,14 @@ import { linkTeamRegistrations } from '../lib/teamAdmin'
 
 const AuthContext = createContext(null)
 
+// Mock sign-in (a fake demo account) is a local-development convenience only.
+// A production build missing its Firebase config must fail loudly instead of
+// silently signing every visitor in as the same demo person.
+const mockAllowed = !isFirebaseConfigured && import.meta.env.DEV
+function assertMockAllowed() {
+  if (!mockAllowed) throw new Error('Sign-in is unavailable right now — the site is missing its Firebase configuration.')
+}
+
 // Default profile fields for a freshly created user.
 const defaultProfile = (partial = {}) => ({
   name: 'ACM Member',
@@ -71,7 +79,7 @@ async function ensureProfile(fbUser, extra = {}) {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    if (isFirebaseConfigured) return null
+    if (!mockAllowed) return null
     try {
       const raw = localStorage.getItem('acm-user')
       return raw ? JSON.parse(raw) : null
@@ -111,8 +119,9 @@ export function AuthProvider({ children }) {
   }, [user])
 
   // ── Public API (identical shape in both modes) ─────────────
-  const mockUser = (partial) =>
-    setUser({
+  const mockUser = (partial) => {
+    assertMockAllowed()
+    return setUser({
       id: 'u_local',
       name: 'Aparna Menon',
       email: 'aparna@tkmce.ac.in',
@@ -124,6 +133,7 @@ export function AuthProvider({ children }) {
       permissions: {},
       ...partial,
     })
+  }
 
   async function signInWithGoogle() {
     if (!isFirebaseConfigured) return mockUser({})

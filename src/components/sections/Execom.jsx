@@ -157,7 +157,7 @@ export function Execom() {
         <SectionHeading
           eyebrow="Execom"
           title="The team behind ACM TKMCE"
-          description="The students who plan, build and run everything — organised department by department, in order of responsibility."
+          description="The students who plan, build and run everything — organised team by team, in order of responsibility."
         />
 
         <div className="mt-16 space-y-20">

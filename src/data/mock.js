@@ -52,17 +52,17 @@ export const goals = [
   {
     key: 'Vision',
     icon: 'Eye',
-    text: 'ACM will continue to be the premiere global computing society.To be the launchpad where every TKMCE student discovers and masters the craft of computing.',
+    text: 'ACM will continue to be the premier global computing society. To be the launchpad where every TKMCE student discovers and masters the craft of computing.',
   },
   {
     key: 'Mission',
     icon: 'Target',
-    text: 'ACM is a global scientific and educational organization dedicated to advancing the art, science, engineering, and application of computing, serving both professional and public interests by fostering the open exchange of information and by promoting the highest professional and ethical standards.Deliver high-signal events, mentorship and open-source culture that make world-class skills accessible on campus.',
+    text: 'ACM is a global scientific and educational organization dedicated to advancing the art, science, engineering, and application of computing, serving both professional and public interests by fostering the open exchange of information and by promoting the highest professional and ethical standards. Deliver high-signal events, mentorship and open-source culture that make world-class skills accessible on campus.',
   },
   {
     key: 'Values',
     icon: 'Gem',
-    text: '• Technical Excellence • Education and Technical Advancemen • Ethical Computing and Technology for Positive Impact• Diversity, Equity, and InclusionCuriosity over credentials, collaboration over competition, and shipping over talking.',
+    text: '• Technical Excellence • Education and Technical Advancement • Ethical Computing and Technology for Positive Impact • Diversity, Equity, and Inclusion • Curiosity over credentials, collaboration over competition, and shipping over talking.',
   },
 ]
 
@@ -213,7 +213,7 @@ export const testimonials = [
 export const events = [
   {
     id: 'ev1',
-    name: 'HackTKM 2025',
+    name: 'HackTKM 2026',
     poster: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=1200&auto=format&fit=crop',
     date: '2026-08-22',
     time: '9:00 AM',
@@ -223,7 +223,7 @@ export const events = [
       'HackTKM is the chapter’s flagship 24-hour hackathon bringing together 300+ builders across Kerala. Form a team, pick a track — AI, Web3, Sustainability or Open Innovation — and turn an idea into a working prototype overnight, with mentors on the floor and prizes for the boldest builds.',
     status: 'open',
     fee: 0,
-    deadline: '2025-08-18',
+    deadline: '2026-08-18',
     speakers: [
       { name: 'Dr. Latha Menon', designation: 'Professor, CSE', organization: 'TKMCE', photo: 'https://i.pravatar.cc/150?img=32' },
       { name: 'Rohit Sharma', designation: 'Staff Engineer', organization: 'Postman', photo: 'https://i.pravatar.cc/150?img=13' },
@@ -241,9 +241,9 @@ export const events = [
       'A practical, whiteboard-heavy session decoding how large systems actually scale — caching layers, load balancing, queues and databases. Walk out able to sketch the architecture of your favourite app.',
     status: 'coming-soon',
     fee: 0,
-    deadline: '2025-07-28',
+    deadline: '2026-07-18',
     speakers: [
-      { name: 'Arjun Das', designation: 'Secretary, ACM TKMCE', organization: 'TKMCE', photo: 'https://i.pravatar.cc/150?img=33' },
+      { name: 'Sivanandana J P', designation: 'Secretary, ACM TKMCE', organization: 'TKMCE', photo: 'https://i.pravatar.cc/150?img=33' },
     ],
   },
   {
@@ -275,9 +275,9 @@ export const events = [
       'A guided sprint where first-timers make their first open-source contribution — git basics, reading issues, and getting a PR reviewed and merged into a live project by day’s end.',
     status: 'open',
     fee: 0,
-    deadline: '2025-09-01',
+    deadline: '2026-07-27',
     speakers: [
-      { name: 'Kevin Joseph', designation: 'Web Lead, ACM TKMCE', organization: 'TKMCE', photo: 'https://i.pravatar.cc/150?img=15' },
+      { name: 'Michael Harold Sony', designation: 'Tech & Web Head, ACM TKMCE', organization: 'TKMCE', photo: 'https://i.pravatar.cc/150?img=15' },
     ],
   },
 ]
@@ -291,11 +291,11 @@ export const registrations = [
 
 // ── Admin: sample participant roster ─────────────────────────
 export const participants = [
-  { id: 'p1', name: 'Aparna Menon', email: 'aparna@tkmce.ac.in', event: 'HackTKM 2025', eventId: 'ev1', college: 'TKMCE', acmMember: true, status: 'Confirmed' },
-  { id: 'p2', name: 'Rahul Nair', email: 'rahul@tkmce.ac.in', event: 'HackTKM 2025', eventId: 'ev1', college: 'TKMCE', acmMember: true, status: 'Confirmed' },
+  { id: 'p1', name: 'Aparna Menon', email: 'aparna@tkmce.ac.in', event: 'HackTKM 2026', eventId: 'ev1', college: 'TKMCE', acmMember: true, status: 'Confirmed' },
+  { id: 'p2', name: 'Rahul Nair', email: 'rahul@tkmce.ac.in', event: 'HackTKM 2026', eventId: 'ev1', college: 'TKMCE', acmMember: true, status: 'Confirmed' },
   { id: 'p3', name: 'Sana Ali', email: 'sana@ceck.ac.in', event: 'Open Source Sprint', eventId: 'ev4', college: 'CE Chengannur', acmMember: false, status: 'Pending' },
   { id: 'p4', name: 'Joel George', email: 'joel@tkmce.ac.in', event: 'Open Source Sprint', eventId: 'ev4', college: 'TKMCE', acmMember: false, status: 'Confirmed' },
-  { id: 'p5', name: 'Nimisha R', email: 'nimisha@mgits.ac.in', event: 'HackTKM 2025', eventId: 'ev1', college: 'MG Institute', acmMember: true, status: 'Confirmed' },
+  { id: 'p5', name: 'Nimisha R', email: 'nimisha@mgits.ac.in', event: 'HackTKM 2026', eventId: 'ev1', college: 'MG Institute', acmMember: true, status: 'Confirmed' },
 ]
 
 // ── Gallery ──────────────────────────────────────────────────
@@ -304,7 +304,7 @@ export const gallery = [
   { id: 'g2', eventId: 'ev3', image: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=800&auto=format&fit=crop', caption: 'Design workshop' },
   { id: 'g3', eventId: 'ev4', image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=800&auto=format&fit=crop', caption: 'Open source sprint' },
   { id: 'g4', eventId: 'ev1', image: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=800&auto=format&fit=crop', caption: 'Midnight debugging' },
-  { id: 'g5', eventId: 'ev2', image: 'https://images.unsplash.com/photo-1515187029135-18ee286d815b?q=80&w=800&auto=format&fit=crop', caption: 'AI bootcamp' },
+  { id: 'g5', eventId: 'ev2', image: 'https://images.unsplash.com/photo-1515187029135-18ee286d815b?q=80&w=800&auto=format&fit=crop', caption: 'Systems design session' },
   { id: 'g6', eventId: 'ev2', image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=800&auto=format&fit=crop', caption: 'Team huddle' },
   { id: 'g7', eventId: 'ev3', image: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=800&auto=format&fit=crop', caption: 'Guest lecture' },
   { id: 'g8', eventId: 'ev4', image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop', caption: 'Mentor circles' },
@@ -312,8 +312,8 @@ export const gallery = [
 
 // ── Updates & announcements (home ticker) ────────────────────
 export const announcements = [
-  { id: 'a1', tag: 'New', text: 'HackTKM 2025 registrations are live — grab your spot' },
-  { id: 'a2', tag: 'Soon', text: 'Execom 2025–26 applications open next month' },
+  { id: 'a1', tag: 'New', text: 'HackTKM 2026 registrations are live — grab your spot' },
+  { id: 'a2', tag: 'Soon', text: 'Execom 2026–27 applications open next month' },
   { id: 'a3', tag: 'Update', text: 'ACM India Winter School shortlists announced' },
   { id: 'a4', tag: 'Weekly', text: 'CP circle every Friday, 5 PM · Seminar Hall' },
 ]
