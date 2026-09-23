@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown, School, UserRound, MessageCircle, ExternalLink } from 'lucide-react'
+import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown, School, UserRound, MessageCircle, ExternalLink, Upload } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Input, Select } from '../components/ui/Input'
@@ -19,11 +19,14 @@ import { years, genders, TKM_COLLEGE, isTkmCollege } from '../lib/orgData'
 import { isValidPhone, isProfileComplete } from '../lib/profile'
 import { isPhoneOtpEnabled, sendPhoneOtp, confirmPhoneOtp, clearRecaptcha } from '../lib/phoneAuth'
 import { fetchMembership, fetchUserMessages, markThreadRead } from '../services/firestore'
+import { TicketCarousel } from '../components/tickets/TicketCarousel'
+import { ReceiptUploadModal } from '../components/payments/ReceiptUploadModal'
+import { paymentState, hasTicket, needsReceipt, PAYMENT_STATE_META } from '../lib/manualPay'
 
 export default function Dashboard() {
   const { user, loading, logout, saveProfile } = useAuth()
   const { events, departments } = useData()
-  const { regs, refetch: refetchRegs } = useRegistrations()
+  const { regs, refetch: refetchRegs, resubmitReceipt } = useRegistrations()
   const navigate = useNavigate()
   const location = useLocation()
   // Arriving here from a "register" click on an incomplete profile: open the
@@ -45,6 +48,8 @@ export default function Dashboard() {
   // Profile inbox — messages from the chapter, with a red dot when unread.
   const [inbox, setInbox] = useState([])
   const [openMsg, setOpenMsg] = useState(null)
+  // Registration whose receipt the user is (re)uploading: { reg, event }.
+  const [uploadFor, setUploadFor] = useState(null)
   // Phone verification (controlled, so OTP state and the number stay in sync).
   const [phoneInput, setPhoneInput] = useState('')
   const [phoneVerifiedLocal, setPhoneVerifiedLocal] = useState(false)
@@ -211,6 +216,11 @@ export default function Dashboard() {
     },
   }))
 
+  // Verified (or free) registrations get a ticket in the carousel.
+  const ticketItems = myEvents.filter(({ reg }) => hasTicket(reg))
+  const memberVerified = !!membership && hasTicket(membership)
+  const memState = membership ? paymentState(membership) : null
+
   const profileRows = [
     { icon: Mail, label: 'Email', value: user.email },
     { icon: Phone, label: 'Phone', value: user.phone },
@@ -242,6 +252,8 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
+        <TicketCarousel items={ticketItems} holderName={displayName} />
+
         <div className="mt-10 grid gap-6 lg:grid-cols-[320px_1fr]">
           {/* Profile */}
           <motion.aside
@@ -254,7 +266,7 @@ export default function Dashboard() {
               <img src={avatar} alt="" className="h-16 w-16 shrink-0 rounded-2xl object-cover" />
               <div className="min-w-0">
                 <h2 className="truncate font-semibold tracking-tight">{displayName}</h2>
-                {membership && membership.paymentStatus !== 'pending' && (
+                {memberVerified && (
                   <Badge tone="blue" className="mt-1">
                     <BadgeCheck className="h-3.5 w-3.5" /> ACM Member
                   </Badge>
@@ -385,9 +397,13 @@ export default function Dashboard() {
                         <div className="text-neutral-500 dark:text-neutral-400">
                           {membership?.membershipId?.trim()
                             ? membership.membershipId
-                            : membership?.paymentStatus === 'pending'
-                              ? 'Assigned once your payment is confirmed.'
-                              : 'Will be updated soon.'}
+                            : memState === 'review'
+                              ? 'Your payment is under review — the ID is assigned once it’s verified.'
+                              : memState === 'rejected'
+                                ? <>Payment rejected{membership.rejectReason ? `: ${membership.rejectReason}` : ''}. <Link to="/membership" className="font-medium text-acm-600 underline dark:text-acm-400">Upload a new receipt</Link></>
+                                : memState === 'awaiting'
+                                  ? <>Payment pending. <Link to="/membership" className="font-medium text-acm-600 underline dark:text-acm-400">Upload your receipt</Link></>
+                                  : 'Will be updated soon.'}
                         </div>
                       </div>
                     </div>
@@ -455,11 +471,41 @@ export default function Dashboard() {
                               </p>
                             )}
                           </div>
-                          <Badge tone={reg.status === 'Attended' ? 'neutral' : 'green'} dot={reg.status === 'Confirmed'} className="mt-2">
-                            {reg.status}
-                          </Badge>
+                          {hasTicket(reg) ? (
+                            <Badge tone={reg.status === 'Attended' ? 'neutral' : 'green'} dot={reg.status === 'Confirmed'} className="mt-2">
+                              {reg.status}
+                            </Badge>
+                          ) : (
+                            <Badge tone={PAYMENT_STATE_META[paymentState(reg)].tone} className="mt-2">
+                              {PAYMENT_STATE_META[paymentState(reg)].label}
+                            </Badge>
+                          )}
                         </div>
                       </button>
+
+                      {!hasTicket(reg) && (
+                        <div className={cn(
+                          'flex items-center justify-between gap-3 border-t px-3.5 py-2.5 text-xs',
+                          paymentState(reg) === 'rejected'
+                            ? 'border-rose-100 bg-rose-50/70 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300'
+                            : 'border-amber-100 bg-amber-50/70 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200',
+                        )}>
+                          <span className="min-w-0">
+                            {paymentState(reg) === 'review'
+                              ? 'Payment under review — your ticket appears once it’s verified.'
+                              : paymentState(reg) === 'rejected'
+                                ? `Receipt rejected: ${reg.rejectReason || 'please upload a clearer receipt.'}`
+                                : reg.userId === user.id
+                                  ? 'Upload your payment receipt to complete registration.'
+                                  : 'Waiting for your team leader to upload the payment receipt.'}
+                          </span>
+                          {needsReceipt(reg) && reg.userId === user.id && (
+                            <Button size="sm" variant="outline" className="shrink-0" onClick={() => setUploadFor({ reg, event })}>
+                              <Upload className="h-3.5 w-3.5" /> Upload
+                            </Button>
+                          )}
+                        </div>
+                      )}
 
                       {reg.isTeam && reg.members?.length > 0 && (
                         <div className="border-t border-neutral-100 dark:border-neutral-800">
@@ -491,7 +537,7 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      {event.whatsappLink && (
+                      {event.whatsappLink && hasTicket(reg) && (
                         <a
                           href={normalizeUrl(event.whatsappLink)}
                           target="_blank"
@@ -553,6 +599,17 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      <ReceiptUploadModal
+        open={!!uploadFor}
+        onClose={() => setUploadFor(null)}
+        title={uploadFor?.event.name || 'Event'}
+        amount={uploadFor ? (uploadFor.reg.amountDue ?? (Number(uploadFor.event.fee) || 0)) : 0}
+        upiAccountId={uploadFor?.reg.upiAccountId || uploadFor?.event.upiAccountId || ''}
+        note={uploadFor?.event.name}
+        rejectReason={uploadFor && paymentState(uploadFor.reg) === 'rejected' ? uploadFor.reg.rejectReason : ''}
+        onSubmit={(receipt) => resubmitReceipt(uploadFor.reg, receipt, uploadFor.event)}
+      />
 
       <EventDetailsModal event={selected} open={!!selected} onClose={() => setSelected(null)} registered />
 
