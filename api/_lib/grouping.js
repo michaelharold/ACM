@@ -63,7 +63,7 @@ function chunk(list, size) {
 
 function teamDocFromMembers(ev, members, teamName) {
   const fee = Number(ev.fee) || 0
-  const anyPending = fee > 0 && members.some((m) => m.paymentStatus === 'pending')
+  const allSettled = members.every((m) => ['paid', 'free'].includes(m.paymentStatus))
   const first = members[0]
   return {
     userId: first.uid,
@@ -77,6 +77,7 @@ function teamDocFromMembers(ev, members, teamName) {
       uid: m.uid, name: m.name || '', email: m.email || '', phone: m.phone || '',
       department: m.department || '', college: m.college || '', year: m.year || '',
       role: 'member', paymentStatus: m.paymentStatus || '', paymentId: m.paymentId || '', paidAt: m.paidAt || null,
+      receiptId: m.receiptId || '', utr: m.utr || '',
     })),
     memberUids: members.map((m) => m.uid),
     teamSize: members.length,
@@ -84,7 +85,7 @@ function teamDocFromMembers(ev, members, teamName) {
     membershipId: '',
     date: new Date().toISOString().slice(0, 10),
     status: 'Confirmed',
-    paymentStatus: fee <= 0 ? 'free' : (anyPending ? 'pending' : 'paid'),
+    paymentStatus: fee <= 0 ? 'free' : (allSettled ? 'paid' : 'pending'),
     // Random-grouping capacity is enforced on individual sign-up (maxRegistrations
     // counts people, not teams — see RegistrationDrawer), so a formed team never
     // occupies its own counted slot.
@@ -114,7 +115,9 @@ export async function runGroupingForEvent(db, eventId) {
   if (ev.groupingRanAt) return { skipped: true, reason: 'already-ran' }
 
   const regsSnap = await db.collection('registrations').where('eventId', '==', eventId).get()
-  const soloDocs = regsSnap.docs.filter((d) => !d.data().isTeam)
+  // Only verified (or free) registrants are grouped — an unverified or rejected
+  // payment stays solo for an admin to place once it's sorted out.
+  const soloDocs = regsSnap.docs.filter((d) => !d.data().isTeam && ['paid', 'free'].includes(d.data().paymentStatus))
   if (soloDocs.length === 0) {
     await evSnap.ref.update({ groupingRanAt: new Date().toISOString() })
     return { skipped: false, teamsFormed: 0, grouped: 0, leftover: 0 }
@@ -127,7 +130,8 @@ export async function runGroupingForEvent(db, eventId) {
       return {
         regId: d.id, uid: r.userId, name: r.userName, email: r.userEmail, department: r.department,
         college: r.college || '', year: r.year || '',
-        paymentStatus: r.paymentStatus || '', paymentId: r.razorpayPaymentId || '', paidAt: r.paidAt || null,
+        paymentStatus: r.paymentStatus || '', paymentId: r.razorpayPaymentId || r.utr || '', paidAt: r.paidAt || null,
+        receiptId: r.receiptId || '', utr: r.utr || '',
       }
     }),
   )
@@ -181,7 +185,8 @@ export async function formGroupFromRegistrations(db, eventId, registrationIds) {
       return {
         regId: d.id, uid: r.userId, name: r.userName, email: r.userEmail, department: r.department,
         college: r.college || '', year: r.year || '',
-        paymentStatus: r.paymentStatus || '', paymentId: r.razorpayPaymentId || '', paidAt: r.paidAt || null,
+        paymentStatus: r.paymentStatus || '', paymentId: r.razorpayPaymentId || r.utr || '', paidAt: r.paidAt || null,
+        receiptId: r.receiptId || '', utr: r.utr || '',
       }
     }),
   )

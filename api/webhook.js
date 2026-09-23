@@ -53,6 +53,9 @@ export default async function handler(req, res) {
           razorpayOrderId: payment?.order_id || '',
           paidAt: FieldValue.serverTimestamp(),
         })
+        if (type === 'membership') {
+          await adminDb().collection('users').doc(refId).set({ acmMember: true }, { merge: true })
+        }
       }
     }
 

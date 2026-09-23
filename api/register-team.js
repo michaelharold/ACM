@@ -122,6 +122,10 @@ export default async function handler(req, res) {
       date: new Date().toISOString().slice(0, 10),
       status: 'Confirmed',
       paymentStatus: fee > 0 ? 'pending' : 'free',
+      // What the leader owes, and whether this team is holding a capacity slot
+      // (released if its payment receipt is rejected).
+      amountDue: fee,
+      seatHeld: maxTeams > 0,
       // When capped, this team occupies a slot the shared registeredCount tracks,
       // so the UI's "Registrations Full" works and a cancelled team frees a slot.
       counted: maxTeams > 0,

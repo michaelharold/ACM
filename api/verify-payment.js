@@ -48,6 +48,10 @@ export default async function handler(req, res) {
       razorpayOrderId: razorpay_order_id,
       paidAt: FieldValue.serverTimestamp(),
     })
+    // A paid membership makes them a member — the client can't set this itself.
+    if (type === 'membership') {
+      await db.collection('users').doc(refId).set({ acmMember: true }, { merge: true })
+    }
     return send(res, 200, { ok: true })
   } catch (err) {
     return send(res, err.status || 500, { error: err.message || 'Server error' })
