@@ -11,3 +11,6 @@ npm-debug.log*
 venv
 .vercel
 .worktrees
+
+# Firebase emulator logs
+*-debug.log
