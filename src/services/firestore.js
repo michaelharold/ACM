@@ -178,10 +178,11 @@ export async function updateUserAccess(uid, permissions) {
   if (isFirebaseConfigured) await updateDoc(doc(db, 'users', uid), { permissions })
 }
 
-// Self-service profile fields only — role and permissions are never writable here.
+// Self-service profile fields only — role, permissions and acmMember are never
+// writable here (acmMember is granted when a membership payment is verified).
 export async function updateUserProfile(uid, patch) {
-  const { name = '', googleName = '', phone = '', phoneVerified = false, department = '', year = '', college = '', gender = '', acmMember = false } = patch
-  const clean = { name, googleName, phone, phoneVerified: !!phoneVerified, department, year, college, gender, acmMember: !!acmMember }
+  const { name = '', googleName = '', phone = '', phoneVerified = false, department = '', year = '', college = '', gender = '' } = patch
+  const clean = { name, googleName, phone, phoneVerified: !!phoneVerified, department, year, college, gender }
   if (isFirebaseConfigured) await updateDoc(doc(db, 'users', uid), clean)
   return clean
 }
@@ -434,8 +435,10 @@ export async function fetchMembership(uid) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null
 }
 
-export async function createMembership(uid, data) {
-  const clean = {
+// The fields of a membership application, shared by the plain create below and
+// the create-with-receipt flow in services/payments.js.
+export function membershipRecord(uid, data) {
+  return {
     userId: uid,
     // The verified Google-account name, kept on the member record so the chapter
     // can cross-check it against the typed name.
@@ -448,8 +451,14 @@ export async function createMembership(uid, data) {
     department: data.department || '',
     className: data.className || '',
     paymentStatus: data.paymentStatus || 'pending',
+    amountDue: Math.max(0, Number(data.amountDue) || 0),
+    upiAccountId: data.upiAccountId || '',
     membershipId: '', // admin-assigned only
   }
+}
+
+export async function createMembership(uid, data) {
+  const clean = membershipRecord(uid, data)
   if (!isFirebaseConfigured) {
     const rec = { id: uid, ...clean, createdAt: new Date().toISOString() }
     try { localStorage.setItem(MEMBER_KEY(uid), JSON.stringify(rec)) } catch { /* quota */ }

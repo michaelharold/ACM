@@ -99,6 +99,41 @@ export async function fitWithin(file, { maxW = 900, maxH = 1350, maxBytes = 300 
 // Full event poster, uncropped, sized to live inside a Firestore document.
 export const fitPoster = (file) => fitWithin(file, { maxW: 900, maxH: 1350, maxBytes: 300 * 1024 })
 
+// Keep the whole picture (no crop), cap its long edge, and step the JPEG
+// quality — then the size — down until the data URI fits `maxChars`. Used where
+// every pixel region may matter: a payment screenshot's amount and UTR can sit
+// anywhere, and a QR code must survive intact. The canvas is filled white first
+// so a transparent PNG doesn't turn black as a JPEG.
+export async function fitUnderChars(file, { maxEdge = 1400, maxChars = 380_000 } = {}) {
+  if (!file?.type?.startsWith('image/')) throw new Error('Upload an image (a JPG or PNG screenshot).')
+  const img = await loadImage(file)
+  let scale = Math.min(1, maxEdge / Math.max(img.width, img.height))
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const w = Math.max(1, Math.round(img.width * scale))
+    const h = Math.max(1, Math.round(img.height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, w, h)
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(img, 0, 0, w, h)
+    for (const q of [0.82, 0.7, 0.58, 0.46]) {
+      const url = canvas.toDataURL('image/jpeg', q)
+      if (url.length <= maxChars) return url
+    }
+    scale *= 0.75
+  }
+  throw new Error('That image is too large to upload — try a cropped screenshot.')
+}
+
+// Payment screenshot — kept under the receipts rule's 400,000-character cap.
+export const prepareReceipt = (file) => fitUnderChars(file, { maxEdge: 1400, maxChars: 380_000 })
+
+// A UPI account's QR code — small, since every payer loads it.
+export const prepareQr = (file) => fitUnderChars(file, { maxEdge: 700, maxChars: 200_000 })
+
 // Deterministic-per-load shuffle so the strip looks fresh on every visit
 // without reordering mid-session (which would fight the marquee animation).
 export function shuffle(list) {
