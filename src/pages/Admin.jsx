@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarCog, Users, SlidersHorizontal, ShieldCheck, Plus, Trash2,
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
   Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet, AlertCircle,
-  Loader2, UserX, FileText, Shuffle, Info, MessageCircle, School, UserRound, Mail, Phone, Send, Globe, GraduationCap,
+  Loader2, UserX, FileText, Shuffle, Info, MessageCircle, School, UserRound, Mail, Phone, Send, Globe, GraduationCap, ReceiptText,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
@@ -14,6 +14,10 @@ import { MembershipPanel } from '../components/admin/MembershipPanel'
 import { PaymentsPanel } from '../components/admin/PaymentsPanel'
 import { StorageMeter } from '../components/admin/StorageMeter'
 import { UpiAccountForm } from '../components/payments/UpiAccountForm'
+import { PaymentReviewPanel } from '../components/admin/PaymentReviewPanel'
+import { ReceiptReviewModal } from '../components/payments/ReceiptReviewModal'
+import { fetchPendingReviews, fetchUpiAccounts } from '../services/payments'
+import { paymentState, PAYMENT_STATE_META } from '../lib/manualPay'
 import * as pay from '../services/payments'
 import { isRazorpayMode } from '../lib/payments'
 import { downloadCsv } from '../lib/csv'
@@ -56,6 +60,7 @@ const fmtDateTime = (c) => {
 }
 
 const paymentLabel = (r) => {
+  if (!isRazorpayMode) return PAYMENT_STATE_META[paymentState(r)].label
   const s = (r.paymentStatus || '').toLowerCase()
   if (s === 'paid') return 'Paid'
   if (s === 'pending') return 'Pending'
@@ -69,11 +74,14 @@ export default function Admin() {
   const [tab, setTab] = useState('overview')
   const [regRows, setRegRows] = useState(seedParticipants)
   const [unreadMsgs, setUnreadMsgs] = useState(0)
+  // Receipts waiting for verification — drives the tab dot and Overview banner.
+  const [pendingReviews, setPendingReviews] = useState(0)
 
   const isAdmin = user?.role === 'admin'
   const perms = user?.permissions || {}
   const can = (key) => isAdmin || !!perms[key]
   const hasAnyAccess = isAdmin || Object.values(perms).some(Boolean)
+  const canVerify = !isRazorpayMode && (can('registrations') || can('membership'))
 
   // Tabs are permission-gated: editors only see what they were granted.
   const tabs = [
@@ -83,6 +91,7 @@ export default function Admin() {
     { key: 'content', label: 'Site Content', icon: SlidersHorizontal, show: can('content') },
     { key: 'gallery', label: 'Gallery', icon: Images, show: can('content') },
     { key: 'membership', label: 'Membership', icon: Fingerprint, show: can('membership') },
+    { key: 'verify', label: 'Verify payments', icon: ReceiptText, show: canVerify },
     { key: 'payments', label: 'Payments', icon: Wallet, show: isAdmin },
     { key: 'messages', label: 'Messages', icon: Inbox, show: can('messages') },
     { key: 'registrations', label: 'Registrations', icon: Users, show: can('registrations') },
@@ -120,6 +129,17 @@ export default function Admin() {
         razorpayPaymentId: r.razorpayPaymentId || '',
         razorpayOrderId: r.razorpayOrderId || '',
         paidAt: r.paidAt || null,
+        receiptId: r.receiptId || '',
+        utr: r.utr || '',
+        amountDue: r.amountDue,
+        upiAccountId: r.upiAccountId || '',
+        membershipId: r.membershipId || '',
+        rejectReason: r.rejectReason || '',
+        reviewedBy: r.reviewedBy || '',
+        reviewedAt: r.reviewedAt || null,
+        receiptSubmittedAt: r.receiptSubmittedAt || null,
+        counted: !!r.counted,
+        seatHeld: r.seatHeld,
         createdAt: r.createdAt || null,
       })),
     )
@@ -141,6 +161,16 @@ export default function Admin() {
       .catch(() => {})
     return () => { alive = false }
   }, [tab, isAdmin])
+
+  useEffect(() => {
+    if (!canVerify) return
+    let alive = true
+    fetchPendingReviews({ events: can('registrations'), membership: can('membership') })
+      .then((l) => alive && setPendingReviews(l.length))
+      .catch(() => {})
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canVerify, tab])
 
   if (loading)
     return (
@@ -195,7 +225,7 @@ export default function Admin() {
 
   // Registrations whose payment is stuck 'pending' (possible money-taken-but-
   // -not-recorded case) — surfaced so an admin reconciles them with Razorpay.
-  const paymentAlerts = countPaymentChecks(regRows)
+  const paymentAlerts = isRazorpayMode ? countPaymentChecks(regRows) : 0
 
   const stats = [
     { label: 'Total Events', value: events.length, icon: CalendarDays, tone: 'blue' },
@@ -245,7 +275,7 @@ export default function Admin() {
                   <span className="relative">
                     <t.icon className="h-4 w-4" />
                     {/* Red alert dot: unread messages, or payments needing a check */}
-                    {((t.key === 'messages' && unreadMsgs > 0) || (t.key === 'registrations' && paymentAlerts > 0)) && (
+                    {((t.key === 'messages' && unreadMsgs > 0) || (t.key === 'registrations' && paymentAlerts > 0) || (t.key === 'verify' && pendingReviews > 0)) && (
                       <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500 dark:border-neutral-900" />
                     )}
                   </span>
@@ -257,7 +287,7 @@ export default function Admin() {
 
           {/* Panels */}
           <div className="min-w-0">
-            {tab === 'overview' && <Overview stats={stats} events={events} paymentAlerts={paymentAlerts} onReviewAlerts={() => setTab('registrations')} />}
+            {tab === 'overview' && <Overview stats={stats} events={events} paymentAlerts={paymentAlerts} onReviewAlerts={() => setTab('registrations')} reviewCount={canVerify ? pendingReviews : 0} onOpenReviews={() => setTab('verify')} />}
             {tab === 'events' && can('events') && (
               <EventsPanel events={events} onAdd={handleAdd} onCycle={cycleStatus} onDelete={removeEvent} onSave={editEvent} />
             )}
@@ -265,6 +295,14 @@ export default function Admin() {
             {tab === 'content' && can('content') && <SiteContentPanel />}
             {tab === 'gallery' && can('content') && <GalleryPanel />}
             {tab === 'membership' && can('membership') && <MembershipPanel canEdit={can('membership')} adminName={user.name} />}
+            {tab === 'verify' && canVerify && (
+              <PaymentReviewPanel
+                canEvents={can('registrations')}
+                canMembership={can('membership')}
+                reviewerName={user.name}
+                onChanged={(n) => { setPendingReviews(n); loadRegistrations() }}
+              />
+            )}
             {tab === 'payments' && isAdmin && <PaymentsPanel />}
             {tab === 'messages' && can('messages') && <MessagesPanel adminName={user.name} />}
             {tab === 'registrations' && can('registrations') && (
@@ -287,10 +325,26 @@ const toneBg = {
 const inputCls =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-acm-400 dark:border-neutral-700 dark:bg-neutral-800'
 
-function Overview({ stats, events, paymentAlerts = 0, onReviewAlerts }) {
+function Overview({ stats, events, paymentAlerts = 0, onReviewAlerts, reviewCount = 0, onOpenReviews }) {
   const upcoming = [...events].sort((a, b) => (a.date || '').localeCompare(b.date || '')).slice(0, 4)
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      {reviewCount > 0 && (
+        <button
+          onClick={onOpenReviews}
+          className="flex w-full items-start gap-3 rounded-2xl border border-acm-200 bg-acm-50 p-4 text-left transition-colors hover:bg-acm-100/70 dark:border-acm-500/30 dark:bg-acm-500/10 dark:hover:bg-acm-500/15"
+        >
+          <ReceiptText className="mt-0.5 h-5 w-5 shrink-0 text-acm-600 dark:text-acm-400" />
+          <div>
+            <p className="text-sm font-semibold text-acm-800 dark:text-acm-200">
+              {reviewCount} payment{reviewCount === 1 ? '' : 's'} waiting for verification
+            </p>
+            <p className="mt-0.5 text-xs text-acm-700/80 dark:text-acm-300/80">
+              Open Verify payments to check each receipt against the account statement and approve or reject it.
+            </p>
+          </div>
+        </button>
+      )}
       {paymentAlerts > 0 && (
         <button
           onClick={onReviewAlerts}
@@ -1412,6 +1466,11 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
   const [groupingErr, setGroupingErr] = useState('')
   const [groupingErrEventId, setGroupingErrEventId] = useState(null)
   const [formTeamFor, setFormTeamFor] = useState(null) // the event whose leftover pool we're picking from
+  // Manual payments: the roster row whose receipt is open, and the UPI accounts
+  // (to show which one a payment should have gone to).
+  const [receiptFor, setReceiptFor] = useState(null)
+  const [upiAccounts, setUpiAccounts] = useState([])
+  useEffect(() => { fetchUpiAccounts().then((l) => setUpiAccounts(l || [])).catch(() => {}) }, [])
 
   async function addTeammate(reg, { name, email }) {
     await adminTeamAction({ action: 'addMember', registrationId: reg.id, name, email })
@@ -1465,7 +1524,7 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
     return true
   }), [rows, dept, eventFilter, member])
 
-  const alerts = filtered.filter((r) => paymentNeedsCheck(r)).length
+  const alerts = isRazorpayMode ? filtered.filter((r) => paymentNeedsCheck(r)).length : 0
 
   // Team member rows expand to show every member's email + phone.
   const [expanded, setExpanded] = useState(() => new Set())
@@ -1505,6 +1564,10 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
     { label: 'Payment', value: (r) => paymentLabel(r) },
     { label: 'Payment ID', value: (r) => r.paymentId || '' },
     { label: 'Paid at', value: (r) => fmtDateTime(r.paidAt) },
+    { label: 'UTR', value: (r) => r.utr || '' },
+    { label: 'Amount due', value: (r) => (r.amountDue != null ? r.amountDue : '') },
+    { label: 'Reviewed by', value: (r) => r.reviewedBy || '' },
+    { label: 'Reviewed at', value: (r) => fmtDateTime(r.reviewedAt) },
   ]
   const exportCsv = (list, name = 'event-registrations') => downloadCsv(name, list, csvCols)
 
@@ -1592,27 +1655,33 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
                     <Badge tone={p.status === 'Confirmed' ? 'green' : 'amber'} dot={p.status === 'Confirmed'}>{p.status}</Badge>
                   </td>
                   <td className="px-5 py-3.5">
-                    {(p.paymentStatus || '').toLowerCase() === 'paid' ? (
-                      <div>
-                        <Badge tone="green" dot>Paid</Badge>
-                        {p.paymentId && (
-                          <div className="mt-1 text-[11px] leading-tight text-neutral-400">
-                            <code>{p.paymentId}</code>
-                            {fmtDateTime(p.paidAt) && <div>{fmtDateTime(p.paidAt)}</div>}
-                          </div>
-                        )}
-                      </div>
-                    ) : (p.paymentStatus || '').toLowerCase() === 'pending' ? (
-                      paymentNeedsCheck(p) ? (
-                        <span className="inline-flex items-center gap-1.5" title="Stuck pending — a payment may have been taken but not recorded. Check Razorpay.">
-                          <Badge tone="red" dot>Check</Badge>
-                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                        </span>
+                    {isRazorpayMode ? (
+                      <>
+                      {(p.paymentStatus || '').toLowerCase() === 'paid' ? (
+                        <div>
+                          <Badge tone="green" dot>Paid</Badge>
+                          {p.paymentId && (
+                            <div className="mt-1 text-[11px] leading-tight text-neutral-400">
+                              <code>{p.paymentId}</code>
+                              {fmtDateTime(p.paidAt) && <div>{fmtDateTime(p.paidAt)}</div>}
+                            </div>
+                          )}
+                        </div>
+                      ) : (p.paymentStatus || '').toLowerCase() === 'pending' ? (
+                        paymentNeedsCheck(p) ? (
+                          <span className="inline-flex items-center gap-1.5" title="Stuck pending — a payment may have been taken but not recorded. Check Razorpay.">
+                            <Badge tone="red" dot>Check</Badge>
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                          </span>
+                        ) : (
+                          <Badge tone="amber">Pending</Badge>
+                        )
                       ) : (
-                        <Badge tone="amber">Pending</Badge>
-                      )
+                        <span className="text-neutral-400">Free</span>
+                      )}
+                      </>
                     ) : (
-                      <span className="text-neutral-400">Free</span>
+                      <ManualPaymentCell p={p} onView={() => setReceiptFor(p)} />
                     )}
                   </td>
                 </tr>
@@ -1813,6 +1882,21 @@ function RegistrationsPanel({ rows, events = [], adminName, canMessage, isAdmin,
         toName={msgTo?.name}
         toEmail={msgTo?.email}
         fromName={adminName}
+      />
+
+      <ReceiptReviewModal
+        open={!!receiptFor}
+        onClose={() => setReceiptFor(null)}
+        kind="event"
+        record={receiptFor}
+        title={receiptFor?.event}
+        personName={receiptFor?.isTeam ? `${receiptFor.teamName} · ${receiptFor.name}` : receiptFor?.name}
+        personEmail={receiptFor?.email}
+        reviewerName={adminName}
+        canAct
+        canCheckMember={isAdmin}
+        accounts={upiAccounts}
+        onDone={() => onTeamChanged?.()}
       />
 
       <ConfirmDialog
@@ -2079,6 +2163,23 @@ function AddTeammateForm({ onAdd, onCancel }) {
       <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>Cancel</Button>
       {err && <p className="mt-1 w-full text-xs text-rose-600 dark:text-rose-300">{err}</p>}
     </form>
+  )
+}
+
+// Manual-mode payment status for a roster row, with a link to its receipt.
+function ManualPaymentCell({ p, onView }) {
+  const st = paymentState(p)
+  const meta = PAYMENT_STATE_META[st]
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <Badge tone={meta.tone} dot={st === 'verified'}>{meta.label}</Badge>
+      {p.utr && <code className="text-[11px] text-neutral-400">{p.utr}</code>}
+      {(p.receiptId || st === 'rejected') && (
+        <button onClick={onView} className="text-[11px] font-medium text-acm-600 hover:underline dark:text-acm-400">
+          {p.receiptId ? 'View receipt' : 'Details'}
+        </button>
+      )}
+    </div>
   )
 }
 

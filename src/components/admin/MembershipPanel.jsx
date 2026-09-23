@@ -9,6 +9,10 @@ import { departments } from '../../lib/orgData'
 import { downloadCsv } from '../../lib/csv'
 import * as svc from '../../services/firestore'
 import { cn } from '../../lib/cn'
+import { ReceiptReviewModal } from '../payments/ReceiptReviewModal'
+import { fetchUpiAccounts } from '../../services/payments'
+import { isRazorpayMode } from '../../lib/payments'
+import { paymentState, PAYMENT_STATE_META } from '../../lib/manualPay'
 
 const inputCls =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-acm-400 dark:border-neutral-700 dark:bg-neutral-800'
@@ -35,6 +39,11 @@ export function MembershipPanel({ canEdit = true, adminName }) {
   const [drafts, setDrafts] = useState({}) // uid -> edited membershipId
   const [savingId, setSavingId] = useState(null)
   const [msgTo, setMsgTo] = useState(null)
+  // Manual payments: the application whose receipt is open, and the UPI
+  // accounts (to show which one the fee should have gone to).
+  const [receiptFor, setReceiptFor] = useState(null)
+  const [upiAccounts, setUpiAccounts] = useState([])
+  useEffect(() => { fetchUpiAccounts().then((l) => setUpiAccounts(l || [])).catch(() => {}) }, [])
 
   const [dept, setDept] = useState('all')
   const [klass, setKlass] = useState('')
@@ -75,7 +84,7 @@ export function MembershipPanel({ canEdit = true, adminName }) {
     return out.sort((a, b) => (hasId(a) ? 1 : 0) - (hasId(b) ? 1 : 0))
   }, [rows, dept, klass, assign, q])
 
-  const alerts = filtered.filter((m) => paymentNeedsCheck(m)).length
+  const alerts = isRazorpayMode ? filtered.filter((m) => paymentNeedsCheck(m)).length : 0
 
   async function saveId(m) {
     const value = (drafts[m.id] ?? m.membershipId ?? '').trim()
@@ -96,7 +105,8 @@ export function MembershipPanel({ canEdit = true, adminName }) {
       { label: 'Phone', value: (m) => m.phone || '' },
       { label: 'Department', value: (m) => m.department || '' },
       { label: 'Class', value: (m) => m.className || '' },
-      { label: 'Payment', value: (m) => (m.paymentStatus === 'paid' ? 'Paid' : m.paymentStatus === 'free' ? 'Free' : 'Pending') },
+      { label: 'Payment', value: (m) => (isRazorpayMode ? (m.paymentStatus === 'paid' ? 'Paid' : m.paymentStatus === 'free' ? 'Free' : 'Pending') : PAYMENT_STATE_META[paymentState(m)].label) },
+      { label: 'UTR', value: (m) => m.utr || '' },
       { label: 'Payment ID', value: (m) => m.razorpayPaymentId || '' },
       { label: 'Paid at', value: (m) => fmtWhen(m.paidAt) },
       { label: 'Membership ID', value: (m) => m.membershipId || '' },
@@ -209,22 +219,38 @@ export function MembershipPanel({ canEdit = true, adminName }) {
                     <div className="text-xs text-neutral-400">{m.className || '—'} · {appliedOn(m)}</div>
                   </td>
                   <td className="px-4 py-3">
-                    {m.paymentStatus === 'paid' ? (
-                      <Badge tone="green" dot>Paid</Badge>
-                    ) : m.paymentStatus === 'free' ? (
-                      <Badge tone="neutral">Free</Badge>
-                    ) : paymentNeedsCheck(m) ? (
-                      <span className="inline-flex items-center gap-1.5" title="Stuck pending — a payment may have been taken but not recorded. Check Razorpay.">
-                        <Badge tone="red" dot>Check</Badge>
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                      </span>
+                    {isRazorpayMode ? (
+                      <>
+                        {m.paymentStatus === 'paid' ? (
+                          <Badge tone="green" dot>Paid</Badge>
+                        ) : m.paymentStatus === 'free' ? (
+                          <Badge tone="neutral">Free</Badge>
+                        ) : paymentNeedsCheck(m) ? (
+                          <span className="inline-flex items-center gap-1.5" title="Stuck pending — a payment may have been taken but not recorded. Check Razorpay.">
+                            <Badge tone="red" dot>Check</Badge>
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                          </span>
+                        ) : (
+                          <Badge tone="amber">Pending</Badge>
+                        )}
+                        {m.razorpayPaymentId && (
+                          <div className="mt-1 text-[11px] leading-tight text-neutral-400">
+                            <code>{m.razorpayPaymentId}</code>
+                            {fmtWhen(m.paidAt) && <div>{fmtWhen(m.paidAt)}</div>}
+                          </div>
+                        )}
+                      </>
                     ) : (
-                      <Badge tone="amber">Pending</Badge>
-                    )}
-                    {m.razorpayPaymentId && (
-                      <div className="mt-1 text-[11px] leading-tight text-neutral-400">
-                        <code>{m.razorpayPaymentId}</code>
-                        {fmtWhen(m.paidAt) && <div>{fmtWhen(m.paidAt)}</div>}
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge tone={PAYMENT_STATE_META[paymentState(m)].tone} dot={paymentState(m) === 'verified'}>
+                          {PAYMENT_STATE_META[paymentState(m)].label}
+                        </Badge>
+                        {m.utr && <code className="text-[11px] text-neutral-400">{m.utr}</code>}
+                        {(m.receiptId || paymentState(m) === 'rejected') && (
+                          <button onClick={() => setReceiptFor(m)} className="text-[11px] font-medium text-acm-600 hover:underline dark:text-acm-400">
+                            {m.receiptId ? 'View receipt' : 'Details'}
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>
@@ -261,6 +287,20 @@ export function MembershipPanel({ canEdit = true, adminName }) {
           </table>
         </div>
       )}
+
+      <ReceiptReviewModal
+        open={!!receiptFor}
+        onClose={() => setReceiptFor(null)}
+        kind="membership"
+        record={receiptFor}
+        title="ACM Membership"
+        personName={receiptFor ? fullName(receiptFor) : ''}
+        personEmail={receiptFor?.email}
+        reviewerName={adminName}
+        canAct={canEdit}
+        accounts={upiAccounts}
+        onDone={(patch) => setRows((rs) => rs.map((r) => (r.id === receiptFor.id ? { ...r, ...patch } : r)))}
+      />
 
       <ComposeMessageModal
         open={!!msgTo}
