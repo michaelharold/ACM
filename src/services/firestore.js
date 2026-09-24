@@ -13,6 +13,7 @@ import {
   serverTimestamp,
   increment,
   arrayUnion,
+  writeBatch,
 } from 'firebase/firestore'
 import { db, isFirebaseConfigured } from '../lib/firebase'
 import { uploadImage, deleteImage } from '../lib/storage'
@@ -45,8 +46,42 @@ export async function updateEvent(id, patch) {
   if (!isFirebaseConfigured) return patch
   const next = { ...patch }
   if ('poster' in next) next.poster = await uploadImage('posters', next.poster)
-  await updateDoc(doc(db, 'events', id), next)
+  if (!('whatsappLink' in next) && !('whatsappHidden' in next)) {
+    await updateDoc(doc(db, 'events', id), next)
+    return next
+  }
+  // WhatsApp link visibility. Event documents are public, so a hidden link must
+  // not sit in one: the admin's copy always lives in eventPrivate/{id} (event
+  // editors only), and the public document carries the link only while it's
+  // shown. Hiding it therefore removes it from what registrants can read at all.
+  let link = next.whatsappLink
+  let hidden = next.whatsappHidden
+  if (link === undefined || hidden === undefined) {
+    const [ev, saved] = await Promise.all([getDoc(doc(db, 'events', id)), fetchEventWhatsapp(id)])
+    if (hidden === undefined) hidden = !!ev.data()?.whatsappHidden
+    if (link === undefined) link = saved ?? ev.data()?.whatsappLink ?? ''
+  }
+  link = String(link || '').trim()
+  next.whatsappHidden = !!hidden
+  next.whatsappLink = next.whatsappHidden ? '' : link
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'events', id), next)
+  batch.set(doc(db, 'eventPrivate', id), { whatsappLink: link, updatedAt: serverTimestamp() }, { merge: true })
+  await batch.commit()
   return next
+}
+
+// The admin's copy of an event's WhatsApp link (kept even while it's hidden),
+// or null when none has been saved there yet — older events only have the
+// public field, which the caller falls back to.
+export async function fetchEventWhatsapp(id) {
+  if (!isFirebaseConfigured || !id) return null
+  try {
+    const snap = await getDoc(doc(db, 'eventPrivate', id))
+    return snap.exists() ? (snap.data().whatsappLink ?? null) : null
+  } catch {
+    return null // not an event editor — nothing private to show
+  }
 }
 
 export async function deleteEvent(id) {
@@ -57,6 +92,7 @@ export async function deleteEvent(id) {
   if (snap.exists()) await deleteImage(snap.data().poster)
   const guides = await getDocs(query(collection(db, 'eventGuidelines'), where('eventId', '==', id)))
   await Promise.all(guides.docs.map((g) => deleteEventGuidelineImage(g.id)))
+  await deleteDoc(doc(db, 'eventPrivate', id)).catch(() => {})
   await deleteDoc(doc(db, 'events', id))
 }
 
@@ -456,6 +492,11 @@ export function membershipRecord(uid, data) {
     phone: data.phone || '',
     department: data.department || '',
     className: data.className || '',
+    // Profile details kept on the member record, so the members panel (and its
+    // CSV) has them even for editors who can't read user profiles.
+    year: data.year || '',
+    college: data.college || '',
+    gender: data.gender || '',
     paymentStatus: data.paymentStatus || 'pending',
     amountDue: Math.max(0, Number(data.amountDue) || 0),
     upiAccountId: data.upiAccountId || '',

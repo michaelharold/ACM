@@ -53,6 +53,44 @@ service cloud.firestore {
           || (d.paymentStatus == 'pending' && d.get('amountDue', 0) >= minDue);
     }
 
+    // The caller's sign-in email, lower-cased, when the provider vouches for it
+    // (Google always does; an unverified email/password sign-up doesn't count).
+    function verifiedEmail() {
+      return request.auth.token.get('email_verified', false) == true
+        ? request.auth.token.get('email', '').lower()
+        : '';
+    }
+
+    // "Already a member?" auto-verification. A member may write their own
+    // membership record with an existing ID only when it copies a roster entry
+    // (uploaded by an admin) that is filed under their own verified email.
+    function rosterClaimOk(uid) {
+      let d = request.resource.data;
+      let rid = d.get('rosterId', '');
+      let path = /databases/$(database)/documents/memberRoster/$(rid);
+      return d.get('legacy', false) == true
+        && d.get('verifiedVia', '') == 'roster'
+        && d.userId == uid
+        && d.paymentStatus == 'free'
+        && rid is string && rid.size() > 0
+        && verifiedEmail() != ''
+        && exists(path)
+        && get(path).data.email == verifiedEmail()
+        && d.membershipId == get(path).data.membershipId;
+    }
+
+    // A verification request always starts pending, carries the caller's own
+    // email (and whether it's verified), and none of the review fields.
+    function validVerificationRequest(uid) {
+      let d = request.resource.data;
+      return d.userId == uid
+        && d.status == 'pending'
+        && d.membershipId is string && d.membershipId.size() > 0 && d.membershipId.size() <= 64
+        && d.email == request.auth.token.get('email', '')
+        && d.emailVerified == (request.auth.token.get('email_verified', false) == true)
+        && !d.keys().hasAny(['reviewedBy', 'reviewedAt', 'denyReason', 'approvedMembershipId', 'verifiedVia']);
+    }
+
     function membershipFeeIsZero() {
       return !exists(/databases/$(database)/documents/siteContent/main)
         || get(/databases/$(database)/documents/siteContent/main).data.get('membershipFee', 0) <= 0;
@@ -72,7 +110,14 @@ service cloud.firestore {
         || (request.auth.uid == uid
             && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'permissions', 'acmMember']))
         || (hasPerm('membership')
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acmMember']));
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acmMember']))
+        // The roster auto-verification sets the flag in the same batch that
+        // writes the (rules-checked) roster-verified membership record.
+        || (request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acmMember'])
+            && request.resource.data.acmMember == true
+            && getAfter(/databases/$(database)/documents/memberships/$(uid)).data.get('verifiedVia', '') == 'roster'
+            && getAfter(/databases/$(database)/documents/memberships/$(uid)).data.get('membershipId', '') != '');
       allow delete: if isAdmin();
     }
 
@@ -88,6 +133,12 @@ service cloud.firestore {
         && request.resource.data.registeredCount >= 0
         && (request.resource.data.registeredCount == resource.data.get('registeredCount', 0) + 1
             || request.resource.data.registeredCount == resource.data.get('registeredCount', 0) - 1);
+    }
+    // Event data that must not be public: the admin's copy of the WhatsApp
+    // link, kept here while the link is hidden (the public event document then
+    // doesn't carry it at all).
+    match /eventPrivate/{id} {
+      allow read, write: if isAdmin() || hasPerm('events');
     }
     match /execomGroups/{id}   { allow read: if true; allow write: if isAdmin() || hasPerm('execom'); }
     match /testimonials/{id}   { allow read: if true; allow write: if isAdmin(); }
@@ -175,13 +226,22 @@ service cloud.firestore {
     match /memberships/{uid} {
       allow read: if isSignedIn()
         && (request.auth.uid == uid || isAdmin() || hasPerm('membership'));
-      allow create: if isSignedIn()
-        && request.auth.uid == uid
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.membershipId == ''
-        && (request.resource.data.paymentStatus == 'pending'
-            || (request.resource.data.paymentStatus == 'free' && membershipFeeIsZero()));
+      allow create: if isAdmin() || hasPerm('membership')
+        || (isSignedIn()
+            && request.auth.uid == uid
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.membershipId == ''
+            && (request.resource.data.paymentStatus == 'pending'
+                || (request.resource.data.paymentStatus == 'free' && membershipFeeIsZero())))
+        || (isSignedIn() && request.auth.uid == uid && rosterClaimOk(uid));
       allow update: if isAdmin() || hasPerm('membership')
+        // An applicant who isn't a member yet (no ID, no receipt under review)
+        // may switch to a roster-verified existing membership.
+        || (isSignedIn() && request.auth.uid == uid
+            && resource.data.get('membershipId', '') == ''
+            && resource.data.get('receiptId', '') == ''
+            && resource.data.get('paymentStatus', '') != 'paid'
+            && rosterClaimOk(uid))
         || (request.auth.uid == uid
             && request.resource.data.membershipId == resource.data.membershipId
             && (request.resource.data.paymentStatus == resource.data.paymentStatus
@@ -190,6 +250,31 @@ service cloud.firestore {
             && !request.resource.data.diff(resource.data).affectedKeys()
                  .hasAny(['reviewedBy', 'reviewedAt', 'paidAt', 'userId', 'amountDue']));
       allow delete: if isAdmin();
+    }
+
+    // The roster of members who joined before this website: membership ID +
+    // email, uploaded by an admin. Admins and membership editors manage it. A
+    // signed-in member may read exactly one entry — the one filed under their
+    // own verified email — which is how auto-verification checks a claimed ID
+    // without exposing anyone else's address. (A missing entry reads as denied
+    // too, so probing reveals nothing.)
+    match /memberRoster/{id} {
+      allow read, write: if isAdmin() || hasPerm('membership');
+      allow get: if isSignedIn() && verifiedEmail() != '' && resource.data.email == verifiedEmail();
+    }
+
+    // "Already a member?" requests — one per user (id == uid). The member files
+    // (or, after a denial, re-files) their own; admins / membership editors
+    // approve or deny. The member may withdraw one that isn't approved.
+    match /memberVerifications/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin() || hasPerm('membership'));
+      allow create: if isSignedIn() && request.auth.uid == uid && validVerificationRequest(uid);
+      allow update: if isAdmin() || hasPerm('membership')
+        || (isSignedIn() && request.auth.uid == uid
+            && resource.data.status == 'denied'
+            && validVerificationRequest(uid));
+      allow delete: if isAdmin() || hasPerm('membership')
+        || (isSignedIn() && request.auth.uid == uid && resource.data.status != 'approved');
     }
 
     // UPI / QR payment accounts shown to payers — public, since the QR and UPI

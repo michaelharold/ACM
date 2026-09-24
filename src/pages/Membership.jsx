@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { BadgeCheck, CreditCard, ShieldCheck, AlertCircle, Mail, Fingerprint, Loader2, UserCog, GraduationCap, Clock, Upload } from 'lucide-react'
+import { BadgeCheck, CreditCard, ShieldCheck, AlertCircle, Mail, Fingerprint, Loader2, UserCog, GraduationCap, Clock, Upload, UserPlus, Sparkles } from 'lucide-react'
 import { SectionHeading } from '../components/SectionHeading'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
@@ -19,21 +19,30 @@ import { cn } from '../lib/cn'
 import { avatarDataUri } from '../lib/avatar'
 import { isProfileComplete } from '../lib/profile'
 import { isTkmCollege } from '../lib/orgData'
+import { fetchMyVerification, canClaimExisting } from '../services/membership'
+import { VerifyExistingForm, PendingVerification, DeniedVerification } from '../components/membership/VerifyExisting'
 
 const fullName = (m) => [m.firstName, m.middleName, m.lastName].filter(Boolean).join(' ')
 
 export default function Membership() {
-  const { user, loading } = useAuth()
+  const { user, loading, refreshProfile } = useAuth()
   const { content, departments } = useData()
   const navigate = useNavigate()
+  const location = useLocation()
   const membershipFee = Number(content?.membershipFee) || 0
   // A fee is collected in either payment mode; `manual` = UPI QR + receipt.
   const manual = !isRazorpayMode
   const chargesFee = membershipFee > 0 && (PAYMENT_MODE === 'manual' || isRazorpayMode)
 
-  // phase: 'loading' | 'incomplete-profile' | 'not-tkm' | 'form' | 'status' | 'blocked'
+  // phase: 'loading' | 'incomplete-profile' | 'not-tkm' | 'form' | 'status' | 'verify-pending' | 'blocked'
   const [phase, setPhase] = useState('loading')
   const [membership, setMembership] = useState(null)
+  // "Already a member?" — the member's verification request (if any), which
+  // of the two options the form shows, and a one-off welcome after approval.
+  const [verification, setVerification] = useState(null)
+  const [mode, setMode] = useState(location.state?.verify ? 'verify' : 'join')
+  const [welcomed, setWelcomed] = useState(false)
+  const [verifyOpen, setVerifyOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [confirming, setConfirming] = useState(false) // captured but not yet verified
@@ -55,10 +64,18 @@ export default function Membership() {
     let alive = true
     ;(async () => {
       try {
-        const existing = await fetchMembership(user.id)
+        const [existing, request] = await Promise.all([
+          fetchMembership(user.id),
+          fetchMyVerification(user.id).catch(() => null),
+        ])
         if (!alive) return
+        setVerification(request)
+        if (existing) setMembership(existing)
+        if (request?.status === 'pending') {
+          setPhase('verify-pending')
+          return
+        }
         if (existing) {
-          setMembership(existing)
           setPhase('status')
           return
         }
@@ -85,6 +102,9 @@ export default function Membership() {
       phone: f.phone.trim(),
       department: f.department,
       className: f.className.trim(),
+      year: user.year || '',
+      college: user.college || '',
+      gender: user.gender || '',
     }
 
     // Manual payment: the application, its receipt and the UTR are written
@@ -144,6 +164,28 @@ export default function Membership() {
 
   // Manual mode: upload a receipt after a rejection (or for an older
   // application that never had one).
+  // Result of "Already a member? Verify": instantly a member (roster match), or
+  // a request waiting for the team.
+  function onVerifyResult(res) {
+    setVerifyOpen(false)
+    if (res.status === 'approved') {
+      setMembership(res.membership)
+      setVerification(null)
+      setWelcomed(true)
+      setPhase('status')
+      refreshProfile?.({ acmMember: true })
+    } else {
+      setVerification(res.request)
+      setPhase('verify-pending')
+    }
+  }
+
+  function onVerifyCancelled() {
+    setVerification(null)
+    setMode('verify')
+    setPhase(membership ? 'status' : 'form')
+  }
+
   async function handleResubmit(receipt) {
     const applied = await attachReceipt({
       kind: 'membership',
@@ -190,14 +232,83 @@ export default function Membership() {
         {phase === 'not-tkm' && <NotTkm />}
         {phase === 'blocked' && <Blocked />}
 
+        {phase === 'verify-pending' && verification && (
+          <div className="mt-10">
+            <PendingVerification request={verification} onCancelled={onVerifyCancelled} />
+          </div>
+        )}
+
         {phase === 'form' && (
-          <MembershipForm user={user} onSubmit={handleSubmit} submitting={submitting} error={error} fee={membershipFee} chargesFee={chargesFee} manual={manual} upiAccountId={content?.membershipUpiAccountId || ''} departments={departments} />
+          <>
+            {verification?.status === 'denied' && <DeniedVerification request={verification} className="mt-10" />}
+            <ModeSwitch mode={mode} onChange={setMode} className={verification?.status === 'denied' ? 'mt-5' : 'mt-10'} />
+            {mode === 'verify' ? (
+              <VerifyExistingForm user={user} membership={membership} request={verification} onResult={onVerifyResult} className="mt-5" />
+            ) : (
+              <MembershipForm user={user} onSubmit={handleSubmit} submitting={submitting} error={error} fee={membershipFee} chargesFee={chargesFee} manual={manual} upiAccountId={content?.membershipUpiAccountId || ''} departments={departments} />
+            )}
+          </>
         )}
 
         {phase === 'status' && membership && (
-          <StatusCard membership={membership} user={user} chargesFee={chargesFee} fee={membershipFee} onPay={handlePayNow} error={error} confirming={confirming} manual={manual} onResubmit={handleResubmit} upiAccountId={content?.membershipUpiAccountId || ''} />
+          <>
+            {welcomed && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mt-10 flex items-center gap-3 rounded-2xl border border-emerald-400/70 bg-emerald-500/10 p-4 shadow-[0_0_16px_rgba(52,211,153,0.35)]"
+              >
+                <Sparkles className="h-5 w-5 shrink-0 text-emerald-500" />
+                <div className="text-sm">
+                  <div className="font-semibold text-emerald-800 dark:text-emerald-200">Welcome back — your membership is verified</div>
+                  <div className="text-emerald-700/80 dark:text-emerald-300/80">Every member benefit is unlocked, including event discounts.</div>
+                </div>
+              </motion.div>
+            )}
+            {verification?.status === 'denied' && canClaimExisting(membership) && <DeniedVerification request={verification} className="mt-10" />}
+            <StatusCard membership={membership} user={user} chargesFee={chargesFee} fee={membershipFee} onPay={handlePayNow} error={error} confirming={confirming} manual={manual} onResubmit={handleResubmit} upiAccountId={content?.membershipUpiAccountId || ''} />
+            {canClaimExisting(membership) && (
+              verifyOpen ? (
+                <VerifyExistingForm user={user} membership={membership} request={verification} onResult={onVerifyResult} className="mt-5" />
+              ) : (
+                <button onClick={() => setVerifyOpen(true)} className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-acm-600 hover:underline dark:text-acm-400">
+                  <Fingerprint className="h-4 w-4" /> Joined ACM before this website? Verify your existing membership ID
+                </button>
+              )
+            )}
+          </>
         )}
       </div>
+    </div>
+  )
+}
+
+// Join as a new member, or verify an existing membership.
+function ModeSwitch({ mode, onChange, className }) {
+  const opts = [
+    { k: 'join', label: 'Join ACM', icon: UserPlus },
+    { k: 'verify', label: 'Already a member? Verify', icon: Fingerprint },
+  ]
+  return (
+    <div className={cn('grid grid-cols-2 gap-1 rounded-2xl border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-800 dark:bg-neutral-900/60', className)}>
+      {opts.map((o) => (
+        <button
+          key={o.k}
+          type="button"
+          onClick={() => onChange(o.k)}
+          aria-pressed={mode === o.k}
+          className={cn(
+            'relative flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+            mode === o.k ? 'text-neutral-900 dark:text-white' : 'text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200',
+          )}
+        >
+          {mode === o.k && (
+            <motion.span layoutId="membership-mode" transition={{ type: 'spring', stiffness: 380, damping: 32 }} className="absolute inset-0 rounded-xl bg-white shadow-sm dark:bg-neutral-800" />
+          )}
+          <o.icon className="relative h-4 w-4 shrink-0" />
+          <span className="relative truncate">{o.label}</span>
+        </button>
+      ))}
     </div>
   )
 }
@@ -211,7 +322,7 @@ function MembershipForm({ user, onSubmit, submitting, error, fee, chargesFee, ma
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       onSubmit={(e) => onSubmit(e, { receipt, accountId: account?.id })}
-      className="mt-10 rounded-2xl border border-neutral-200 bg-white p-6 sm:p-8 dark:border-neutral-800 dark:bg-neutral-900"
+      className="mt-5 rounded-2xl border border-neutral-200 bg-white p-6 sm:p-8 dark:border-neutral-800 dark:bg-neutral-900"
     >
       <div className="grid gap-4 sm:grid-cols-3">
         <Input label="First name" name="firstName" required placeholder="First" />
@@ -277,7 +388,7 @@ function StatusCard({ membership, user, chargesFee, fee, onPay, error, confirmin
   const assigned = membership.membershipId && membership.membershipId.trim()
   const state = paymentState(membership)
   // Manual mode: a member once verified (or free). Razorpay mode: the old rule.
-  const isMember = manual ? hasTicket(membership) : !(chargesFee && !isPaid && !confirming)
+  const isMember = !!membership.legacy || (manual ? hasTicket(membership) : !(chargesFee && !isPaid && !confirming))
 
   async function pay() {
     setPayErr('')
@@ -299,7 +410,9 @@ function StatusCard({ membership, user, chargesFee, fee, onPay, error, confirmin
     // Show a real payment state: Paid if paid, Confirming if the money was taken
     // but not yet verified, Pending only when a fee is actually collectable right
     // now, otherwise there's no charge → Free.
-    { label: 'Payment', value: manual ? PAYMENT_STATE_META[state].label : (isPaid ? 'Paid' : confirming ? 'Confirming…' : chargesFee ? 'Pending' : 'Free') },
+    membership.legacy
+      ? { label: 'Membership', value: membership.verifiedVia === 'roster' ? 'Existing · auto-verified' : 'Existing · verified by team' }
+      : { label: 'Payment', value: manual ? PAYMENT_STATE_META[state].label : (isPaid ? 'Paid' : confirming ? 'Confirming…' : chargesFee ? 'Pending' : 'Free') },
   ]
   return (
     <motion.div

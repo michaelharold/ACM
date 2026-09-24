@@ -211,3 +211,104 @@ test('upiAccounts: public read, admin/events editors write, admin deletes', asyn
   await assertFails(deleteDoc(doc(as('eventsEditor'), 'upiAccounts/u1')))
   await assertSucceeds(deleteDoc(doc(as('admin'), 'upiAccounts/u1')))
 })
+
+// ── eventPrivate (hidden WhatsApp links) ─────────────────────
+test('eventPrivate: event editors only', async () => {
+  await seed((sdb) => setDoc(doc(sdb, 'eventPrivate/paid'), { whatsappLink: 'https://chat.whatsapp.com/x' }))
+  await assertSucceeds(getDoc(doc(as('eventsEditor'), 'eventPrivate/paid')))
+  await assertSucceeds(setDoc(doc(as('admin'), 'eventPrivate/free'), { whatsappLink: 'y' }))
+  await assertFails(getDoc(doc(as('alice'), 'eventPrivate/paid')))
+  await assertFails(getDoc(doc(anon(), 'eventPrivate/paid')))
+  await assertFails(setDoc(doc(as('regEditor'), 'eventPrivate/paid'), { whatsappLink: 'z' }))
+})
+
+// ── member roster + "Already a member?" ──────────────────────
+// A signed-in user whose token carries a (verified or not) email.
+const withEmail = (uid, email, verified = true) =>
+  env.authenticatedContext(uid, { email, email_verified: verified }).firestore()
+const ALICE_MAIL = 'alice@tkmce.ac.in'
+const seedRoster = () => seed(async (db) => {
+  await setDoc(doc(db, 'memberRoster/1234567'), { membershipId: '1234567', email: ALICE_MAIL, name: 'Alice' })
+  await setDoc(doc(db, 'memberRoster/7654321'), { membershipId: '7654321', email: 'bob@tkmce.ac.in', name: 'Bob' })
+})
+const legacy = (over = {}) => ({
+  userId: 'alice', membershipId: '1234567', rosterId: '1234567', paymentStatus: 'free', amountDue: 0,
+  legacy: true, verifiedVia: 'roster', verifiedBy: 'Auto (roster)', ...over,
+})
+
+test('roster: a member reads only the entry under their own verified email', async () => {
+  await seedRoster()
+  await assertSucceeds(getDoc(doc(withEmail('alice', ALICE_MAIL), 'memberRoster/1234567')))
+  await assertSucceeds(getDoc(doc(withEmail('alice', 'Alice@TKMCE.ac.in'), 'memberRoster/1234567')))
+  await assertFails(getDoc(doc(withEmail('alice', ALICE_MAIL), 'memberRoster/7654321')))
+  await assertFails(getDoc(doc(withEmail('alice', ALICE_MAIL), 'memberRoster/0000000'))) // missing reads as denied
+  await assertFails(getDoc(doc(withEmail('alice', ALICE_MAIL, false), 'memberRoster/1234567'))) // unverified email
+  await assertFails(getDocs(collection(withEmail('alice', ALICE_MAIL), 'memberRoster')))
+  await assertSucceeds(getDocs(collection(as('memEditor'), 'memberRoster')))
+  await assertFails(setDoc(doc(withEmail('alice', ALICE_MAIL), 'memberRoster/1234567'), { membershipId: '1234567', email: ALICE_MAIL }))
+  await assertSucceeds(setDoc(doc(as('memEditor'), 'memberRoster/5555555'), { membershipId: '5555555', email: 'x@y.z' }))
+})
+
+test('roster claim: membership + acmMember in one batch, only for your own entry', async () => {
+  await seedRoster()
+  const db = withEmail('alice', ALICE_MAIL)
+  const good = writeBatch(db)
+  good.set(doc(db, 'memberships/alice'), legacy())
+  good.update(doc(db, 'users/alice'), { acmMember: true })
+  await assertSucceeds(good.commit())
+})
+
+test('roster claim: someone else\'s ID, a changed ID, an unverified email, or a flag without the record all fail', async () => {
+  await seedRoster()
+  const db = withEmail('alice', ALICE_MAIL)
+  await assertFails(setDoc(doc(db, 'memberships/alice'), legacy({ membershipId: '7654321', rosterId: '7654321' })))
+  await assertFails(setDoc(doc(db, 'memberships/alice'), legacy({ membershipId: '9999999' })))
+  await assertFails(setDoc(doc(db, 'memberships/alice'), legacy({ paymentStatus: 'paid' })))
+  await assertFails(setDoc(doc(withEmail('alice', ALICE_MAIL, false), 'memberships/alice'), legacy()))
+  await assertFails(setDoc(doc(withEmail('bob', ALICE_MAIL), 'memberships/alice'), legacy()))
+  await assertFails(updateDoc(doc(db, 'users/alice'), { acmMember: true }))
+})
+
+test('roster claim over an unpaid application, but not over a receipt under review', async () => {
+  await seedRoster()
+  const db = withEmail('alice', ALICE_MAIL)
+  await seed((sdb) => setDoc(doc(sdb, 'memberships/alice'), mem({ paymentStatus: 'rejected' })))
+  await assertSucceeds(setDoc(doc(db, 'memberships/alice'), legacy(), { merge: true }))
+  await seed((sdb) => setDoc(doc(sdb, 'memberships/alice'), mem({ receiptId: 'rc1', utr: UTR })))
+  await assertFails(setDoc(doc(db, 'memberships/alice'), legacy(), { merge: true }))
+})
+
+const vreq = (over = {}) => ({
+  userId: 'alice', status: 'pending', membershipId: '42', rosterId: '42', name: 'Alice',
+  email: ALICE_MAIL, emailVerified: true, ...over,
+})
+
+test('verification request: own, pending, honest email; no self-approval', async () => {
+  const db = withEmail('alice', ALICE_MAIL)
+  await assertFails(setDoc(doc(db, 'memberVerifications/alice'), vreq({ status: 'approved' })))
+  await assertFails(setDoc(doc(db, 'memberVerifications/alice'), vreq({ email: 'someone@else.com' })))
+  await assertFails(setDoc(doc(db, 'memberVerifications/alice'), vreq({ emailVerified: false })))
+  await assertFails(setDoc(doc(db, 'memberVerifications/bob'), vreq({ userId: 'bob' })))
+  await assertFails(setDoc(doc(db, 'memberVerifications/alice'), vreq({ reviewedBy: 'me' })))
+  await assertSucceeds(setDoc(doc(db, 'memberVerifications/alice'), vreq()))
+  await assertFails(updateDoc(doc(db, 'memberVerifications/alice'), { status: 'approved' }))
+  await assertSucceeds(getDoc(doc(db, 'memberVerifications/alice')))
+  await assertFails(getDoc(doc(withEmail('bob', 'bob@tkmce.ac.in'), 'memberVerifications/alice')))
+})
+
+test('verification request: editor approves (membership, flag, request); member re-files only after a denial', async () => {
+  await seed((sdb) => setDoc(doc(sdb, 'memberVerifications/alice'), vreq()))
+  const ed = as('memEditor')
+  const b = writeBatch(ed)
+  b.set(doc(ed, 'memberships/alice'), legacy({ verifiedVia: 'admin', verifiedBy: 'M', membershipId: '42', rosterId: '42' }), { merge: true })
+  b.update(doc(ed, 'users/alice'), { acmMember: true })
+  b.update(doc(ed, 'memberVerifications/alice'), { status: 'approved', approvedMembershipId: '42', reviewedBy: 'M' })
+  await assertSucceeds(b.commit())
+  const db = withEmail('alice', ALICE_MAIL)
+  await assertFails(setDoc(doc(db, 'memberVerifications/alice'), vreq()))
+  await assertFails(deleteDoc(doc(db, 'memberVerifications/alice')))
+
+  await seed((sdb) => setDoc(doc(sdb, 'memberVerifications/alice'), vreq({ status: 'denied', denyReason: 'no' })))
+  await assertSucceeds(setDoc(doc(db, 'memberVerifications/alice'), vreq({ membershipId: '43' })))
+  await assertSucceeds(deleteDoc(doc(db, 'memberVerifications/alice')))
+})
