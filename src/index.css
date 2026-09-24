@@ -120,3 +120,41 @@
   --y: calc(100% - 89px);
   border-radius: 22px;
 }
+
+/* Chart tokens for the admin Analytics tab. Colours were checked with the
+   data-viz palette validator (CVD + contrast) in both modes; the light set is
+   kept for when a light theme returns. Glow comes from the mark colour. */
+.viz {
+  --viz-ink: #0b0b0b;
+  --viz-ink-2: #52514e;
+  --viz-muted: #898781;
+  --viz-grid: #e1e0d9;
+  --viz-axis: #c3c2b7;
+  --viz-surface: #ffffff;
+  --viz-bar: #2a78d6;
+  --viz-line: #e34948;
+  --viz-member: #1baf7a;
+  --viz-nonmember: #eda100;
+  --viz-inside: #2a78d6;
+  --viz-outside: #eb6834;
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-serious: #ec835a;
+  --viz-critical: #d03b3b;
+  --viz-idle: #b4b2aa;
+}
+.dark .viz {
+  --viz-ink: #ffffff;
+  --viz-ink-2: #c3c2b7;
+  --viz-muted: #898781;
+  --viz-grid: #2c2c2a;
+  --viz-axis: #383835;
+  --viz-surface: #171717;
+  --viz-bar: #3987e5;
+  --viz-line: #e66767;
+  --viz-member: #199e70;
+  --viz-nonmember: #c98500;
+  --viz-inside: #3987e5;
+  --viz-outside: #d95926;
+  --viz-idle: #55544f;
+}

@@ -12,6 +12,7 @@
     "test": "node --test 'tests/unit/*.test.mjs'",
     "dev:emu": "VITE_FIREBASE_EMULATORS=1 VITE_FIREBASE_PROJECT_ID=demo-acm-e2e vite --port 5174 --strictPort",
     "test:e2e": "firebase emulators:exec --only auth,firestore --project demo-acm-e2e \"node scripts/e2e-payments.mjs\"",
+    "test:e2e:members": "firebase emulators:exec --only auth,firestore --project demo-acm-e2e \"node scripts/e2e-membership.mjs\"",
     "audit:mobile": "firebase emulators:exec --only auth,firestore --project demo-acm-e2e \"node scripts/mobile-audit.mjs\"",
     "test:rules": "firebase emulators:exec --only firestore --project demo-acm-rules \"node --test 'tests/rules/*.test.mjs'\""
   },

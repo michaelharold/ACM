@@ -6,12 +6,14 @@ import {
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
   Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet, AlertCircle,
   Loader2, UserX, FileText, Shuffle, Info, MessageCircle, School, UserRound, Mail, Phone, Send, Globe, GraduationCap, ReceiptText, Eye, EyeOff,
+  BarChart3,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
 import { ExecomPanel } from '../components/admin/ExecomPanel'
 import { MembershipPanel } from '../components/admin/MembershipPanel'
 import { MemberVerificationPanel } from '../components/admin/MemberVerificationPanel'
+import { AnalyticsPanel } from '../components/admin/AnalyticsPanel'
 import { fetchPendingVerificationCount } from '../services/membership'
 import { PaymentsPanel } from '../components/admin/PaymentsPanel'
 import { StorageMeter } from '../components/admin/StorageMeter'
@@ -94,6 +96,7 @@ export default function Admin() {
   // Tabs are permission-gated: editors only see what they were granted.
   const tabs = [
     { key: 'overview', label: 'Overview', icon: LayoutDashboard, show: hasAnyAccess },
+    { key: 'analytics', label: 'Analytics', icon: BarChart3, show: can('registrations') },
     { key: 'events', label: 'Events', icon: CalendarCog, show: can('events') },
     { key: 'execom', label: 'Execom', icon: Contact2, show: can('execom') },
     { key: 'content', label: 'Site Content', icon: SlidersHorizontal, show: can('content') },
@@ -128,6 +131,7 @@ export default function Admin() {
         email: r.userEmail || '—',
         phone: r.phone || '',
         event: r.eventName || '—',
+        eventName: r.eventName || '',
         eventId: r.eventId || '',
         department: r.department || '—',
         college: r.college || '—',
@@ -137,6 +141,8 @@ export default function Admin() {
         teamName: r.teamName || '',
         randomlyGrouped: !!r.randomlyGrouped,
         members: r.members || [],
+        memberUids: r.memberUids || [],
+        date: r.date || '',
         teamSize: r.teamSize || (r.members ? r.members.length : 1),
         status: r.status || 'Confirmed',
         paymentStatus: r.paymentStatus || '',
@@ -326,6 +332,9 @@ export default function Admin() {
           {/* Panels */}
           <div className="min-w-0">
             {tab === 'overview' && <Overview stats={stats} events={events} paymentAlerts={paymentAlerts} onReviewAlerts={() => setTab('registrations')} reviewCount={canVerify ? pendingReviews : 0} onOpenReviews={() => setTab('verify')} memberCount={can('membership') ? pendingMembers : 0} onOpenMembers={() => setTab('memberVerify')} />}
+            {tab === 'analytics' && can('registrations') && (
+              <AnalyticsPanel regs={regRows} events={events} adminName={user.name} canMessage={can('messages') || can('membership') || can('registrations')} />
+            )}
             {tab === 'events' && can('events') && (
               <EventsPanel events={events} onAdd={handleAdd} onCycle={cycleStatus} onDelete={removeEvent} onSave={editEvent} />
             )}
