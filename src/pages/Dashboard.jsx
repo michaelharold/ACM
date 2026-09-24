@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown, School, UserRound, MessageCircle, ExternalLink, Upload } from 'lucide-react'
+import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown, School, UserRound, MessageCircle, ExternalLink, Upload, History, Trophy } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Input, Select } from '../components/ui/Input'
@@ -14,14 +14,19 @@ import { useData } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
 import { avatarDataUri } from '../lib/avatar'
 import { cn } from '../lib/cn'
-import { formatDate, normalizeUrl } from '../lib/format'
+import { formatDate } from '../lib/format'
 import { years, genders, TKM_COLLEGE, isTkmCollege } from '../lib/orgData'
 import { isValidPhone, isProfileComplete } from '../lib/profile'
 import { isPhoneOtpEnabled, sendPhoneOtp, confirmPhoneOtp, clearRecaptcha } from '../lib/phoneAuth'
 import { fetchMembership, fetchUserMessages, markThreadRead } from '../services/firestore'
 import { TicketCarousel } from '../components/tickets/TicketCarousel'
+import { TicketCard } from '../components/tickets/TicketCard'
 import { ReceiptUploadModal } from '../components/payments/ReceiptUploadModal'
-import { paymentState, hasTicket, needsReceipt, PAYMENT_STATE_META } from '../lib/manualPay'
+import { paymentState, hasTicket, needsReceipt, PAYMENT_STATE_META, ticketCode } from '../lib/manualPay'
+import { useNow } from '../lib/eventClock'
+import { splitByEventEnd, whatsappLinkFor, isQrHidden } from '../lib/eventAccess'
+import { fetchMyVerification } from '../services/membership'
+import { PendingVerification } from '../components/membership/VerifyExisting'
 
 export default function Dashboard() {
   const { user, loading, logout, saveProfile } = useAuth()
@@ -44,6 +49,13 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false)
   const [membership, setMembership] = useState(null)
   const [membershipLoaded, setMembershipLoaded] = useState(false)
+  // "Already a member?" request, shown as a yellow-glow pending status.
+  const [verification, setVerification] = useState(null)
+  // A past event's pass, opened from Events History.
+  const [pastTicket, setPastTicket] = useState(null)
+  // Re-evaluated every minute, so a ticket moves to Events History by itself
+  // once its event ends while the page is open.
+  const now = useNow(60000)
   const [formErr, setFormErr] = useState('')
   // Profile inbox — messages from the chapter, with a red dot when unread.
   const [inbox, setInbox] = useState([])
@@ -137,10 +149,10 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user) return
     let alive = true
-    fetchMembership(user.id)
-      .then((m) => { if (alive) setMembership(m) })
-      .catch(() => {})
-      .finally(() => { if (alive) setMembershipLoaded(true) })
+    Promise.all([
+      fetchMembership(user.id).then((m) => { if (alive) setMembership(m) }).catch(() => {}),
+      fetchMyVerification(user.id).then((v) => { if (alive) setVerification(v) }).catch(() => {}),
+    ]).finally(() => { if (alive) setMembershipLoaded(true) })
     return () => { alive = false }
   }, [user])
 
@@ -207,17 +219,23 @@ export default function Dashboard() {
   const eventsById = Object.fromEntries(events.map((e) => [e.id, e]))
   const myEvents = regs.map((r) => ({
     reg: r,
+    // An event an admin has since deleted: keep the record, file it as history.
     event: eventsById[r.eventId] || {
       id: r.eventId,
       name: r.eventName || 'Event',
       poster: '',
-      date: r.date,
+      date: '',
       venue: '—',
+      missing: true,
     },
   }))
 
-  // Verified (or free) registrations get a ticket in the carousel.
-  const ticketItems = myEvents.filter(({ reg }) => hasTicket(reg))
+  // Upcoming/ongoing events stay up front; once an event ends its registration
+  // moves to Events History.
+  const { active: activeEvents, history: pastEvents } = splitByEventEnd(myEvents, now)
+  const participated = pastEvents.filter(({ reg }) => hasTicket(reg)).length
+  // Verified (or free) registrations for events that haven't ended get a ticket.
+  const ticketItems = activeEvents.filter(({ reg }) => hasTicket(reg))
   const memberVerified = !!membership && hasTicket(membership)
   const memState = membership ? paymentState(membership) : null
 
@@ -389,6 +407,8 @@ export default function Dashboard() {
                 <div className="mt-5 rounded-xl border border-neutral-200 p-3.5 dark:border-neutral-800">
                   {!membershipLoaded ? (
                     <div className="h-4 w-32 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+                  ) : verification?.status === 'pending' ? (
+                    <PendingVerification request={verification} compact />
                   ) : membership ? (
                     <div className="flex items-start gap-2.5">
                       <Fingerprint className="mt-0.5 h-4 w-4 shrink-0 text-acm-500" />
@@ -410,12 +430,25 @@ export default function Dashboard() {
                   ) : (
                     <div className="text-sm">
                       <div className="font-semibold">Not a member yet</div>
-                      <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-                        Join the chapter to get member discounts on events.
-                      </p>
+                      {verification?.status === 'denied' ? (
+                        <p className="mt-0.5 text-xs text-rose-600 dark:text-rose-300">
+                          We couldn’t verify membership ID {verification.membershipId}{verification.denyReason ? ` — ${verification.denyReason}` : ''}.
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                          Join the chapter to get member discounts on events.
+                        </p>
+                      )}
                       <Button as={Link} to="/membership" size="sm" className="mt-3 w-full">
                         <BadgeCheck className="h-4 w-4" /> Join ACM
                       </Button>
+                      <Link
+                        to="/membership"
+                        state={{ verify: true }}
+                        className="mt-2 flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-acm-600 transition-colors hover:bg-acm-50 dark:text-acm-400 dark:hover:bg-acm-500/10"
+                      >
+                        <Fingerprint className="h-3.5 w-3.5" /> Already a member? Verify
+                      </Link>
                     </div>
                   )}
                 </div>
@@ -433,17 +466,19 @@ export default function Dashboard() {
               <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
                 <Ticket className="h-5 w-5 text-acm-500" /> Registered events
               </h2>
-              <span className="text-sm text-neutral-400">{myEvents.length} total</span>
+              <span className="text-sm text-neutral-400">{activeEvents.length} upcoming</span>
             </div>
 
-            {myEvents.length === 0 ? (
+            {activeEvents.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-neutral-200 p-12 text-center dark:border-neutral-800">
-                <p className="text-sm text-neutral-500">You haven't registered for any events yet.</p>
+                <p className="text-sm text-neutral-500">
+                  {pastEvents.length ? 'No upcoming events on your list — your past events are in Events History below.' : 'You haven\'t registered for any events yet.'}
+                </p>
                 <Button as={Link} to="/events" size="sm" className="mt-4">Explore events</Button>
               </div>
             ) : (
               <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2" amount={0.1}>
-                {myEvents.map(({ reg, event }) => {
+                {activeEvents.map(({ reg, event }) => {
                   const teamOpen = openTeams.has(reg.id)
                   return (
                   <Item key={reg.id}>
@@ -537,9 +572,9 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      {event.whatsappLink && hasTicket(reg) && (
+                      {whatsappLinkFor(event) && hasTicket(reg) && (
                         <a
-                          href={normalizeUrl(event.whatsappLink)}
+                          href={whatsappLinkFor(event)}
                           target="_blank"
                           rel="noreferrer noopener"
                           onClick={(e) => e.stopPropagation()}
@@ -556,6 +591,50 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        {/* Events History — every registration whose event has ended. */}
+        {pastEvents.length > 0 && (
+          <section className="mt-6 rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900" aria-label="Events History">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+                <History className="h-5 w-5 text-acm-500" /> Events History
+              </h2>
+              {participated > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                  <Trophy className="h-3.5 w-3.5" /> {participated} event{participated === 1 ? '' : 's'} taken part in
+                </span>
+              )}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {pastEvents.map(({ reg, event }) => {
+                const took = hasTicket(reg)
+                return (
+                  <button
+                    key={reg.id}
+                    onClick={() => setPastTicket({ reg, event })}
+                    className="group flex w-full min-w-0 items-center gap-3 rounded-xl border border-neutral-200 p-3 text-left transition-colors hover:border-acm-300 dark:border-neutral-800 dark:hover:border-acm-500/40"
+                  >
+                    <img
+                      src={event.poster || avatarDataUri(event.name || 'Event')}
+                      alt=""
+                      className="h-14 w-14 shrink-0 rounded-lg object-cover grayscale-[35%] transition group-hover:grayscale-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold">{event.name}</div>
+                      <div className="mt-0.5 truncate text-xs text-neutral-500 dark:text-neutral-400">
+                        {event.date ? formatDate(event.date) : 'Event removed'}{event.venue && event.venue !== '—' ? ` · ${event.venue}` : ''}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <Badge tone={took ? 'green' : 'neutral'}>{took ? 'Participated' : 'Not completed'}</Badge>
+                        <span className="font-mono text-[11px] text-neutral-400">{ticketCode(reg.id)}</span>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Message inbox — replies and messages from the chapter */}
         <div className="mt-6 rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
@@ -608,8 +687,13 @@ export default function Dashboard() {
         upiAccountId={uploadFor?.reg.upiAccountId || uploadFor?.event.upiAccountId || ''}
         note={uploadFor?.event.name}
         rejectReason={uploadFor && paymentState(uploadFor.reg) === 'rejected' ? uploadFor.reg.rejectReason : ''}
+        paused={!!uploadFor && isQrHidden(uploadFor.event)}
         onSubmit={(receipt) => resubmitReceipt(uploadFor.reg, receipt, uploadFor.event)}
       />
+
+      <Modal open={!!pastTicket} onClose={() => setPastTicket(null)} size="md">
+        {pastTicket && <PastTicket reg={pastTicket.reg} event={pastTicket.event} holderName={displayName} userId={user.id} />}
+      </Modal>
 
       <EventDetailsModal event={selected} open={!!selected} onClose={() => setSelected(null)} registered />
 
@@ -623,6 +707,59 @@ export default function Dashboard() {
           </div>
         )}
       </Modal>
+    </div>
+  )
+}
+
+// A past event's pass (stamped "Event ended") with the registration details.
+function PastTicket({ reg, event, holderName, userId }) {
+  const took = hasTicket(reg)
+  const state = paymentState(reg)
+  const registeredOn = (() => {
+    const c = reg.createdAt
+    const d = typeof c === 'string' ? new Date(c) : c?.toDate?.()
+    if (d && !Number.isNaN(d.getTime())) return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    return reg.date ? formatDate(reg.date) : '—'
+  })()
+  const rows = [
+    { label: 'Registered on', value: registeredOn },
+    { label: 'Payment', value: state === 'free' ? 'Free entry' : `${PAYMENT_STATE_META[state].label}${reg.amountDue ? ` · ₹${reg.amountDue}` : ''}` },
+    reg.utr ? { label: 'UPI transaction ID', value: reg.utr } : null,
+    reg.membershipId ? { label: 'Member discount', value: `ACM ID ${reg.membershipId}` } : null,
+    reg.isTeam ? { label: 'Team', value: `${reg.teamName || 'Team'}${reg.userId && reg.userId !== userId && reg.userName ? ` · by ${reg.userName}` : ''}` } : null,
+  ].filter(Boolean)
+  return (
+    <div className="p-6 sm:p-8">
+      <span className="text-xs font-medium uppercase tracking-wide text-acm-600 dark:text-acm-400">Events History</span>
+      <h3 className="mt-1 pr-8 text-lg font-bold tracking-tight">{event.name}</h3>
+      {took ? (
+        <div className="relative mt-5">
+          <TicketCard reg={reg} event={event} holderName={holderName} past />
+        </div>
+      ) : (
+        <p className="mt-4 flex items-start gap-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" />
+          This registration wasn’t completed — the payment was never verified before the event ended.
+        </p>
+      )}
+      <dl className="mt-5 divide-y divide-neutral-100 text-sm dark:divide-neutral-800">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-center justify-between gap-4 py-2">
+            <dt className="text-neutral-500 dark:text-neutral-400">{r.label}</dt>
+            <dd className="truncate text-right font-medium">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {reg.isTeam && reg.members?.length > 0 && (
+        <div className="mt-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Teammates</div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {reg.members.map((m, i) => (
+              <span key={i} className="rounded-full border border-neutral-200 px-2.5 py-1 text-xs dark:border-neutral-800">{m.name || m.email || '—'}</span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

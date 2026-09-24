@@ -206,6 +206,19 @@ export function AuthProvider({ children }) {
     setUser((u) => ({ ...u, ...clean }))
   }
 
+  // Re-read the profile after something outside this tab changed it — e.g.
+  // membership verification setting acmMember — so the navbar and forms agree.
+  async function refreshProfile(patch = {}) {
+    if (!user) return
+    if (!isFirebaseConfigured) { setUser((u) => (u ? { ...u, ...patch } : u)); return }
+    try {
+      const snap = await getDoc(doc(db, 'users', user.id))
+      if (snap.exists() && auth.currentUser?.uid === user.id) setUser({ id: user.id, ...snap.data() })
+    } catch {
+      setUser((u) => (u ? { ...u, ...patch } : u))
+    }
+  }
+
   async function logout() {
     if (isFirebaseConfigured) await signOut(auth)
     else setUser(null)
@@ -226,6 +239,7 @@ export function AuthProvider({ children }) {
         loginAsAdmin,
         loginAsEditor,
         saveProfile,
+        refreshProfile,
         logout,
       }}
     >

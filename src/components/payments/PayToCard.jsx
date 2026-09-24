@@ -1,13 +1,16 @@
 import { useState } from 'react'
-import { Copy, Check, Smartphone, AlertCircle, QrCode } from 'lucide-react'
+import { Copy, Check, Smartphone, AlertCircle, QrCode, PauseCircle } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { upiLink } from '../../lib/manualPay'
 
 // "Pay here" block for the manual flow: the UPI account's QR, payee, UPI ID and
 // the exact amount, plus a deep link that opens the payer's UPI app on phones.
 // With no account configured it says so plainly instead of guessing.
-export function PayToCard({ account, amount, note, loading = false }) {
+export function PayToCard({ account, amount, note, loading = false, paused = false }) {
   const [copied, setCopied] = useState(false)
+
+  // An admin hid this event's QR (e.g. while switching accounts).
+  if (paused) return <PaymentsPaused />
 
   if (loading) return <div className="h-44 animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800/60" />
 
@@ -67,6 +70,18 @@ export function PayToCard({ account, amount, note, loading = false }) {
         <p className="mt-3 text-xs text-neutral-400">
           Scan with any UPI app (GPay, PhonePe, Paytm…), pay ₹{amount}, then upload the payment screenshot below.
         </p>
+      </div>
+    </div>
+  )
+}
+
+export function PaymentsPaused() {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-500/25 dark:bg-amber-500/10">
+      <PauseCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+      <div>
+        <div className="font-semibold text-amber-900 dark:text-amber-100">Payments are paused for this event</div>
+        <p className="mt-0.5 text-amber-800/80 dark:text-amber-200/80">The organisers have taken the payment QR down for a moment. Please check back shortly — nothing is lost.</p>
       </div>
     </div>
   )

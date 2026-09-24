@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Fingerprint, Search, Download, Check, Loader2, AlertCircle, BadgeCheck, MessageSquare, AlertTriangle } from 'lucide-react'
+import { Fingerprint, Search, Download, Check, Loader2, AlertCircle, BadgeCheck, MessageSquare, AlertTriangle, Sparkles } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { ComposeMessageModal } from '../messages/Thread'
@@ -12,7 +12,9 @@ import { cn } from '../../lib/cn'
 import { ReceiptReviewModal } from '../payments/ReceiptReviewModal'
 import { fetchUpiAccounts } from '../../services/payments'
 import { isRazorpayMode } from '../../lib/payments'
-import { paymentState, PAYMENT_STATE_META } from '../../lib/manualPay'
+import { paymentState, PAYMENT_STATE_META, hasTicket } from '../../lib/manualPay'
+import { years as yearOptions } from '../../lib/orgData'
+import { normalizeMemberId } from '../../lib/memberRoster'
 
 const inputCls =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-acm-400 dark:border-neutral-700 dark:bg-neutral-800'
@@ -24,6 +26,9 @@ const appliedOn = (m) => {
   return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 }
 const hasId = (m) => !!(m.membershipId && m.membershipId.trim())
+// A member = verified (or free) application, or a verified existing member.
+const isMember = (m) => !!m.legacy || hasTicket(m)
+const sourceLabel = (m) => (m.legacy ? (m.verifiedVia === 'roster' ? 'Existing · auto-verified (roster)' : 'Existing · verified by team') : 'Joined on the website')
 // Firestore Timestamp or ISO string → readable date+time (blank if unset).
 const fmtWhen = (c) => {
   const d = typeof c === 'string' ? new Date(c) : c?.toDate?.()
@@ -48,14 +53,34 @@ export function MembershipPanel({ canEdit = true, adminName }) {
   const [dept, setDept] = useState('all')
   const [klass, setKlass] = useState('')
   const [assign, setAssign] = useState('all') // all | assigned | unassigned
+  const [status, setStatus] = useState('all') // all | members | pending
+  const [source, setSource] = useState('all') // all | site | existing
+  const [year, setYear] = useState('all')
   const [q, setQ] = useState('')
 
   useEffect(() => {
     let alive = true
-    svc.fetchAllMemberships()
-      .then((list) => {
+    Promise.all([
+      svc.fetchAllMemberships(),
+      // Admins can read profiles: fill in details older member records lack.
+      // Editors can't, and just see what the record carries.
+      svc.fetchUsers().catch(() => null),
+    ])
+      .then(([list, users]) => {
         if (!alive) return
-        setRows(list || [])
+        const byId = new Map((users || []).map((u) => [u.id, u]))
+        setRows((list || []).map((m) => {
+          const u = byId.get(m.userId || m.id)
+          if (!u) return m
+          return {
+            ...m,
+            phone: m.phone || u.phone || '',
+            year: m.year || u.year || '',
+            college: m.college || u.college || '',
+            gender: m.gender || u.gender || '',
+            googleName: m.googleName || u.googleName || '',
+          }
+        }))
         setLoading(false)
       })
       .catch((err) => {
@@ -76,13 +101,25 @@ export function MembershipPanel({ canEdit = true, adminName }) {
       if (kl && !(m.className || '').toLowerCase().includes(kl)) return false
       if (assign === 'assigned' && !hasId(m)) return false
       if (assign === 'unassigned' && hasId(m)) return false
-      if (needle && ![fullName(m), m.email, m.phone, m.membershipId].some((f) => (f || '').toLowerCase().includes(needle)))
+      if (status === 'members' && !isMember(m)) return false
+      if (status === 'pending' && isMember(m)) return false
+      if (source === 'site' && m.legacy) return false
+      if (source === 'existing' && !m.legacy) return false
+      if (year !== 'all' && m.year !== year) return false
+      if (needle && ![fullName(m), m.email, m.phone, m.membershipId, m.college, m.googleName].some((f) => (f || '').toLowerCase().includes(needle)))
         return false
       return true
     })
     // Members still waiting for an ID float to the top.
     return out.sort((a, b) => (hasId(a) ? 1 : 0) - (hasId(b) ? 1 : 0))
-  }, [rows, dept, klass, assign, q])
+  }, [rows, dept, klass, assign, status, source, year, q])
+
+  // The same membership ID on two records is almost always a mistake.
+  const dupIds = useMemo(() => {
+    const seen = new Map()
+    rows.forEach((m) => { if (hasId(m)) { const k = normalizeMemberId(m.membershipId); seen.set(k, (seen.get(k) || 0) + 1) } })
+    return new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k))
+  }, [rows])
 
   const alerts = isRazorpayMode ? filtered.filter((m) => paymentNeedsCheck(m)).length : 0
 
@@ -107,10 +144,18 @@ export function MembershipPanel({ canEdit = true, adminName }) {
   function exportCsv() {
     downloadCsv('acm-members', filtered, [
       { label: 'Name', value: fullName },
+      { label: 'Google name', value: (m) => m.googleName || '' },
       { label: 'Email', value: (m) => m.email || '' },
       { label: 'Phone', value: (m) => m.phone || '' },
+      { label: 'College', value: (m) => m.college || '' },
       { label: 'Department', value: (m) => m.department || '' },
+      { label: 'Year', value: (m) => m.year || '' },
       { label: 'Class', value: (m) => m.className || '' },
+      { label: 'Gender', value: (m) => m.gender || '' },
+      { label: 'Status', value: (m) => (isMember(m) ? 'Member' : 'Pending') },
+      { label: 'Source', value: sourceLabel },
+      { label: 'Verified by', value: (m) => m.verifiedBy || m.reviewedBy || '' },
+      { label: 'Verified at', value: (m) => fmtWhen(m.verifiedAt || m.reviewedAt) },
       { label: 'Payment', value: (m) => (isRazorpayMode ? (m.paymentStatus === 'paid' ? 'Paid' : m.paymentStatus === 'free' ? 'Free' : 'Pending') : PAYMENT_STATE_META[paymentState(m)].label) },
       { label: 'UTR', value: (m) => m.utr || '' },
       { label: 'Payment ID', value: (m) => m.razorpayPaymentId || '' },
@@ -121,6 +166,8 @@ export function MembershipPanel({ canEdit = true, adminName }) {
   }
 
   const unassignedCount = rows.filter((m) => !hasId(m)).length
+  const memberCount = rows.filter(isMember).length
+  const existingCount = rows.filter((m) => m.legacy).length
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
@@ -130,7 +177,10 @@ export function MembershipPanel({ canEdit = true, adminName }) {
             <Fingerprint className="h-5 w-5 text-acm-500" /> ACM Members
           </h2>
           <p className="mt-1 text-xs text-neutral-400">
-            {rows.length} total{unassignedCount > 0 && ` · ${unassignedCount} awaiting an ID`}
+            {memberCount} member{memberCount === 1 ? '' : 's'} · {rows.length} record{rows.length === 1 ? '' : 's'}
+            {existingCount > 0 && ` · ${existingCount} existing (verified)`}
+            {unassignedCount > 0 && ` · ${unassignedCount} awaiting an ID`}
+            {filtered.length !== rows.length && ` · showing ${filtered.length}`}
           </p>
         </div>
         <Button size="sm" variant="outline" onClick={exportCsv} disabled={!filtered.length}>
@@ -144,7 +194,21 @@ export function MembershipPanel({ canEdit = true, adminName }) {
           <option value="all">All departments</option>
           {departments.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
+        <select className={cn(inputCls, 'h-10 w-full py-0 sm:w-auto')} value={year} onChange={(e) => setYear(e.target.value)}>
+          <option value="all">All years</option>
+          {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
         <input className={cn(inputCls, 'h-10 w-full py-0 sm:w-[130px]')} placeholder="Class e.g. R5B" value={klass} onChange={(e) => setKlass(e.target.value)} />
+        <select className={cn(inputCls, 'h-10 w-full py-0 sm:w-auto')} value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="all">Members + applicants</option>
+          <option value="members">Members only</option>
+          <option value="pending">Applicants (not verified)</option>
+        </select>
+        <select className={cn(inputCls, 'h-10 w-full py-0 sm:w-auto')} value={source} onChange={(e) => setSource(e.target.value)}>
+          <option value="all">Any source</option>
+          <option value="site">Joined on the website</option>
+          <option value="existing">Existing (verified)</option>
+        </select>
         <div className="inline-flex h-10 shrink-0 items-center rounded-lg border border-neutral-200 bg-white p-1 dark:border-neutral-700 dark:bg-neutral-800">
           {[
             { k: 'all', label: 'All' },
@@ -196,7 +260,7 @@ export function MembershipPanel({ canEdit = true, adminName }) {
             <thead className="text-xs uppercase tracking-wide text-neutral-400">
               <tr className="border-b border-neutral-100 dark:border-neutral-800">
                 <th className="px-4 py-3 font-medium">Member</th>
-                <th className="px-4 py-3 font-medium">Dept · Class</th>
+                <th className="px-4 py-3 font-medium">Profile</th>
                 <th className="px-4 py-3 font-medium">Payment</th>
                 <th className="px-4 py-3 font-medium">Membership ID</th>
               </tr>
@@ -221,11 +285,21 @@ export function MembershipPanel({ canEdit = true, adminName }) {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-neutral-600 dark:text-neutral-300">
-                    <div className="truncate">{m.department || '—'}</div>
-                    <div className="text-xs text-neutral-400">{m.className || '—'} · {appliedOn(m)}</div>
+                    <div className="max-w-[220px] truncate">{m.department || '—'}</div>
+                    <div className="text-xs text-neutral-400">
+                      {[m.year, m.className, m.gender].filter(Boolean).join(' · ') || '—'} · {appliedOn(m)}
+                    </div>
+                    {m.college && <div className="max-w-[220px] truncate text-[11px] text-neutral-400">{m.college}</div>}
                   </td>
                   <td className="px-4 py-3">
-                    {isRazorpayMode ? (
+                    {m.legacy ? (
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge tone="blue" dot>Existing member</Badge>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-neutral-400">
+                          {m.verifiedVia === 'roster' ? <><Sparkles className="h-3 w-3" /> auto-verified</> : <>verified{m.verifiedBy ? ` by ${m.verifiedBy}` : ''}</>}
+                        </span>
+                      </div>
+                    ) : isRazorpayMode ? (
                       <>
                         {m.paymentStatus === 'paid' ? (
                           <Badge tone="green" dot>Paid</Badge>
@@ -285,6 +359,11 @@ export function MembershipPanel({ canEdit = true, adminName }) {
                       </span>
                     ) : (
                       <span className="text-neutral-400">Yet to assign</span>
+                    )}
+                    {hasId(m) && dupIds.has(normalizeMemberId(m.membershipId)) && (
+                      <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 dark:text-rose-400" title="Another record has the same membership ID">
+                        <AlertTriangle className="h-3 w-3" /> Duplicate ID
+                      </div>
                     )}
                   </td>
                 </tr>

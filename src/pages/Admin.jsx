@@ -11,6 +11,8 @@ import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
 import { ExecomPanel } from '../components/admin/ExecomPanel'
 import { MembershipPanel } from '../components/admin/MembershipPanel'
+import { MemberVerificationPanel } from '../components/admin/MemberVerificationPanel'
+import { fetchPendingVerificationCount } from '../services/membership'
 import { PaymentsPanel } from '../components/admin/PaymentsPanel'
 import { StorageMeter } from '../components/admin/StorageMeter'
 import { UpiAccountForm } from '../components/payments/UpiAccountForm'
@@ -40,6 +42,8 @@ import { adminTeamAction } from '../lib/teamAdmin'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Modal } from '../components/ui/Modal'
 import { Field, FormSection, InfoHint } from '../components/ui/Field'
+import { Switch } from '../components/ui/Switch'
+import { VisibilityRow, EventControlsModal, EventQuickChips, lifecycle } from '../components/admin/EventControls'
 import { cn } from '../lib/cn'
 
 const statusCycle = ['open', 'coming-soon', 'closed']
@@ -78,6 +82,8 @@ export default function Admin() {
   const [unreadMsgs, setUnreadMsgs] = useState(0)
   // Receipts waiting for verification — drives the tab dot and Overview banner.
   const [pendingReviews, setPendingReviews] = useState(0)
+  // "Already a member?" requests waiting for a decision.
+  const [pendingMembers, setPendingMembers] = useState(0)
 
   const isAdmin = user?.role === 'admin'
   const perms = user?.permissions || {}
@@ -93,6 +99,7 @@ export default function Admin() {
     { key: 'content', label: 'Site Content', icon: SlidersHorizontal, show: can('content') },
     { key: 'gallery', label: 'Gallery', icon: Images, show: can('content') },
     { key: 'membership', label: 'Membership', icon: Fingerprint, show: can('membership') },
+    { key: 'memberVerify', label: 'Member verification', icon: UserCheck, show: can('membership') },
     { key: 'verify', label: 'Verify payments', icon: ReceiptText, show: canVerify },
     { key: 'payments', label: 'Payments', icon: Wallet, show: isAdmin },
     { key: 'messages', label: 'Messages', icon: Inbox, show: can('messages') },
@@ -187,6 +194,14 @@ export default function Admin() {
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canVerify, tab])
+
+  useEffect(() => {
+    if (!can('membership')) return
+    let alive = true
+    fetchPendingVerificationCount().then((n) => alive && setPendingMembers(n)).catch(() => {})
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, tab])
 
   if (loading)
     return (
@@ -298,7 +313,7 @@ export default function Admin() {
                   <span className="relative">
                     <t.icon className="h-4 w-4" />
                     {/* Red alert dot: unread messages, or payments needing a check */}
-                    {((t.key === 'messages' && unreadMsgs > 0) || (t.key === 'registrations' && paymentAlerts > 0) || (t.key === 'verify' && pendingReviews > 0)) && (
+                    {((t.key === 'messages' && unreadMsgs > 0) || (t.key === 'registrations' && paymentAlerts > 0) || (t.key === 'verify' && pendingReviews > 0) || (t.key === 'memberVerify' && pendingMembers > 0)) && (
                       <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-red-500 dark:border-neutral-900" />
                     )}
                   </span>
@@ -310,7 +325,7 @@ export default function Admin() {
 
           {/* Panels */}
           <div className="min-w-0">
-            {tab === 'overview' && <Overview stats={stats} events={events} paymentAlerts={paymentAlerts} onReviewAlerts={() => setTab('registrations')} reviewCount={canVerify ? pendingReviews : 0} onOpenReviews={() => setTab('verify')} />}
+            {tab === 'overview' && <Overview stats={stats} events={events} paymentAlerts={paymentAlerts} onReviewAlerts={() => setTab('registrations')} reviewCount={canVerify ? pendingReviews : 0} onOpenReviews={() => setTab('verify')} memberCount={can('membership') ? pendingMembers : 0} onOpenMembers={() => setTab('memberVerify')} />}
             {tab === 'events' && can('events') && (
               <EventsPanel events={events} onAdd={handleAdd} onCycle={cycleStatus} onDelete={removeEvent} onSave={editEvent} />
             )}
@@ -318,6 +333,7 @@ export default function Admin() {
             {tab === 'content' && can('content') && <SiteContentPanel />}
             {tab === 'gallery' && can('content') && <GalleryPanel />}
             {tab === 'membership' && can('membership') && <MembershipPanel canEdit={can('membership')} adminName={user.name} />}
+            {tab === 'memberVerify' && can('membership') && <MemberVerificationPanel canEdit={can('membership')} adminName={user.name} onChanged={setPendingMembers} />}
             {tab === 'verify' && canVerify && (
               <PaymentReviewPanel
                 canEvents={can('registrations')}
@@ -348,7 +364,7 @@ const toneBg = {
 const inputCls =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-acm-400 dark:border-neutral-700 dark:bg-neutral-800'
 
-function Overview({ stats, events, paymentAlerts = 0, onReviewAlerts, reviewCount = 0, onOpenReviews }) {
+function Overview({ stats, events, paymentAlerts = 0, onReviewAlerts, reviewCount = 0, onOpenReviews, memberCount = 0, onOpenMembers }) {
   // Soonest first, finished events left out.
   const upcoming = events.filter((e) => !isEnded(e)).sort((a, b) => startMs(a) - startMs(b)).slice(0, 4)
   return (
@@ -365,6 +381,22 @@ function Overview({ stats, events, paymentAlerts = 0, onReviewAlerts, reviewCoun
             </p>
             <p className="mt-0.5 text-xs text-acm-700/80 dark:text-acm-300/80">
               Open Verify payments to check each receipt against the account statement and approve or reject it.
+            </p>
+          </div>
+        </button>
+      )}
+      {memberCount > 0 && (
+        <button
+          onClick={onOpenMembers}
+          className="flex w-full items-start gap-3 rounded-2xl border border-amber-300/80 bg-amber-50 p-4 text-left shadow-[0_0_14px_rgba(251,191,36,0.25)] transition-colors hover:bg-amber-100/70 dark:border-amber-500/30 dark:bg-amber-500/10 dark:hover:bg-amber-500/15"
+        >
+          <UserCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              {memberCount} membership verification{memberCount === 1 ? '' : 's'} waiting
+            </p>
+            <p className="mt-0.5 text-xs text-amber-700/80 dark:text-amber-300/80">
+              Existing members asking to be recognised. Open Member verification to approve or deny — or upload the roster to verify matches automatically.
             </p>
           </div>
         </button>
@@ -455,6 +487,8 @@ function EventEditor({ event, onSave }) {
     codeOfConductEnabled: !!event.codeOfConductEnabled,
     codeOfConductText: event.codeOfConductText || '',
     whatsappLink: event.whatsappLink || '',
+    whatsappHidden: !!event.whatsappHidden,
+    qrHidden: !!event.qrHidden,
     // Defaults closed (TKM-only) — an admin has to deliberately open it up.
     interCollege: !!event.interCollege,
     // Saved as the event's `draft` flag — drafts are hidden from the public site.
@@ -483,6 +517,11 @@ function EventEditor({ event, onSave }) {
     pay.fetchUpiAccounts().then((l) => alive && setUpiAccounts((l || []).filter((a) => a.active !== false))).catch(() => {})
     if (isRazorpayMode) svc.fetchPaymentAccounts().then((l) => alive && setAccounts((l || []).filter((a) => a.active !== false))).catch(() => {})
     svc.fetchEventGuidelineImages(event.id).then((l) => alive && setGuideImages(l || [])).catch(() => {})
+    // A hidden WhatsApp link isn't on the public event document — load the
+    // admin's saved copy so it can be edited or shown again.
+    svc.fetchEventWhatsapp(event.id).then((link) => {
+      if (alive && link != null) setDraft((d) => ({ ...d, whatsappLink: link }))
+    })
     return () => { alive = false }
   }, [event.id])
 
@@ -602,6 +641,9 @@ function EventEditor({ event, onSave }) {
         randomGrouping: draft.isGroup && !!draft.randomGrouping,
         groupingMode: draft.groupingMode || 'pureRandom',
         groupingAt: draft.isGroup && draft.randomGrouping ? draft.groupingAt : '',
+        whatsappLink: draft.whatsappLink.trim(),
+        whatsappHidden: !!draft.whatsappHidden,
+        qrHidden: !!draft.qrHidden,
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
@@ -780,6 +822,16 @@ function EventEditor({ event, onSave }) {
               </select>
             </Field>
           )}
+          {Number(draft.fee) > 0 && !isRazorpayMode && (
+            <VisibilityRow
+              className="sm:col-span-2"
+              label="Show payment QR"
+              shown={!draft.qrHidden}
+              onToggle={() => setDraft((d) => ({ ...d, qrHidden: !d.qrHidden }))}
+              onHint="Payers see the QR and can register."
+              offHint="QR hidden — payers see “payments paused” and can’t finish a paid registration until you show it again."
+            />
+          )}
           {Number(draft.fee) > 0 && isRazorpayMode && (
             <Field label="Razorpay account" hint="Which Razorpay account profile this event's payments are credited to.">
               <select className={cn(inputCls, 'mt-1')} value={draft.paymentAccountId} onChange={set('paymentAccountId')}>
@@ -904,7 +956,7 @@ function EventEditor({ event, onSave }) {
       </FormSection>
 
       {!isExternal && (
-        <FormSection icon={MessageCircle} title="WhatsApp group" hint="Shown to a registrant right after they successfully register, and on their dashboard for this event — so they (and their team) can join.">
+        <FormSection icon={MessageCircle} title="WhatsApp group" hint="Shown to a registrant right after they successfully register, on their ticket, and on their dashboard for this event — so they (and their team) can join.">
           <Field label="WhatsApp group link" hint="Paste your group's invite link. Leave blank to skip this." className="sm:col-span-2">
             <input
               type="url"
@@ -914,6 +966,16 @@ function EventEditor({ event, onSave }) {
               onChange={set('whatsappLink')}
             />
           </Field>
+          {draft.whatsappLink.trim() && (
+            <VisibilityRow
+              className="sm:col-span-2"
+              label="Show link to registrants"
+              shown={!draft.whatsappHidden}
+              onToggle={() => setDraft((d) => ({ ...d, whatsappHidden: !d.whatsappHidden }))}
+              onHint="Verified registrants see it on their ticket and dashboard."
+              offHint="Hidden — it disappears from every ticket and dashboard as if it never existed. Your copy stays saved here."
+            />
+          )}
         </FormSection>
       )}
 
@@ -1069,6 +1131,10 @@ function EventEditor({ event, onSave }) {
 function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
   const [openId, setOpenId] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  // Event whose quick controls (venue / WhatsApp / QR) are open.
+  const [controlsId, setControlsId] = useState(null)
+  const controlsEvent = events.find((e) => e.id === controlsId) || null
+  const openControls = (id) => { setOpenId(null); setControlsId(id) }
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex items-center justify-between border-b border-neutral-100 p-5 dark:border-neutral-800">
@@ -1099,6 +1165,17 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
                   {e.draft && <Badge tone="amber">Draft</Badge>}
                 </p>
                 <p className="text-xs text-neutral-400">{formatDate(e.date)} · {e.time} · {e.venue}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {lifecycle(e) === 'live' && (
+                    <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-rose-500/10 px-2.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500" /> Live now
+                    </span>
+                  )}
+                  {lifecycle(e) === 'ended' && (
+                    <span className="inline-flex h-7 items-center rounded-full bg-neutral-100 px-2.5 text-[11px] font-medium text-neutral-500 dark:bg-neutral-800">Ended</span>
+                  )}
+                  <EventQuickChips event={e} onSave={(patch) => onSave(e.id, patch)} onOpenControls={() => openControls(e.id)} />
+                </div>
               </div>
               {auto ? (
                 <span className="inline-flex items-center gap-1.5" title="Status is automatic from the registration window">
@@ -1110,6 +1187,14 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
                   <Badge tone={statusMeta[status].tone} dot={status === 'open'}>{statusMeta[status].label}</Badge>
                 </button>
               )}
+              <button
+                onClick={() => openControls(e.id)}
+                aria-label="Event controls"
+                title="Quick controls: venue, WhatsApp link, payment QR"
+                className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-acm-300 hover:text-acm-600 dark:border-neutral-800"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+              </button>
               <button
                 onClick={() => setOpenId(openId === e.id ? null : e.id)}
                 aria-label="Edit event"
@@ -1131,8 +1216,15 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
         })}
       </div>
       <p className="border-t border-neutral-100 p-4 text-xs text-neutral-400 dark:border-neutral-800">
-        Tip: click a status badge to cycle Open → Coming Soon → Closed. Expand a row to edit details or upload a poster.
+        Tip: click a status badge to cycle Open → Coming Soon → Closed. Click a WhatsApp / QR chip to show or hide it instantly, the sliders for quick venue and link changes, or expand a row for the full editor.
       </p>
+
+      <EventControlsModal
+        event={controlsEvent}
+        open={!!controlsEvent}
+        onClose={() => setControlsId(null)}
+        onSave={(patch) => onSave(controlsId, patch)}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}
@@ -2281,20 +2373,4 @@ function ManualPaymentCell({ p, onView }) {
   )
 }
 
-function Switch({ on, onClick, tone = 'acm' }) {
-  const onBg = tone === 'violet' ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500' : tone === 'sky' ? 'bg-gradient-to-r from-sky-500 to-blue-500' : 'bg-acm-600'
-  return (
-    <button
-      onClick={onClick}
-      role="switch"
-      aria-checked={on}
-      className={cn('relative h-6 w-11 shrink-0 rounded-full transition-colors', on ? onBg : 'bg-neutral-200 dark:bg-neutral-700')}
-    >
-      <motion.span
-        layout
-        transition={{ type: 'spring', stiffness: 500, damping: 32 }}
-        className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm', on ? 'left-[22px]' : 'left-0.5')}
-      />
-    </button>
-  )
-}
+

@@ -8,15 +8,16 @@ import { Badge } from '../ui/Badge'
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { years, isTkmCollege } from '../../lib/orgData'
-import { formatDate, normalizeUrl } from '../../lib/format'
+import { formatDate } from '../../lib/format'
 import { payFor, validateMembership, registerTeam, isRazorpayMode, isApiAvailable } from '../../lib/payments'
 import { attachReceipt } from '../../services/payments'
 import { receiptReady, normalizeUtr } from '../../lib/manualPay'
-import { PayToCard } from '../payments/PayToCard'
+import { PayToCard, PaymentsPaused } from '../payments/PayToCard'
 import { ReceiptUploader } from '../payments/ReceiptUploader'
 import { useUpiAccount } from '../payments/useUpiAccount'
 import { cn } from '../../lib/cn'
 import { effectiveStatus } from '../../lib/eventClock'
+import { whatsappLinkFor, isQrHidden } from '../../lib/eventAccess'
 
 const emailRe = /\S+@\S+\.\S+/
 
@@ -141,6 +142,9 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
   // Manual mode inserts a Payment step (pay to the QR + upload the receipt)
   // before Confirm whenever something is actually owed.
   const manualPay = !isRazorpayMode && payable > 0
+  // The admin hid this event's QR: a payer can't finish until it's back.
+  const paymentsPaused = manualPay && isQrHidden(event)
+  const whatsapp = whatsappLinkFor(event)
   const stepLabels = ['Your details', isManualTeam ? 'Your team' : 'Eligibility', ...(manualPay ? ['Payment'] : []), 'Confirm']
   const paymentStep = manualPay ? 2 : -1
   const lastStep = stepLabels.length - 1
@@ -162,10 +166,10 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
       if (!canVerify) return form.membershipId.trim().length > 0 // no backend → old behaviour
       return memberCheck?.valid === true // must verify a real member (used or not)
     }
-    if (step === paymentStep) return !!payAccount && receiptReady(receipt)
+    if (step === paymentStep) return !paymentsPaused && !!payAccount && receiptReady(receipt)
     if (step === lastStep) return form.agree
     return true
-  }, [step, form, canVerify, memberCheck, isManualTeam, teammates, event, paymentStep, lastStep, payAccount, receipt])
+  }, [step, form, canVerify, memberCheck, isManualTeam, teammates, event, paymentStep, lastStep, payAccount, receipt, paymentsPaused])
 
   if (!event) return null
 
@@ -292,7 +296,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
             {pendingConfirm ? (
               <>Your payment for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> went through — we’re just confirming it, and your registration will update to paid shortly.</>
             ) : manualPay ? (
-              <>Your registration for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> is saved. The team will verify your payment shortly — your ticket{event.whatsappLink ? ' and the event WhatsApp group' : ''} appear on your dashboard once it’s verified.</>
+              <>Your registration for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> is saved. The team will verify your payment shortly — your ticket{whatsapp ? ' and the event WhatsApp group' : ''} appear on your dashboard once it’s verified.</>
             ) : isRandomGroup ? (
               <>You're registered for <strong className="text-neutral-800 dark:text-neutral-200">{event.name}</strong> — your team will be assigned automatically, and you'll see it on your dashboard once it is.</>
             ) : (
@@ -315,7 +319,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
             </p>
           )}
 
-          {event.whatsappLink && !manualPay && (
+          {whatsapp && !manualPay && (
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-left dark:border-emerald-500/25 dark:bg-emerald-500/10">
               <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
                 <MessageCircle className="h-4 w-4" /> Join the event WhatsApp group
@@ -326,7 +330,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                   : 'Stay in the loop with announcements and updates for this event.'}
               </p>
               <div className="mt-3 flex gap-2">
-                <Button as="a" href={normalizeUrl(event.whatsappLink)} target="_blank" rel="noreferrer noopener" size="sm" className="flex-1">
+                <Button as="a" href={whatsapp} target="_blank" rel="noreferrer noopener" size="sm" className="flex-1">
                   <ExternalLink className="h-4 w-4" /> Open group
                 </Button>
                 <Button
@@ -335,7 +339,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                   size="sm"
                   onClick={async () => {
                     try {
-                      await navigator.clipboard.writeText(normalizeUrl(event.whatsappLink))
+                      await navigator.clipboard.writeText(whatsapp)
                       setLinkCopied(true)
                       setTimeout(() => setLinkCopied(false), 1800)
                     } catch { /* clipboard unavailable — the Open button still works */ }
@@ -381,6 +385,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
               >
                 {step === 0 && (
                   <div className="grid gap-3.5">
+                    {paymentsPaused && <PaymentsPaused />}
                     <Input label="Full name" value={form.name} onChange={set('name')} placeholder="Your name" />
                     <div className="grid gap-3.5 sm:grid-cols-2">
                       {/* Email & phone come from the verified profile and can't be
@@ -566,8 +571,8 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
 
                 {step === paymentStep && (
                   <div className="grid gap-4">
-                    <PayToCard account={payAccount} loading={payAccountLoading} amount={payable} note={event.name} />
-                    <ReceiptUploader value={receipt} onChange={setReceipt} />
+                    <PayToCard account={payAccount} loading={payAccountLoading} amount={payable} note={event.name} paused={paymentsPaused} />
+                    {!paymentsPaused && <ReceiptUploader value={receipt} onChange={setReceipt} />}
                   </div>
                 )}
 

@@ -11,7 +11,7 @@ import { receiptReady } from '../../lib/manualPay'
 // membership: a team leader whose receipt didn't go through, or anyone whose
 // receipt was rejected. `onSubmit(receipt)` performs the write and may throw a
 // readable error, which is shown here.
-export function ReceiptUploadModal({ open, onClose, title, amount, upiAccountId, note, rejectReason, onSubmit }) {
+export function ReceiptUploadModal({ open, onClose, title, amount, upiAccountId, note, rejectReason, onSubmit, paused = false }) {
   const [receipt, setReceipt] = useState({ image: '', utr: '' })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -50,14 +50,14 @@ export function ReceiptUploadModal({ open, onClose, title, amount, upiAccountId,
             <strong>Previous receipt rejected:</strong> {rejectReason}
           </p>
         )}
-        <PayToCard account={account} amount={amount} note={note} loading={loading} />
-        <ReceiptUploader value={receipt} onChange={setReceipt} disabled={busy} />
+        <PayToCard account={account} amount={amount} note={note} loading={loading} paused={paused} />
+        {!paused && <ReceiptUploader value={receipt} onChange={setReceipt} disabled={busy} />}
         {err && (
           <p className="flex items-start gap-2 text-xs text-rose-600 dark:text-rose-300">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {err}
           </p>
         )}
-        <Button onClick={submit} disabled={busy || !account || !receiptReady(receipt)}>
+        <Button onClick={submit} disabled={busy || paused || !account || !receiptReady(receipt)}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Submit receipt
         </Button>
       </div>
