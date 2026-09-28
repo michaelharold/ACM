@@ -302,7 +302,7 @@ function ModeSwitch({ mode, onChange, labels, className }) {
           onClick={() => onChange(o.k)}
           aria-pressed={mode === o.k}
           className={cn(
-            'relative flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+            'relative flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-[color,transform] duration-150 active:scale-[0.98]',
             mode === o.k ? 'text-neutral-900 dark:text-white' : 'text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200',
           )}
         >

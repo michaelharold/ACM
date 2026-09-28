@@ -17,7 +17,7 @@ export function GlobalMembershipButton({ className, block = false, note = false 
         target="_blank"
         rel="noopener noreferrer"
         className={cn(
-          'group inline-flex items-center justify-center gap-2 rounded-xl border border-sky-400/50 bg-sky-500/10 px-4 py-2.5 text-sm font-semibold text-sky-700 transition-all',
+          'group inline-flex items-center justify-center gap-2 rounded-xl border border-sky-400/50 bg-sky-500/10 px-4 py-2.5 text-sm font-semibold text-sky-700 transition-all active:scale-[0.97] active:duration-100',
           'shadow-[0_0_14px_rgba(56,189,248,0.25)] hover:border-sky-300 hover:bg-sky-500/15 hover:shadow-[0_0_20px_rgba(56,189,248,0.45)] dark:text-sky-200',
           block && 'w-full',
         )}

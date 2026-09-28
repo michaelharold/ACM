@@ -75,6 +75,9 @@ function measureOverflow() {
 
 async function audit(page, name) {
   await page.waitForTimeout(700)
+  // The intro loader's exit swells its wordmark past the viewport on purpose;
+  // measure the page itself, once the loader has gone.
+  await page.locator('#acm-loader').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
   const m = await page.evaluate(measureOverflow)
   const ok = m.docOverflow <= 1 && m.offenders.length === 0
   check(`${name} fits ${WIDTH}px`, ok, ok ? '' : `docOverflow=${m.docOverflow}; ${m.offenders.join(' | ')}`)
@@ -205,7 +208,7 @@ try {
   const admin = await newPage(browser, 'admin@audit.test')
   await admin.goto(`${BASE}/admin`)
   await admin.getByText('Control Center').waitFor({ timeout: 15000 })
-  for (const tab of ['Overview', 'Events', 'Execom', 'Site Content', 'Gallery', 'Membership', 'Verify payments', 'Payments', 'Messages', 'Registrations', 'Access']) {
+  for (const tab of ['Overview', 'Events', 'Execom', 'Text Content', 'Gallery', 'Membership', 'Verify payments', 'Payments', 'Messages', 'Registrations', 'Access']) {
     await admin.getByRole('button', { name: tab, exact: true }).first().click()
     await audit(admin, `admin ${tab}`)
   }

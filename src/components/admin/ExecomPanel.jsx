@@ -4,6 +4,7 @@ import { Plus, Trash2, Save, ImageUp, ChevronUp, ChevronDown, Users, AlertCircle
 import { Button } from '../ui/Button'
 import { InfoHint } from '../ui/Field'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { Collapse } from '../ui/Collapse'
 import { useData } from '../../context/DataContext'
 import { iconMap } from '../../lib/icons'
 import { avatarDataUri } from '../../lib/avatar'
@@ -289,7 +290,7 @@ export function ExecomPanel() {
               </div>
 
               {/* Members */}
-              {isOpen && (
+              <Collapse open={isOpen}>
                 <div className="mt-5 space-y-4 rounded-xl bg-neutral-50 p-3 sm:p-4 dark:bg-neutral-950/40">
                   <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-neutral-400">
                     <span>Members of {g.team || 'this team'}</span>
@@ -373,7 +374,7 @@ export function ExecomPanel() {
                     <Plus className="h-4 w-4" /> Add member to {g.team || 'this team'}
                   </Button>
                 </div>
-              )}
+              </Collapse>
             </div>
           )
         })}

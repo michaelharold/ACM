@@ -56,7 +56,7 @@ export function ExploreMore() {
             <Item key={c.to}>
               <Link
                 to={c.to}
-                className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/50 p-7 transition-all duration-300 hover:-translate-y-1 hover:border-acm-500/40 hover:bg-neutral-900 hover:shadow-2xl hover:shadow-black/40"
+                className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/50 p-7 transition-all duration-300 hover:-translate-y-1 active:translate-y-0 active:scale-[0.98] active:duration-100 hover:border-acm-500/40 hover:bg-neutral-900 hover:shadow-2xl hover:shadow-black/40"
               >
                 {/* Accent bar wipes in on hover */}
                 <span

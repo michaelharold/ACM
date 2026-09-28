@@ -42,6 +42,15 @@ export function DataProvider({ children }) {
   // defaults over the real settings, so saves are refused until a reload.
   const [contentLoadFailed, setContentLoadFailed] = useState(false)
 
+  // Tell the intro loader (index.html) once the first data is in, and cache
+  // the chapter name so the next visit's loader shows the admin's wording.
+  useEffect(() => {
+    if (loaded) window.__acmLoaded?.()
+  }, [loaded])
+  useEffect(() => {
+    try { localStorage.setItem('acm-brand-name', resolveText(content, 'brand.name')) } catch { /* private mode */ }
+  }, [content])
+
   // What visitors see: everything except events an admin is still drafting
   // (a new event starts as a draft, so a half-filled "Untitled Event" is never
   // public or registerable). Admin screens keep using `events`.
@@ -65,7 +74,10 @@ export function DataProvider({ children }) {
       svc.fetchGallery().then(set(setGallery)),
       svc.fetchSiteContent()
         .then((sc) => { if (alive && sc) setContent((c) => ({ ...c, ...sc })) })
-        .catch((err) => { if (alive) setContentLoadFailed(true); throw err }),
+        .catch((err) => { if (alive) setContentLoadFailed(true); throw err })
+        // The page's text and settings are what the first screen needs — the
+        // intro loader can finish once they're in (gallery images can follow).
+        .finally(() => window.__acmLoaded?.()),
     ].map((p) => p.catch((err) => {
       // eslint-disable-next-line no-console
       console.warn('[ACM] Firestore fetch failed for one source.', err)

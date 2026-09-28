@@ -77,6 +77,10 @@ try {
     const db = ctx.firestore()
     await setDoc(doc(db, `users/${adminUid}`), profile('Admin One', { email: 'admin@e2e.test', role: 'admin' }))
     await setDoc(doc(db, `users/${userUid}`), profile('User Two', { email: 'user@e2e.test' }))
+    await setDoc(doc(db, 'events/sheet'), {
+      name: 'Sheet Test Talk', date: new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10), time: '10:00 AM',
+      venue: 'Hall', shortDescription: 'Test', description: 'Test', status: 'open', fee: 0, poster: '', speakers: [],
+    })
   })
   const readDoc = async (path) => {
     let data
@@ -95,6 +99,24 @@ try {
   await shot(visitorPhone, 'c1-phone-signed-out')
   const visitor = await newPage(browser)
   check('desktop: Sign In / Sign Up sits in the top bar', await visible(visitor.locator('header nav').getByRole('link', { name: /Sign In \/ Sign Up/ })))
+
+  // ── Phone: dialogs are sheets you can pull down to dismiss ──────
+  await visitorPhone.goto(`${BASE}/events/sheet`)
+  const sheet = visitorPhone.getByRole('dialog')
+  check('phone: event opens as a sheet', await visible(sheet, 15000))
+  await visitorPhone.waitForTimeout(600) // let it finish rising
+  const grip = await sheet.locator('.cursor-grab').first().boundingBox()
+  if (grip) {
+    const x = grip.x + grip.width / 2
+    const y = grip.y + grip.height / 2
+    await visitorPhone.mouse.move(x, y)
+    await visitorPhone.mouse.down()
+    for (let i = 1; i <= 8; i++) await visitorPhone.mouse.move(x, y + i * 45)
+    await visitorPhone.mouse.up()
+  }
+  const dismissed = await sheet.first().waitFor({ state: 'detached', timeout: 5000 }).then(() => true, () => false)
+  check('phone: pulling the sheet down dismisses it', dismissed)
+  await visitorPhone.goto(`${BASE}/`)
 
   // ── Home: new Join label + Global Membership button ─────────────
   check('hero Join button says the full chapter name', await visible(visitor.getByText('Join ACM TKMCE Student Chapter')))
@@ -148,8 +170,8 @@ try {
 
   // ── The public site shows it all ────────────────────────────────
   await visitor.goto(`${BASE}/`)
-  check('Join label updated', await visible(visitor.getByText('Join the Chapter'), 20000))
   check('headline updated', await visible(visitor.getByText('TKM CE'), 20000))
+  check('Join label updated', await visible(visitor.getByRole('button', { name: /Join the Chapter/ }), 20000))
   check('Global link updated', (await visitor.getByRole('link', { name: /Get ACM Global Membership/ }).first().getAttribute('href')) === 'https://www.acm.org/membership')
   await visitor.locator('#about').scrollIntoViewIfNeeded()
   check('number tile relabelled', await visible(visitor.getByText('Workshops held')))

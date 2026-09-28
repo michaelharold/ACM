@@ -31,7 +31,7 @@ function SignInButton({ label, onClick }) {
     <Link
       to="/auth"
       onClick={onClick}
-      className="signin-glow inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-rose-400/70 bg-rose-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-rose-500 sm:px-3.5 sm:text-sm"
+      className="signin-glow inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-rose-400/70 bg-rose-600 px-3 text-xs font-semibold text-white transition-[background-color,transform] duration-150 hover:bg-rose-500 active:scale-95 sm:px-3.5 sm:text-sm"
     >
       <LogIn className="h-4 w-4 shrink-0" /> {label}
     </Link>
@@ -140,7 +140,7 @@ export function Navbar() {
         className={cn(
           'flex w-full max-w-6xl items-center justify-between gap-3 rounded-2xl border px-3 py-2 transition-all duration-300 sm:px-4',
           scrolled
-            ? 'border-neutral-200/80 bg-white/80 shadow-sm backdrop-blur-xl dark:border-neutral-800/80 dark:bg-neutral-950/70'
+            ? 'glass-surface border-neutral-200/80 bg-white/80 shadow-sm backdrop-blur-xl backdrop-saturate-150 dark:border-neutral-800/80 dark:bg-neutral-950/70'
             : 'border-transparent bg-transparent',
         )}
       >
@@ -169,7 +169,7 @@ export function Navbar() {
                 <button
                   onClick={() => goToSection(s)}
                   className={cn(
-                    'relative rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    'relative rounded-lg px-3 py-2 text-sm font-medium transition-[color,transform] duration-150 active:scale-95',
                     isActive
                       ? 'text-neutral-900 dark:text-white'
                       : 'text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white',
@@ -220,7 +220,7 @@ export function Navbar() {
                 onClick={() => setMenuUser((v) => !v)}
                 aria-label="Your profile"
                 aria-expanded={menuUser}
-                className="flex items-center gap-2 rounded-xl border border-neutral-200 py-1 pl-1 pr-2 transition-colors hover:border-neutral-300 dark:border-neutral-800 dark:hover:border-neutral-700"
+                className="flex items-center gap-2 rounded-xl border border-neutral-200 py-1 pl-1 pr-2 transition-[border-color,transform] duration-150 hover:border-neutral-300 active:scale-95 dark:border-neutral-800 dark:hover:border-neutral-700"
               >
                 <span className="relative">
                   <img
@@ -244,6 +244,8 @@ export function Navbar() {
                     exit={{ opacity: 0, y: 8, scale: 0.97 }}
                     transition={{ duration: 0.15 }}
                     onMouseLeave={() => setMenuUser(false)}
+                    // Grows out of the avatar that opened it, and shrinks back into it.
+                    style={{ transformOrigin: 'top right' }}
                     className="absolute right-0 mt-2 w-52 overflow-hidden rounded-xl border border-neutral-200 bg-white p-1.5 shadow-lg dark:border-neutral-800 dark:bg-neutral-900"
                   >
                     <div className="px-2.5 py-2">
@@ -285,7 +287,7 @@ export function Navbar() {
             onClick={() => setOpen((v) => !v)}
             aria-label="Menu"
             aria-expanded={open}
-            className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-200 text-neutral-600 lg:hidden dark:border-neutral-800 dark:text-neutral-300"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-neutral-200 text-neutral-600 transition-transform duration-150 active:scale-90 lg:hidden dark:border-neutral-800 dark:text-neutral-300"
           >
             <span className="relative block h-3.5 w-4.5" style={{ width: 18 }}>
               <motion.span
@@ -308,15 +310,30 @@ export function Navbar() {
         </div>
       </motion.nav>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — a dimmed backdrop you can tap to close, and a panel
+          that grows out of the menu button and folds back into it. */}
       <AnimatePresence>
         {open && (
+          <motion.button
+            key="scrim"
+            aria-label="Close menu"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setOpen(false)}
+            className="glass-scrim fixed inset-0 -z-10 cursor-default bg-neutral-950/40 backdrop-blur-[2px] lg:hidden"
+          />
+        )}
+        {open && (
           <motion.div
-            initial={{ opacity: 0, y: -12, scale: 0.98 }}
+            key="drawer"
+            initial={{ opacity: 0, y: -8, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -12, scale: 0.98 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="absolute inset-x-3 top-[76px] z-40 rounded-2xl border border-neutral-200 bg-white/95 p-3 shadow-xl backdrop-blur-xl lg:hidden dark:border-neutral-800 dark:bg-neutral-950/95"
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
+            style={{ transformOrigin: 'top right' }}
+            className="glass-surface absolute inset-x-3 top-[76px] z-40 rounded-2xl border border-neutral-200 bg-white/95 p-3 shadow-xl backdrop-blur-xl lg:hidden dark:border-neutral-800 dark:bg-neutral-950/95"
           >
             <motion.div
               initial="hidden"
@@ -329,7 +346,7 @@ export function Navbar() {
                   key={s.id}
                   variants={drawerItem}
                   onClick={() => goToSection(s)}
-                  className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                  className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-neutral-700 transition-[background-color,transform] duration-150 hover:bg-neutral-100 active:scale-[0.98] active:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:active:bg-neutral-800"
                 >
                   {t(s.label)}
                 </motion.button>
@@ -383,7 +400,7 @@ function MenuItem({ to, icon: Icon, children, onClick }) {
     <Link
       to={to}
       onClick={onClick}
-      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-neutral-700 transition-[background-color,transform] duration-150 hover:bg-neutral-100 active:scale-[0.98] active:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:active:bg-neutral-800"
     >
       <Icon className="h-4 w-4" /> {children}
     </Link>

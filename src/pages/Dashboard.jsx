@@ -493,7 +493,7 @@ export default function Dashboard() {
                     <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
                       <button
                         onClick={() => setSelected(event)}
-                        className="group flex w-full gap-4 p-3 text-left transition-colors hover:border-acm-300 dark:hover:border-acm-500/40"
+                        className="group flex w-full gap-4 p-3 text-left transition-[background-color,transform] duration-150 hover:bg-neutral-50 active:scale-[0.99] dark:hover:bg-neutral-800/40"
                       >
                         <img
                           src={event.poster || avatarDataUri(event.name || 'Event')}
@@ -620,7 +620,7 @@ export default function Dashboard() {
                   <button
                     key={reg.id}
                     onClick={() => setPastTicket({ reg, event })}
-                    className="group flex w-full min-w-0 items-center gap-3 rounded-xl border border-neutral-200 p-3 text-left transition-colors hover:border-acm-300 dark:border-neutral-800 dark:hover:border-acm-500/40"
+                    className="group flex w-full min-w-0 items-center gap-3 rounded-xl border border-neutral-200 p-3 text-left transition-[border-color,transform] duration-150 hover:border-acm-300 active:scale-[0.98] dark:border-neutral-800 dark:hover:border-acm-500/40"
                   >
                     <img
                       src={event.poster || avatarDataUri(event.name || 'Event')}

@@ -45,6 +45,8 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Modal } from '../components/ui/Modal'
 import { Field, FormSection, InfoHint } from '../components/ui/Field'
 import { Switch } from '../components/ui/Switch'
+import { AnimatedNumber } from '../components/ui/AnimatedNumber'
+import { Collapse } from '../components/ui/Collapse'
 import { VisibilityRow, EventControlsModal, EventQuickChips, lifecycle } from '../components/admin/EventControls'
 import { cn } from '../lib/cn'
 
@@ -78,6 +80,12 @@ export default function Admin() {
   const { events, addEvent, editEvent, removeEvent } = useData()
   const navigate = useNavigate()
   const [tab, setTab] = useState('overview')
+  const tabRail = useRef(null)
+  // Keep the active tab visible in the phone's swipeable tab row.
+  useEffect(() => {
+    const btn = tabRail.current?.querySelector('[aria-current="page"]')
+    btn?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+  }, [tab])
   // Demo mode shows sample rows; live mode starts empty and loads the real
   // roster (only for those allowed to read it — see loadRegistrations).
   const [regRows, setRegRows] = useState(() => (isLive ? [] : seedParticipants))
@@ -301,15 +309,18 @@ export default function Admin() {
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[220px_1fr]">
           {/* Tabs */}
-          <nav className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+          {/* Stays in reach while a long panel scrolls (desktop); on phones it's a
+              swipeable row that keeps the current tab in view. */}
+          <nav ref={tabRail} className="flex gap-1 overflow-x-auto [scrollbar-width:none] lg:sticky lg:top-24 lg:h-fit lg:flex-col lg:overflow-visible [&::-webkit-scrollbar]:hidden">
             {tabs.map((t) => {
               const active = tab === t.key
               return (
                 <button
                   key={t.key}
                   onClick={() => setTab(t.key)}
+                  aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'relative flex shrink-0 items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors',
+                    'relative flex shrink-0 items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-[color,transform] duration-150 active:scale-[0.97]',
                     active ? 'text-neutral-900 dark:text-white' : 'text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white',
                   )}
                 >
@@ -433,7 +444,7 @@ function Overview({ stats, events, paymentAlerts = 0, onReviewAlerts, reviewCoun
             <span className={cn('grid h-10 w-10 place-items-center rounded-xl', toneBg[s.tone])}>
               <s.icon className="h-5 w-5" />
             </span>
-            <div className="mt-4 text-3xl font-extrabold tracking-tight">{s.value}</div>
+            <div className="mt-4 text-3xl font-extrabold tracking-tight"><AnimatedNumber value={s.value} /></div>
             <div className="text-sm text-neutral-500 dark:text-neutral-400">{s.label}</div>
           </div>
         ))}
@@ -1219,7 +1230,9 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
-            {openId === e.id && <EventEditor key={e.id} event={e} onSave={(patch) => onSave(e.id, patch)} />}
+            <Collapse open={openId === e.id}>
+              <EventEditor key={e.id} event={e} onSave={(patch) => onSave(e.id, patch)} />
+            </Collapse>
           </div>
           )
         })}

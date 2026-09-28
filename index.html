@@ -14,12 +14,150 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
       rel="stylesheet"
     />
     <title>ACM TKMCE — Student Chapter</title>
+    <!--
+      Intro loader. Lives here (not in React) so it paints the instant the page
+      arrives, before the app bundle downloads. Brand-blue liquid rises inside
+      the chapter wordmark as the site actually loads — the app reports when it
+      mounts (__acmStep) and when its data is in (__acmLoaded) — then the
+      wordmark swells past the camera and the page is revealed.
+    -->
+    <style>
+      #acm-loader {
+        position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
+        background: #0a0a0a; color: #a3a3a3; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        transition: opacity 700ms cubic-bezier(0.32, 0.72, 0, 1) 200ms;
+      }
+      #acm-loader .stage { position: relative; width: min(92vw, 980px); }
+      #acm-loader svg {
+        display: block; width: 100%; height: auto; overflow: visible; opacity: 0;
+        transform-origin: 38% 62%;
+        transition: opacity 500ms ease, transform 1100ms cubic-bezier(0.7, 0, 0.2, 1);
+        filter: drop-shadow(0 0 22px rgba(31, 71, 245, 0.28));
+      }
+      #acm-loader.ready svg { opacity: 1; }
+      #acm-loader .count {
+        position: absolute; right: 0; top: 100%; margin-top: 10px; font-size: 13px; font-weight: 500;
+        letter-spacing: 0.01em; font-variant-numeric: tabular-nums; white-space: nowrap; transition: color 400ms ease, opacity 400ms ease;
+      }
+      #acm-loader.done .count { color: #525252; }
+      #acm-loader.leave { opacity: 0; pointer-events: none; }
+      #acm-loader.leave svg { transform: scale(7); opacity: 0.08; }
+      #acm-loader.leave .count { opacity: 0; }
+      @media (prefers-reduced-motion: reduce) {
+        #acm-loader, #acm-loader svg { transition: opacity 250ms ease; }
+        #acm-loader.leave svg { transform: none; }
+      }
+    </style>
+    <noscript><style>#acm-loader { display: none !important; }</style></noscript>
   </head>
   <body>
+    <div id="acm-loader" role="status" aria-label="Loading">
+      <div class="stage">
+        <svg id="acm-loader-svg" viewBox="0 0 1000 200" aria-hidden="true">
+          <defs>
+            <linearGradient id="acm-liquid" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stop-color="#8fb0ff" />
+              <stop offset="0.45" stop-color="#3f6bff" />
+              <stop offset="1" stop-color="#1634b8" />
+            </linearGradient>
+            <clipPath id="acm-letters"><text id="acm-clip-text" x="0" y="170" font-size="200" font-weight="900" letter-spacing="-8">ACM TKMCE</text></clipPath>
+          </defs>
+          <text id="acm-base-text" x="0" y="170" font-size="200" font-weight="900" letter-spacing="-8" fill="#262626">ACM TKMCE</text>
+          <g clip-path="url(#acm-letters)">
+            <path id="acm-wave-back" fill="#3f6bff" fill-opacity="0.35" />
+            <path id="acm-wave-front" fill="url(#acm-liquid)" />
+          </g>
+        </svg>
+        <div class="count" aria-hidden="true">loading… <span id="acm-loader-pct">0</span>%</div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var el = document.getElementById('acm-loader')
+        if (!el) return
+        var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches
+        var svg = document.getElementById('acm-loader-svg')
+        var base = document.getElementById('acm-base-text')
+        var clip = document.getElementById('acm-clip-text')
+        var back = document.getElementById('acm-wave-back')
+        var front = document.getElementById('acm-wave-front')
+        var pctEl = document.getElementById('acm-loader-pct')
+        // The wordmark follows the admin-editable chapter name (cached by the app).
+        try {
+          var name = localStorage.getItem('acm-brand-name')
+          if (name && name.length <= 24) { base.textContent = name; clip.textContent = name }
+        } catch (e) {}
+        // A returning visitor in the same session gets a quicker intro.
+        var seen = false
+        try { seen = sessionStorage.getItem('acm-intro-seen') === '1'; sessionStorage.setItem('acm-intro-seen', '1') } catch (e) {}
+        var MIN = seen ? 450 : 1500
+        var t0 = performance.now()
+        // Capital letters sit between the baseline (y 170) and cap height
+        // (~0.727 em for Inter): the liquid rises between those two lines.
+        var W = 1000, BASE = 170, TOP = 170 - 0.727 * 200
+        var last = t0
+        var target = 8, shown = 0, dataIn = false, finishing = false, gone = false
+
+        function fit() {
+          // Size the canvas to the real wordmark so it's never squashed.
+          try {
+            var box = base.getBBox()
+            W = Math.ceil(box.width + 8)
+            svg.setAttribute('viewBox', (box.x - 4) + ' ' + Math.floor(TOP - 18) + ' ' + W + ' ' + Math.ceil(BASE - TOP + 30))
+          } catch (e) {}
+        }
+        function wave(level, phase, amp, len) {
+          var d = 'M-10 ' + (BASE + 40)
+          for (var x = -10; x <= W + 10; x += 12) d += ' L' + x + ' ' + (level + amp * Math.sin((x / len) * 6.283 + phase)).toFixed(1)
+          return d + ' L' + (W + 10) + ' ' + (BASE + 40) + ' Z'
+        }
+        function frame(now) {
+          if (gone) return
+          var t = now - t0
+          var dt = Math.min(100, now - last)
+          last = now
+          // Until the data is in, creep toward 88% so progress never looks stuck.
+          if (!dataIn) target = Math.max(target, 88 * (1 - Math.exp(-t / 2600)))
+          else if (t >= MIN) target = 100
+          // Time-based easing, so it moves at the same pace on any frame rate.
+          shown += (target - shown) * (reduce ? 1 : 1 - Math.exp(-dt / 180))
+          if (target - shown < 0.3) shown = target
+          pctEl.textContent = Math.round(shown)
+          var level = BASE + 8 - (BASE - TOP + 20) * (shown / 100)
+          var calm = shown >= 100 ? 0 : 1
+          var amp = reduce ? 0 : (6 + 6 * Math.sin(t / 700)) * calm
+          back.setAttribute('d', wave(level - 10, t / 380 + 1.6, amp * 1.2, 260))
+          front.setAttribute('d', wave(level, t / 300, amp, 210))
+          if (shown >= 100 && !finishing) finish()
+          requestAnimationFrame(frame)
+        }
+        function finish() {
+          finishing = true
+          el.classList.add('done')
+          setTimeout(function () {
+            el.classList.add('leave')
+            window.__acmIntroDone = true
+            window.dispatchEvent(new Event('acm:intro-done'))
+            setTimeout(function () { gone = true; el.remove() }, reduce ? 500 : 1300)
+          }, reduce ? 50 : 280)
+        }
+        window.__acmStep = function () { target = Math.max(target, 30) }
+        window.__acmLoaded = function () { dataIn = true }
+        // Never hold the site hostage: whatever happens, reveal it.
+        setTimeout(function () { dataIn = true; target = 100 }, 7000)
+        var fonts = document.fonts && document.fonts.load ? document.fonts.load('900 100px Inter') : Promise.resolve()
+        var shownOnce = false
+        function reveal() { if (shownOnce) return; shownOnce = true; fit(); el.classList.add('ready') }
+        // A late font changes the glyphs' width — re-measure when it lands.
+        fonts.then(function () { fit(); reveal() }, reveal)
+        setTimeout(reveal, 700) // don't wait on a slow font forever
+        requestAnimationFrame(frame)
+      })()
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

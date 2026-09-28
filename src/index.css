@@ -14,6 +14,31 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
+  /* Type that reshapes with its size (Inter ships optical sizes). */
+  html {
+    font-optical-sizing: auto;
+  }
+  /* Taps answer instantly: no grey flash, no double-tap-zoom wait. */
+  a,
+  button,
+  [role='button'],
+  [role='switch'],
+  summary,
+  label {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  /* One consistent keyboard focus ring (mouse and touch don't trigger it). */
+  :where(a, button, [role='button'], [role='switch'], summary, [tabindex]:not([tabindex='-1'])):focus-visible {
+    outline: 2px solid rgb(89 142 255 / 0.85);
+    outline-offset: 2px;
+  }
+  /* Big headings read better balanced across lines. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
   body {
     @apply bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
     font-feature-settings: 'cv11', 'ss01';
@@ -171,4 +196,34 @@
 @keyframes signin-breathe {
   0%, 100% { box-shadow: 0 0 12px rgba(244, 63, 94, 0.45), 0 0 2px rgba(254, 205, 211, 0.6) inset; }
   50% { box-shadow: 0 0 24px rgba(244, 63, 94, 0.75), 0 0 2px rgba(254, 205, 211, 0.7) inset; }
+}
+
+/* Translucent chrome (header, menus, sheet backdrops) turns solid for people
+   who ask for less transparency or more contrast. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass-surface {
+    background-color: rgb(255 255 255) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  .dark .glass-surface {
+    background-color: rgb(10 10 10) !important;
+  }
+  .glass-scrim {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background-color: rgb(10 10 10 / 0.75) !important;
+  }
+}
+@media (prefers-contrast: more) {
+  .glass-surface {
+    background-color: rgb(255 255 255) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    border-color: rgb(115 115 115) !important;
+  }
+  .dark .glass-surface {
+    background-color: rgb(10 10 10) !important;
+    border-color: rgb(163 163 163) !important;
+  }
 }

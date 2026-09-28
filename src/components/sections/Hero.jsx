@@ -1,6 +1,6 @@
 import { Suspense, lazy, useRef, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, useScroll, useTransform } from 'framer-motion'
+import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion'
 import { ArrowRight, ArrowDown } from 'lucide-react'
 import SpecularButton from '../reactbits/SpecularButton'
 import BlurText from '../reactbits/BlurText'
@@ -8,6 +8,7 @@ import { SocialLinks } from '../SocialLinks'
 import { useTheme } from '../../context/ThemeContext'
 import { useText } from '../../context/DataContext'
 import { GlobalMembershipButton } from '../membership/GlobalMembershipButton'
+import { useIntroDone } from '../../lib/intro'
 import { scrollToId } from '../../lib/smoothScroll'
 
 // Fluid-sim backdrop (three.js) stays in its own lazy chunk.
@@ -37,6 +38,10 @@ export function Hero() {
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] })
   const contentY = useTransform(scrollYProgress, [0, 1], [0, -120])
   const contentOpacity = useTransform(scrollYProgress, [0, 0.75], [1, 0])
+  // Reduced motion: the copy just fades as it leaves — no drift.
+  const reduceMotion = useReducedMotion()
+  // Hold the entrance until the intro loader has swept away.
+  const introDone = useIntroDone()
 
   // Shared theme-aware styling for the secondary specular CTAs.
   const secondary = dark
@@ -46,7 +51,9 @@ export function Hero() {
   return (
     <section ref={ref} className="bg-grid relative flex min-h-[100svh] items-center overflow-hidden">
       {/* Liquid ether fluid backdrop — reacts to the cursor, self-drives when idle */}
-      {mounted && (
+      {/* The fluid sim starts once the intro loader is gone, so the two never
+          fight over the GPU. */}
+      {mounted && introDone && (
         <div className="absolute inset-0" aria-hidden>
           <Suspense fallback={null}>
             <LiquidEther
@@ -77,15 +84,15 @@ export function Hero() {
       <motion.div
         variants={container}
         initial="hidden"
-        animate="show"
-        style={{ y: contentY, opacity: contentOpacity }}
+        animate={introDone ? 'show' : 'hidden'}
+        style={{ y: reduceMotion ? 0 : contentY, opacity: contentOpacity }}
         className="section-shell pointer-events-none relative z-10 py-28 text-center"
       >
         {/* Official chapter mark — a one-shot reveal on load, then it holds still */}
         <motion.div variants={item} className="mx-auto mb-10 flex justify-center">
           <motion.div
             initial={{ opacity: 0, scale: 0.68, filter: 'blur(18px)' }}
-            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+            animate={introDone ? { opacity: 1, scale: 1, filter: 'blur(0px)' } : { opacity: 0, scale: 0.68, filter: 'blur(18px)' }}
             transition={{ duration: 1.25, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
             className="relative"
           >
@@ -94,7 +101,7 @@ export function Hero() {
             <motion.span
               aria-hidden
               initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 0.4, scale: 1.1 }}
+              animate={introDone ? { opacity: 0.4, scale: 1.1 } : { opacity: 0, scale: 0.8 }}
               transition={{ duration: 1.4, ease: 'easeOut', delay: 0.2 }}
               className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-acm-500/30 blur-[64px]"
             />
@@ -122,7 +129,7 @@ export function Hero() {
                 strokeWidth="3"
                 strokeLinecap="round"
                 initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
+                animate={{ pathLength: introDone ? 1 : 0 }}
                 transition={{ duration: 1, delay: 0.6, ease: 'easeInOut' }}
               />
               <defs>

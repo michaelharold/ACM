@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, useScroll, useTransform } from 'framer-motion'
+import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion'
 import { ArrowUpRight, ArrowUp, Mail } from 'lucide-react'
 import { Logo } from '../Logo'
 import { SocialLinks } from '../SocialLinks'
@@ -54,6 +54,7 @@ export function Footer() {
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end end'] })
   const markX = useTransform(scrollYProgress, [0, 1], [60, -30])
   const markOpacity = useTransform(scrollYProgress, [0, 0.6], [0, 1])
+  const reduceMotion = useReducedMotion()
 
   return (
     <footer ref={ref} className="relative overflow-hidden border-t border-neutral-200 bg-neutral-50/60 dark:border-neutral-800 dark:bg-neutral-900/40">
@@ -90,7 +91,7 @@ export function Footer() {
         {/* Giant parallax wordmark */}
         <motion.div
           aria-hidden
-          style={{ x: markX, opacity: markOpacity }}
+          style={{ x: reduceMotion ? 0 : markX, opacity: markOpacity }}
           className="pointer-events-none mt-14 select-none whitespace-nowrap text-center text-[clamp(3.5rem,13vw,10rem)] font-extrabold leading-none tracking-tighter text-transparent [-webkit-text-stroke:1.5px_rgba(31,71,245,0.22)] dark:[-webkit-text-stroke:1.5px_rgba(89,142,255,0.25)]"
         >
           {t('footer.wordmark')}
