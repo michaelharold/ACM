@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Eye, EyeOff, Loader2, MessageCircle, QrCode, MapPin, Save, AlertCircle, CheckCircle2, Radio, Flag } from 'lucide-react'
+import { Eye, EyeOff, Loader2, MessageCircle, QrCode, MapPin, Save, AlertCircle, CheckCircle2, Radio, Flag, BellRing, Send } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { Switch } from '../ui/Switch'
@@ -8,7 +8,9 @@ import { useData } from '../../context/DataContext'
 import * as svc from '../../services/firestore'
 import { fetchUpiAccounts } from '../../services/payments'
 import { isRazorpayMode } from '../../lib/payments'
-import { isEnded, isLiveNow } from '../../lib/eventClock'
+import { isEnded, isLiveNow, effectiveStatus } from '../../lib/eventClock'
+import { fetchEventAlerts, sendEventAlerts } from '../../services/engagement'
+import { useAuth } from '../../context/AuthContext'
 import { cn } from '../../lib/cn'
 
 const inputCls =
@@ -99,6 +101,11 @@ export function EventQuickChips({ event, onSave, onOpenControls }) {
 // checks on dates and windows getting in the way.
 export function EventControlsModal({ event, open, onClose, onSave }) {
   const { content } = useData()
+  const { user } = useAuth()
+  // People who tapped "Notify me" on this event, and the send result.
+  const [alerts, setAlerts] = useState(null)
+  const [alerting, setAlerting] = useState(false)
+  const [alertNote, setAlertNote] = useState('')
   const [draft, setDraft] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [saving, setSaving] = useState(false)
@@ -121,6 +128,9 @@ export function EventControlsModal({ event, open, onClose, onSave }) {
       if (alive && link != null) setDraft((d) => ({ ...d, whatsappLink: link }))
     })
     fetchUpiAccounts().then((l) => alive && setAccounts((l || []).filter((a) => a.active !== false))).catch(() => {})
+    setAlertNote('')
+    setAlerts(null)
+    if (!event.external) fetchEventAlerts(event.id).then((l) => alive && setAlerts(l)).catch(() => alive && setAlerts([]))
     return () => { alive = false }
     // Keyed to the event id: a save updates the event object, and that must not
     // reset the form mid-confirmation.
@@ -211,6 +221,40 @@ export function EventControlsModal({ event, open, onClose, onSave }) {
               onHint="Payers see the QR and can register."
               offHint="Payers see “payments paused” until you show it again."
             />
+          </div>
+        )}
+
+        {!event.external && alerts && (alerts.length > 0 || alertNote) && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-acm-300/40 bg-acm-500/5 p-3.5">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-acm-500" />
+              <div className="min-w-0 text-sm">
+                <div className="font-medium">{alertNote || `${alerts.length} ${alerts.length === 1 ? 'person is' : 'people are'} waiting to hear when registration opens`}</div>
+                {!alertNote && (
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {effectiveStatus(event) === 'open' ? 'Registration is open — let them know.' : 'Send it once registration opens.'}
+                  </p>
+                )}
+              </div>
+            </div>
+            {alerts.length > 0 && (
+              <Button
+                size="sm"
+                disabled={alerting}
+                onClick={async () => {
+                  setAlerting(true)
+                  try {
+                    const n = await sendEventAlerts({ event, alerts, fromName: user?.name })
+                    setAlerts([])
+                    setAlertNote(`Sent to ${n} ${n === 1 ? 'person' : 'people'} — it’s in their inbox.`)
+                  } finally {
+                    setAlerting(false)
+                  }
+                }}
+              >
+                {alerting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Notify them
+              </Button>
+            )}
           </div>
         )}
 

@@ -28,6 +28,8 @@ import { useNow } from '../lib/eventClock'
 import { splitByEventEnd, whatsappLinkFor, isQrHidden } from '../lib/eventAccess'
 import { fetchMyVerification } from '../services/membership'
 import { PendingVerification } from '../components/membership/VerifyExisting'
+import PeekRating from '../components/reactbits/PeekRating'
+import { fetchMyRatings, rateEvent, RATING_LABELS } from '../services/engagement'
 
 export default function Dashboard() {
   const { user, loading, logout, saveProfile } = useAuth()
@@ -55,6 +57,9 @@ export default function Dashboard() {
   const [verification, setVerification] = useState(null)
   // A past event's pass, opened from Events History.
   const [pastTicket, setPastTicket] = useState(null)
+  // { eventId: 1–5 } — the stars this person gave events they attended.
+  const [ratings, setRatings] = useState({})
+  const [ratingSaved, setRatingSaved] = useState('')
   // Re-evaluated every minute, so a ticket moves to Events History by itself
   // once its event ends while the page is open.
   const now = useNow(60000)
@@ -157,6 +162,26 @@ export default function Dashboard() {
     ]).finally(() => { if (alive) setMembershipLoaded(true) })
     return () => { alive = false }
   }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    let alive = true
+    fetchMyRatings(user.id).then((r) => { if (alive) setRatings(r) }).catch(() => {})
+    return () => { alive = false }
+  }, [user])
+
+  async function rate(reg, event, value) {
+    if (!value) return
+    const prev = ratings[event.id]
+    setRatings((r) => ({ ...r, [event.id]: value }))
+    try {
+      await rateEvent({ uid: user.id, event, reg, rating: value })
+      setRatingSaved(event.id)
+      setTimeout(() => setRatingSaved((id) => (id === event.id ? '' : id)), 2200)
+    } catch {
+      setRatings((r) => ({ ...r, [event.id]: prev }))
+    }
+  }
 
   // Random Grouping can turn a solo registration into a team registration in
   // the background (daily cron), so a tab left open across that window won't
@@ -617,10 +642,10 @@ export default function Dashboard() {
               {pastEvents.map(({ reg, event }) => {
                 const took = hasTicket(reg)
                 return (
+                  <div key={reg.id} className="overflow-hidden rounded-xl border border-neutral-200 transition-colors hover:border-acm-300 dark:border-neutral-800 dark:hover:border-acm-500/40">
                   <button
-                    key={reg.id}
                     onClick={() => setPastTicket({ reg, event })}
-                    className="group flex w-full min-w-0 items-center gap-3 rounded-xl border border-neutral-200 p-3 text-left transition-[border-color,transform] duration-150 hover:border-acm-300 active:scale-[0.98] dark:border-neutral-800 dark:hover:border-acm-500/40"
+                    className="group flex w-full min-w-0 items-center gap-3 rounded-xl p-3 text-left transition-transform duration-150 active:scale-[0.98]"
                   >
                     <img
                       src={event.poster || avatarDataUri(event.name || 'Event')}
@@ -638,6 +663,29 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </button>
+                    {took && !event.missing && (
+                      <div className="flex items-center justify-between gap-3 border-t border-neutral-100 px-3 pb-1.5 dark:border-neutral-800">
+                        <span className="pt-5 text-xs text-neutral-500 dark:text-neutral-400">
+                          {ratingSaved === event.id ? 'Thanks for rating!' : ratings[event.id] ? 'Your rating' : 'How was it?'}
+                        </span>
+                        <PeekRating
+                          value={ratings[event.id] || 0}
+                          onChange={(v) => rate(reg, event, v)}
+                          labels={RATING_LABELS}
+                          ariaLabel={`Rate ${event.name}`}
+                          allowClear={false}
+                          size={20}
+                          lift={5}
+                          magnify={1.18}
+                          riseDuration={380}
+                          activeColor="#fbbf24"
+                          idleColor="#404040"
+                          tipColor="#171717"
+                          tipTextColor="#fafafa"
+                        />
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>

@@ -10,6 +10,9 @@ import { formatDateLong, formatDateTime, normalizeUrl } from '../../lib/format'
 import { fetchEventGuidelineImages } from '../../services/firestore'
 import { useAuth } from '../../context/AuthContext'
 import { isTkmCollege } from '../../lib/orgData'
+import { useNavigate, useLocation } from 'react-router-dom'
+import BellToggle from '../reactbits/BellToggle'
+import { fetchMyAlerts, setEventAlert } from '../../services/engagement'
 
 function Fact({ icon: Icon, label, value }) {
   return (
@@ -27,6 +30,28 @@ function Fact({ icon: Icon, label, value }) {
 
 export function EventDetailsModal({ event, open, onClose, onRegister, registered }) {
   const { user } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  // "Notify me when registration opens" — whether this person asked already.
+  const [alerted, setAlerted] = useState(false)
+  useEffect(() => {
+    if (!open || !user || !event) return undefined
+    let alive = true
+    fetchMyAlerts(user.id).then((set) => { if (alive) setAlerted(set.has(event.id)) }).catch(() => {})
+    return () => { alive = false }
+  }, [open, user, event])
+  async function toggleAlert(on) {
+    if (!user) {
+      navigate('/auth', { state: { from: location.pathname } })
+      return
+    }
+    setAlerted(on)
+    try {
+      await setEventAlert({ user, event, on })
+    } catch {
+      setAlerted(!on)
+    }
+  }
   // Re-render as time passes, so "Register Now" enables/disables by itself when
   // the registration window opens or closes while the modal is open.
   const now = useNow()
@@ -208,6 +233,23 @@ export function EventDetailsModal({ event, open, onClose, onRegister, registered
             <Button variant="outline" disabled className="!opacity-100">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Registered
             </Button>
+          ) : status === 'coming-soon' && !ineligible ? (
+            <BellToggle
+              pressed={alerted}
+              onChange={toggleAlert}
+              offLabel="Notify me"
+              onLabel="You'll be notified"
+              label="Notify me when registration opens"
+              color="#e5e5e5"
+              background="#262626"
+              onColor="#ffffff"
+              onBackground="#1f47f5"
+              ringDuration={950}
+              ringPasses={5}
+              crossfadeMs={260}
+              revealBounce={0.08}
+              badge={false}
+            />
           ) : (
             <Button disabled={!canRegister} onClick={() => onRegister?.(event)}>
               {ineligible ? 'TKM students only' : status === 'open' ? 'Register Now' : meta.label}

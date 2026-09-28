@@ -9,6 +9,8 @@ import { Badge } from '../ui/Badge'
 import { InfoHint } from '../ui/Field'
 import { ComposeMessageModal } from '../messages/Thread'
 import * as svc from '../../services/firestore'
+import { fetchAllRatings } from '../../services/engagement'
+import { Star } from 'lucide-react'
 import { useNow, startMs } from '../../lib/eventClock'
 import { formatDate } from '../../lib/format'
 import { downloadCsv } from '../../lib/csv'
@@ -50,6 +52,7 @@ export function AnalyticsPanel({ regs = [], events = [], adminName, canMessage =
   const [peopleFilter, setPeopleFilter] = useState('all')
   const [users, setUsers] = useState([])
   const [memberships, setMemberships] = useState([])
+  const [ratings, setRatings] = useState([])
   const [limited, setLimited] = useState(false)
   const now = useNow(60000)
 
@@ -61,8 +64,10 @@ export function AnalyticsPanel({ regs = [], events = [], adminName, canMessage =
     Promise.all([
       svc.fetchUsers().catch(() => null),
       svc.fetchAllMemberships().catch(() => null),
-    ]).then(([u, m]) => {
+      fetchAllRatings().catch(() => []),
+    ]).then(([u, m, r]) => {
       if (!alive) return
+      setRatings(r || [])
       setUsers(u || [])
       setMemberships(m || [])
       setLimited(!u || !m)
@@ -77,11 +82,11 @@ export function AnalyticsPanel({ regs = [], events = [], adminName, canMessage =
     const ids = new Set(evs.map((e) => e.id))
     const rs = regs.filter((r) => ids.has(r.eventId))
     const members = memberIndex({ users, memberships })
-    const stats = allEventStats(evs, rs, { now, members }).sort((a, b) => b.start - a.start)
+    const stats = allEventStats(evs, rs, { now, members, ratings }).sort((a, b) => b.start - a.start)
     const people = peopleStats({ regs: rs, users, memberships, events: evs, now })
     const periodLabel = PERIODS.find((p) => p.k === period)?.label || 'All time'
     return { from, evs, rs, stats, people, periodLabel, t: totals(stats, people, memberships) }
-  }, [events, regs, users, memberships, period, now])
+  }, [events, regs, users, memberships, ratings, period, now])
 
   const focus = data.stats.find((s) => s.id === focusId)
     || [...data.stats].filter((s) => s.registrations > 0).sort((a, b) => b.start - a.start)[0]
@@ -158,7 +163,7 @@ function Overview({ data, now, onOpenEvent, onPeople }) {
         <StatTile icon={IndianRupee} label="Collected" value={fmtMoney(t.collected + t.membershipFees)} sub={`${fmtMoney(t.membershipFees)} memberships${t.underReview ? ` · ${fmtMoney(t.underReview)} in review` : ''}`} accent="good" />
         <StatTile icon={BadgeCheck} label="By ACM members" value={fmtPct(t.registrations ? t.memberRegs / t.registrations : null)} sub={`${fmtInt(t.members)} members on record`} accent="member" />
         <StatTile icon={Globe} label="From outside TKM" value={fmtInt(t.outside)} sub={fmtPct(t.registrations ? t.outside / t.registrations : null) + ' of registrations'} accent="outside" />
-        <StatTile icon={GaugeIcon} label="Avg success" value={t.avgSuccess} sub="score out of 100" accent="line" />
+        <StatTile icon={GaugeIcon} label="Avg success" value={t.avgSuccess} sub={t.avgRating != null ? `out of 100 · ★ ${t.avgRating.toFixed(1)} from ${fmtInt(t.ratingCount)} ratings` : 'score out of 100'} accent="line" />
       </div>
 
       {t.participatedNonMembers > 0 && (
@@ -286,6 +291,8 @@ function EventSuccess({ data, focus, onFocus }) {
       { label: 'Outside TKM', value: (s) => s.outside },
       { label: 'Collected (₹)', value: (s) => s.collected },
       { label: 'Under review (₹)', value: (s) => s.underReview },
+      { label: 'Average rating', value: (s) => (s.avgRating != null ? s.avgRating.toFixed(2) : '') },
+      { label: 'Ratings', value: (s) => s.ratingCount },
       { label: 'Success score', value: (s) => s.successScore },
     ])
   }
@@ -316,12 +323,13 @@ function EventSuccess({ data, focus, onFocus }) {
             <div className="flex justify-between"><dt className="text-neutral-500">Completion</dt><dd className="font-semibold tabular-nums">{fmtPct(focus.completion)}</dd></div>
           </dl>
         </ChartCard>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <StatTile icon={Star} label="Rating" value={focus.avgRating != null ? `★ ${focus.avgRating.toFixed(1)}` : '—'} sub={focus.ratingCount ? `${fmtInt(focus.ratingCount)} ${focus.ratingCount === 1 ? 'rating' : 'ratings'}` : focus.stage === 'ended' ? 'No ratings yet' : 'After it ends'} accent="nonmember" />
           <StatTile icon={Trophy} label="Registrations" value={fmtInt(focus.registrations)} sub={rank ? `#${rank} of ${ranked.length} events` : ''} accent="bar" />
           <StatTile icon={Users} label="Fill rate" value={focus.fillRate == null ? 'No cap' : fmtPct(focus.fillRate)} sub={focus.capacity ? `${fmtInt(focus.registrations - focus.states.rejected)} of ${fmtInt(focus.capacity)} seats` : plural(focus.people, 'person', 'people')} accent="inside" />
           <StatTile icon={CheckCircle2} label="Tickets issued" value={fmtInt(focus.ticketed)} sub={`${fmtPct(focus.completion)} of registrations`} accent="good" />
           <StatTile icon={IndianRupee} label="Collected" value={fmtMoney(focus.collected)} sub={focus.underReview ? `${fmtMoney(focus.underReview)} under review` : focus.fee ? `₹${focus.fee} fee` : 'Free event'} accent="member" />
-          <ChartCard title="Registrations vs other events" subtitle="This event highlighted" className="col-span-2 md:col-span-4">
+          <ChartCard title="Registrations vs other events" subtitle="This event highlighted" className="col-span-2 md:col-span-5">
             <BarList
               items={ranked.slice(0, 12).map((s) => ({ key: s.id, label: s.name, value: s.registrations }))}
               highlight={focus.id}
@@ -382,6 +390,7 @@ function EventSuccess({ data, focus, onFocus }) {
                 {th('memberRegs', 'Members')}
                 {th('outside', 'Outside')}
                 {th('collected', 'Collected')}
+                {th('avgRating', 'Rating')}
                 {th('successScore', 'Score', 'pr-5')}
               </tr>
             </thead>
@@ -403,6 +412,7 @@ function EventSuccess({ data, focus, onFocus }) {
                   <td className="px-3 py-2.5">{fmtInt(s.memberRegs)}<span className="text-neutral-400"> / {fmtInt(s.nonMemberRegs)}</span></td>
                   <td className="px-3 py-2.5">{fmtInt(s.outside)}</td>
                   <td className="px-3 py-2.5">{fmtMoney(s.collected)}</td>
+                  <td className="px-3 py-2.5">{s.avgRating != null ? <span title={`${s.ratingCount} ratings`}>★ {s.avgRating.toFixed(1)}</span> : <span className="text-neutral-400">—</span>}</td>
                   <td className="px-3 py-2.5 pr-5">
                     <span className="inline-flex items-center gap-2">
                       <span className="h-1.5 w-12 rounded-full bg-neutral-200 dark:bg-neutral-700">

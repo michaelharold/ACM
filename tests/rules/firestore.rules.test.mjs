@@ -312,3 +312,33 @@ test('verification request: editor approves (membership, flag, request); member 
   await assertSucceeds(setDoc(doc(db, 'memberVerifications/alice'), vreq({ membershipId: '43' })))
   await assertSucceeds(deleteDoc(doc(db, 'memberVerifications/alice')))
 })
+
+// ── event ratings + registration alerts ──────────────────────
+test('ratings: only a ticket holder rates, 1–5, as themselves', async () => {
+  await seed(async (db) => {
+    await setDoc(doc(db, 'registrations/tk'), reg({ paymentStatus: 'paid' }))
+    await setDoc(doc(db, 'registrations/unpaid'), reg({ userId: 'bob', paymentStatus: 'pending' }))
+  })
+  const rate = (who, over = {}) => setDoc(doc(as(who), `eventRatings/paid_${who}`), { eventId: 'paid', userId: who, registrationId: 'tk', rating: 4, ...over })
+  await assertSucceeds(rate('alice'))
+  await assertSucceeds(rate('alice', { rating: 5 })) // change your mind
+  await assertFails(rate('alice', { rating: 6 }))
+  await assertFails(rate('alice', { rating: 3.5 }))
+  await assertFails(rate('bob')) // bob's name on alice's ticket
+  await assertFails(rate('bob', { registrationId: 'unpaid' })) // no verified ticket
+  await assertFails(setDoc(doc(as('alice'), 'eventRatings/free_alice'), { eventId: 'free', userId: 'alice', registrationId: 'tk', rating: 4 })) // wrong event
+  await assertSucceeds(getDocs(collection(as('eventsEditor'), 'eventRatings')))
+  await assertFails(getDocs(collection(as('bob'), 'eventRatings')))
+})
+
+test('alerts: own subscription only; event editors read, message and clear', async () => {
+  const mine = (who, over = {}) => setDoc(doc(as(who), `eventAlerts/paid_${who}`), { eventId: 'paid', userId: who, userName: who, userEmail: `${who}@example.com`, ...over })
+  await assertSucceeds(mine('alice'))
+  await assertFails(setDoc(doc(as('bob'), 'eventAlerts/paid_alice'), { eventId: 'paid', userId: 'alice' }))
+  await assertFails(setDoc(doc(as('bob'), 'eventAlerts/ghost_bob'), { eventId: 'ghost', userId: 'bob' }))
+  await assertSucceeds(getDocs(query(collection(as('alice'), 'eventAlerts'), where('userId', '==', 'alice'))))
+  await assertFails(getDocs(collection(as('bob'), 'eventAlerts')))
+  await assertSucceeds(getDocs(collection(as('eventsEditor'), 'eventAlerts')))
+  await assertSucceeds(setDoc(doc(as('eventsEditor'), 'messages/m1'), { userId: 'alice', body: 'open!', initiatedBy: 'admin' }))
+  await assertSucceeds(deleteDoc(doc(as('eventsEditor'), 'eventAlerts/paid_alice')))
+})

@@ -91,6 +91,17 @@ service cloud.firestore {
         && !d.keys().hasAny(['reviewedBy', 'reviewedAt', 'denyReason', 'approvedMembershipId', 'verifiedVia']);
     }
 
+    // Does this registration give the caller a ticket to that event (their own
+    // or their team's, paid or free)?
+    function holdsTicket(regId, eventId) {
+      let path = /databases/$(database)/documents/registrations/$(regId);
+      return regId is string && regId.size() > 0 && exists(path)
+        && get(path).data.eventId == eventId
+        && (get(path).data.userId == request.auth.uid
+            || request.auth.uid in get(path).data.get('memberUids', []))
+        && get(path).data.get('paymentStatus', '') in ['paid', 'free'];
+    }
+
     function membershipFeeIsZero() {
       return !exists(/databases/$(database)/documents/siteContent/main)
         || get(/databases/$(database)/documents/siteContent/main).data.get('membershipFee', 0) <= 0;
@@ -169,7 +180,7 @@ service cloud.firestore {
           && request.resource.data.body is string
           && request.resource.data.body.size() > 0
           && request.resource.data.body.size() <= 4000)
-        || isAdmin() || hasPerm('messages') || hasPerm('membership') || hasPerm('registrations');
+        || isAdmin() || hasPerm('messages') || hasPerm('membership') || hasPerm('registrations') || hasPerm('events');
       // Admins and 'messages'-granted editors manage any thread. The thread's
       // owner may only append a reply and toggle the unread flags on their
       // own thread — no other fields may change.
@@ -275,6 +286,34 @@ service cloud.firestore {
             && validVerificationRequest(uid));
       allow delete: if isAdmin() || hasPerm('membership')
         || (isSignedIn() && request.auth.uid == uid && resource.data.status != 'approved');
+    }
+
+    // Star ratings — one per person per event (id = eventId_uid), only from
+    // someone holding a ticket to it. The person reads their own; event and
+    // registration managers read them all for analytics.
+    match /eventRatings/{id} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin() || hasPerm('events') || hasPerm('registrations'));
+      allow create, update: if isSignedIn()
+        && id == request.resource.data.eventId + '_' + request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+        && holdsTicket(request.resource.data.registrationId, request.resource.data.eventId);
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // "Notify me when registration opens" — one per person per event. Event
+    // editors read the list, message everyone, then clear it.
+    match /eventAlerts/{id} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin() || hasPerm('events'));
+      allow create: if isSignedIn()
+        && id == request.resource.data.eventId + '_' + request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && exists(/databases/$(database)/documents/events/$(request.resource.data.eventId));
+      allow delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin() || hasPerm('events'));
     }
 
     // UPI / QR payment accounts shown to payers — public, since the QR and UPI

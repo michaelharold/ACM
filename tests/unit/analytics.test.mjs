@@ -64,3 +64,13 @@ test('the admin roster\'s "—" placeholder is unknown, not an outside college',
   assert.equal(s.outside, 0)
   assert.deepEqual(s.departments, [{ label: 'Not set', value: 1 }])
 })
+
+test('ratings average per event and overall', () => {
+  const ratings = [{ eventId: 'past', rating: 5 }, { eventId: 'past', rating: 4 }, { eventId: 'soon', rating: 2 }, { eventId: 'past', rating: 9 }]
+  const stats = allEventStats([past, soon], regs, { now, ratings })
+  assert.equal(stats[0].avgRating, 4.5)
+  assert.equal(stats[0].ratingCount, 2) // the out-of-range 9 is ignored
+  const t = totals(stats, peopleStats({ regs, users, events: [past, soon], now }))
+  assert.equal(t.ratingCount, 3)
+  assert.ok(Math.abs(t.avgRating - 11 / 3) < 1e-9)
+})
