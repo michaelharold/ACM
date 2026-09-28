@@ -1,4 +1,5 @@
-// Attendee engagement: star ratings for events people took part in, and
+// Attendee engagement: star ratings (with optional remarks and suggestions)
+// for events people took part in, and
 // "notify me when registration opens" alerts for upcoming events. Security
 // rules decide who may rate (ticket holders only) and who may read/send
 // alerts (event editors). Mock mode keeps everything in localStorage.
@@ -19,23 +20,34 @@ const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 // ── Ratings ──────────────────────────────────────────────────
 export const RATING_LABELS = ['Not great', 'Okay', 'Good', 'Great', 'Loved it']
 
-// { [eventId]: rating } for one person.
+// Remarks and suggestions are capped to what the security rules accept.
+export const FEEDBACK_MAX = 1000
+const cleanText = (v) => String(v || '').replace(/\r\n?/g, '\n').trim().slice(0, FEEDBACK_MAX)
+
+// { [eventId]: { rating, remarks, suggestions } } for one person.
 export async function fetchMyRatings(uid) {
   if (!uid) return {}
   const list = isFirebaseConfigured
     ? rows(await getDocs(query(collection(db, 'eventRatings'), where('userId', '==', uid))))
     : readLocal(RATINGS).filter((r) => r.userId === uid)
-  return Object.fromEntries(list.map((r) => [r.eventId, r.rating]))
+  return Object.fromEntries(list.map((r) => [r.eventId, { rating: r.rating, remarks: r.remarks || '', suggestions: r.suggestions || '' }]))
 }
 
-export async function rateEvent({ uid, event, reg, rating }) {
+// Saves a star rating, and optionally the written remarks/suggestions. Fields
+// left undefined keep whatever was saved before (the write merges).
+export async function rateEvent({ uid, userName, event, reg, rating, remarks, suggestions }) {
   const value = Math.max(1, Math.min(5, Math.round(Number(rating) || 0)))
   const data = { eventId: event.id, eventName: event.name || '', userId: uid, registrationId: reg.id, rating: value }
+  if (userName) data.userName = String(userName).trim().slice(0, 120)
+  if (remarks !== undefined) data.remarks = cleanText(remarks)
+  if (suggestions !== undefined) data.suggestions = cleanText(suggestions)
   if (!isFirebaseConfigured) {
-    writeLocal(RATINGS, [...readLocal(RATINGS).filter((r) => !(r.userId === uid && r.eventId === event.id)), data])
+    const all = readLocal(RATINGS)
+    const prev = all.find((r) => r.userId === uid && r.eventId === event.id) || {}
+    writeLocal(RATINGS, [...all.filter((r) => r !== prev), { ...prev, ...data, updatedAt: new Date().toISOString() }])
     return value
   }
-  await setDoc(doc(db, 'eventRatings', `${event.id}_${uid}`), { ...data, updatedAt: serverTimestamp() })
+  await setDoc(doc(db, 'eventRatings', `${event.id}_${uid}`), { ...data, updatedAt: serverTimestamp() }, { merge: true })
   return value
 }
 

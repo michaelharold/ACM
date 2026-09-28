@@ -148,6 +148,21 @@ try {
   check('rating thanks the attendee', await visible(a.getByText('Thanks for rating!')))
   await shot(a, 'm1b-rating')
 
+  // ── Remarks & suggestions ────────────────────────────────────────
+  await a.getByRole('button', { name: 'Add remarks & suggestions' }).click()
+  const sheet = a.getByRole('form', { name: 'Event feedback' })
+  await sheet.waitFor()
+  check('feedback sheet starts from the saved rating', (await sheet.getByRole('radio', { name: /^4 of 5/ }).getAttribute('aria-checked')) === 'true')
+  await sheet.getByLabel('Remarks').fill('Loved the hands-on demos')
+  await sheet.getByLabel('Suggestions').fill('Start ten minutes earlier')
+  await shot(a, 'm1c-feedback-sheet')
+  await sheet.getByRole('button', { name: 'Save feedback' }).click()
+  let fb
+  for (let i = 0; i < 30 && !fb?.remarks; i++) { fb = await readDoc(`eventRatings/past_${asha}`); if (!fb?.remarks) await a.waitForTimeout(200) }
+  check('attendee saves remarks and suggestions', fb?.rating === 4 && fb?.remarks === 'Loved the hands-on demos' && fb?.suggestions === 'Start ten minutes earlier', JSON.stringify(fb))
+  await sheet.waitFor({ state: 'detached' }).catch(() => {})
+  check('history card offers to edit the remarks', await visible(a.getByRole('button', { name: 'Edit your remarks' })))
+
   // ── Notify me when registration opens ───────────────────────────
   await a.goto(`${BASE}/events/soon`)
   const bell = a.getByRole('button', { name: 'Notify me when registration opens' })
@@ -289,7 +304,16 @@ try {
   await admin.getByRole('button', { name: 'Analytics', exact: true }).last().click()
   check('analytics overview renders', await visible(admin.getByText('Registrations over time')))
   check('analytics counts members vs non-members', await visible(admin.getByText('ACM members vs non-members')))
+  const quote = admin.getByText('“Loved the hands-on demos”')
+  check('overview shows the latest feedback', await visible(quote))
   await shot(admin, 'm8-analytics-overview')
+  await quote.click()
+  const fbCard = admin.locator('#analytics-feedback')
+  check('event feedback lists remarks and suggestions',
+    (await visible(fbCard.getByText('Loved the hands-on demos'))) && (await visible(fbCard.getByText('Start ten minutes earlier'))))
+  check('feedback shows who wrote it', await visible(fbCard.getByText('Asha K')))
+  await fbCard.scrollIntoViewIfNeeded()
+  await shot(admin, 'm9b-analytics-feedback')
   await admin.getByRole('radio', { name: 'Event success', exact: true }).click()
   check('event success view renders', await visible(admin.getByText('Every event, ranked')))
   check('analytics shows the rating', await visible(admin.getByText('★ 4.0')))

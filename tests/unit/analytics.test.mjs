@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { eventStats, allEventStats, peopleStats, totals, timeline, memberIndex, participantsOf } from '../../src/lib/analytics.js'
+import { eventStats, allEventStats, peopleStats, totals, timeline, memberIndex, participantsOf, latestFeedback } from '../../src/lib/analytics.js'
 
 const TKM = 'TKM College Of Engineering, Kollam'
 const now = new Date(2030, 5, 15, 12).getTime()
@@ -73,4 +73,25 @@ test('ratings average per event and overall', () => {
   const t = totals(stats, peopleStats({ regs, users, events: [past, soon], now }))
   assert.equal(t.ratingCount, 3)
   assert.ok(Math.abs(t.avgRating - 11 / 3) < 1e-9)
+})
+
+test('written feedback is collected per event, newest first', () => {
+  const ratings = [
+    { eventId: 'past', userId: 'a', userName: 'Asha', rating: 5, remarks: '  Loved the hands-on part ', updatedAt: { seconds: 100 } },
+    { eventId: 'past', userId: 'b', rating: 3, suggestions: 'Start on time', updatedAt: { seconds: 200 } },
+    { eventId: 'past', userId: 'c', rating: 4, remarks: '   ' },
+    { eventId: 'soon', userId: 'd', rating: 2, remarks: 'Too crowded', updatedAt: { seconds: 50 } },
+  ]
+  const stats = allEventStats([past, soon], regs, { now, ratings })
+  const p = stats.find((s) => s.id === 'past')
+  assert.deepEqual(p.ratingSpread.map((x) => x.count), [1, 1, 1, 0, 0])
+  assert.equal(p.feedback.length, 2) // a blank remark doesn't count
+  assert.equal(p.feedback[0].name, 'Attendee')
+  assert.equal(p.feedback[0].suggestions, 'Start on time')
+  assert.equal(p.feedback[1].remarks, 'Loved the hands-on part')
+  const t = totals(stats, peopleStats({ regs, users: [], memberships: [], events: [past, soon], now }), [])
+  assert.equal(t.feedbackCount, 3)
+  const latest = latestFeedback(stats, 2)
+  assert.deepEqual(latest.map((f) => f.eventName), [past.name, past.name])
+  assert.equal(latest[0].at, 200000)
 })

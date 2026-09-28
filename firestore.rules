@@ -91,6 +91,11 @@ service cloud.firestore {
         && !d.keys().hasAny(['reviewedBy', 'reviewedAt', 'denyReason', 'approvedMembershipId', 'verifiedVia']);
     }
 
+    // An optional text field: absent, or a string of at most `max` characters.
+    function shortText(data, key, max) {
+      return !(key in data) || (data[key] is string && data[key].size() <= max);
+    }
+
     // Does this registration give the caller a ticket to that event (their own
     // or their team's, paid or free)?
     function holdsTicket(regId, eventId) {
@@ -288,17 +293,22 @@ service cloud.firestore {
         || (isSignedIn() && request.auth.uid == uid && resource.data.status != 'approved');
     }
 
-    // Star ratings — one per person per event (id = eventId_uid), only from
-    // someone holding a ticket to it. The person reads their own; event and
-    // registration managers read them all for analytics.
+    // Star ratings with optional remarks and suggestions — one per person per
+    // event (id = eventId_uid), only from someone holding a ticket to it. The
+    // person reads their own; event and registration managers read them all
+    // for analytics.
     match /eventRatings/{id} {
       allow read: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isAdmin() || hasPerm('events') || hasPerm('registrations'));
       allow create, update: if isSignedIn()
         && id == request.resource.data.eventId + '_' + request.auth.uid
+        && request.resource.data.keys().hasOnly(['eventId', 'eventName', 'userId', 'userName', 'registrationId', 'rating', 'remarks', 'suggestions', 'updatedAt'])
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.rating is int
         && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+        && shortText(request.resource.data, 'remarks', 1000)
+        && shortText(request.resource.data, 'suggestions', 1000)
+        && shortText(request.resource.data, 'userName', 120)
         && holdsTicket(request.resource.data.registrationId, request.resource.data.eventId);
       allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }

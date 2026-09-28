@@ -1,5 +1,6 @@
 // Firestore rules tests — run with `npm run test:rules` (starts the emulator).
 import { test, before, after, beforeEach } from 'node:test'
+import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing'
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore'
@@ -329,6 +330,22 @@ test('ratings: only a ticket holder rates, 1–5, as themselves', async () => {
   await assertFails(setDoc(doc(as('alice'), 'eventRatings/free_alice'), { eventId: 'free', userId: 'alice', registrationId: 'tk', rating: 4 })) // wrong event
   await assertSucceeds(getDocs(collection(as('eventsEditor'), 'eventRatings')))
   await assertFails(getDocs(collection(as('bob'), 'eventRatings')))
+})
+
+test('ratings: remarks and suggestions are optional short text', async () => {
+  await seed((db) => setDoc(doc(db, 'registrations/tk'), reg({ paymentStatus: 'paid' })))
+  const rate = (over = {}) => setDoc(doc(as('alice'), 'eventRatings/paid_alice'), { eventId: 'paid', userId: 'alice', registrationId: 'tk', rating: 4, ...over })
+  await assertSucceeds(rate({ userName: 'Alice', remarks: 'Loved the demos', suggestions: 'More snacks' }))
+  await assertSucceeds(rate({ remarks: 'x'.repeat(1000), suggestions: '' }))
+  await assertFails(rate({ remarks: 'x'.repeat(1001) }))
+  await assertFails(rate({ suggestions: 42 }))
+  await assertFails(rate({ userName: 'y'.repeat(121) }))
+  await assertFails(rate({ approved: true })) // no extra fields
+  // A merge that only changes the stars keeps the written feedback.
+  await assertSucceeds(setDoc(doc(as('alice'), 'eventRatings/paid_alice'), { eventId: 'paid', userId: 'alice', registrationId: 'tk', rating: 2 }, { merge: true }))
+  const saved = await getDoc(doc(as('eventsEditor'), 'eventRatings/paid_alice'))
+  assert.equal(saved.data().rating, 2)
+  assert.equal(saved.data().remarks.length, 1000)
 })
 
 test('alerts: own subscription only; event editors read, message and clear', async () => {
