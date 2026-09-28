@@ -323,13 +323,13 @@ function EventSuccess({ data, focus, onFocus }) {
             <div className="flex justify-between"><dt className="text-neutral-500">Completion</dt><dd className="font-semibold tabular-nums">{fmtPct(focus.completion)}</dd></div>
           </dl>
         </ChartCard>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <StatTile icon={Star} label="Rating" value={focus.avgRating != null ? `★ ${focus.avgRating.toFixed(1)}` : '—'} sub={focus.ratingCount ? `${fmtInt(focus.ratingCount)} ${focus.ratingCount === 1 ? 'rating' : 'ratings'}` : focus.stage === 'ended' ? 'No ratings yet' : 'After it ends'} accent="nonmember" />
           <StatTile icon={Trophy} label="Registrations" value={fmtInt(focus.registrations)} sub={rank ? `#${rank} of ${ranked.length} events` : ''} accent="bar" />
           <StatTile icon={Users} label="Fill rate" value={focus.fillRate == null ? 'No cap' : fmtPct(focus.fillRate)} sub={focus.capacity ? `${fmtInt(focus.registrations - focus.states.rejected)} of ${fmtInt(focus.capacity)} seats` : plural(focus.people, 'person', 'people')} accent="inside" />
           <StatTile icon={CheckCircle2} label="Tickets issued" value={fmtInt(focus.ticketed)} sub={`${fmtPct(focus.completion)} of registrations`} accent="good" />
           <StatTile icon={IndianRupee} label="Collected" value={fmtMoney(focus.collected)} sub={focus.underReview ? `${fmtMoney(focus.underReview)} under review` : focus.fee ? `₹${focus.fee} fee` : 'Free event'} accent="member" />
-          <ChartCard title="Registrations vs other events" subtitle="This event highlighted" className="col-span-2 md:col-span-5">
+          <ChartCard title="Registrations vs other events" subtitle="This event highlighted" className="col-span-2 sm:col-span-3">
             <BarList
               items={ranked.slice(0, 12).map((s) => ({ key: s.id, label: s.name, value: s.registrations }))}
               highlight={focus.id}
