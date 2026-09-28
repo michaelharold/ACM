@@ -673,9 +673,10 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
 
 function Row({ label, value, last }) {
   return (
-    <div className={cn('flex items-center justify-between gap-4 py-1.5', !last && 'border-b border-neutral-100 dark:border-neutral-800')}>
-      <span className="text-neutral-500 dark:text-neutral-400">{label}</span>
-      <span className="truncate text-right font-medium">{value}</span>
+    <div className={cn('flex items-start justify-between gap-4 py-1.5', !last && 'border-b border-neutral-100 dark:border-neutral-800')}>
+      <span className="shrink-0 text-neutral-500 dark:text-neutral-400">{label}</span>
+      {/* min-w-0 lets a long value (a department, an email) wrap inside the card instead of pushing past it. */}
+      <span className="min-w-0 break-words text-right font-medium">{value}</span>
     </div>
   )
 }
