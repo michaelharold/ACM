@@ -11,13 +11,8 @@ import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
 import { createMessage } from '../../services/firestore'
 import { avatarDataUri } from '../../lib/avatar'
-import { chapter } from '../../data/mock'
-
-const channels = [
-  { label: 'Email', value: chapter.socials.email, href: `mailto:${chapter.socials.email}`, Icon: Mail },
-  { label: 'LinkedIn', value: '/company/acm-tkmce', href: chapter.socials.linkedin, Icon: Linkedin },
-  { label: 'Instagram', value: '@acm_tkmce', href: chapter.socials.instagram, Icon: Instagram },
-]
+import { useText } from '../../context/DataContext'
+import { isWebUrl, isEmailAddress } from '../../lib/siteText'
 
 export function Contact() {
   const [sent, setSent] = useState(false)
@@ -26,6 +21,14 @@ export function Contact() {
   const { theme } = useTheme()
   const { user, isAuthed, loading } = useAuth()
   const { pathname } = useLocation()
+  const t = useText()
+  // Channels come from admin-editable contact details; a switched-off link hides.
+  const email = t('contact.email')
+  const channels = [
+    { label: 'Email', value: email, href: isEmailAddress(email) ? `mailto:${email}` : '', Icon: Mail },
+    { label: 'LinkedIn', value: t('social.linkedinLabel'), href: isWebUrl(t('social.linkedin')) ? t('social.linkedin') : '', Icon: Linkedin },
+    { label: 'Instagram', value: t('social.instagramLabel'), href: isWebUrl(t('social.instagram')) ? t('social.instagram') : '', Icon: Instagram },
+  ].filter((c) => c.href)
   // White threads read on the dark canvas; brand blue on light.
   const threadColor = theme === 'dark' ? [1, 1, 1] : [0.12, 0.28, 0.96]
 
@@ -65,7 +68,7 @@ export function Contact() {
       </LazyBackdrop>
 
       <div className="section-shell relative">
-        <SectionHeading eyebrow="Contact" title="Let’s connect" description="Questions, collaborations, or want to join a team? Reach out — we reply fast." />
+        <SectionHeading eyebrow={t('contact.eyebrow')} title={t('contact.title')} description={t('contact.description')} />
 
         <div className="mt-14 grid gap-6 lg:grid-cols-2">
           {/* Channels */}
@@ -102,10 +105,8 @@ export function Contact() {
                 <span className="grid h-12 w-12 place-items-center rounded-2xl border border-neutral-200 bg-neutral-50 text-acm-500 dark:border-neutral-800 dark:bg-neutral-800/60">
                   <LogIn className="h-5 w-5" />
                 </span>
-                <h3 className="mt-5 text-lg font-bold tracking-tight">Sign in to send a message</h3>
-                <p className="mt-2 max-w-xs text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
-                  We ask you to sign in with Google so every message carries a verified email we can actually reply to.
-                </p>
+                <h3 className="mt-5 text-lg font-bold tracking-tight">{t('contact.signInTitle')}</h3>
+                <p className="mt-2 max-w-xs text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">{t('contact.signInBody')}</p>
                 <Button as={Link} to="/auth" state={{ from: pathname }} size="lg" className="mt-6">
                   Continue with Google <Send className="h-4 w-4" />
                 </Button>
@@ -168,7 +169,7 @@ export function Contact() {
                     </motion.span>
                   ) : (
                     <>
-                      {sending ? 'Sending…' : 'Send message'} <Send className="h-4 w-4" />
+                      {sending ? 'Sending…' : t('contact.sendLabel')} <Send className="h-4 w-4" />
                     </>
                   )}
                 </Button>

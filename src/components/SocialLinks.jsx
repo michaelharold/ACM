@@ -1,15 +1,19 @@
 import { Instagram, Linkedin } from 'lucide-react'
-import { chapter } from '../data/mock'
+import { useText } from '../context/DataContext'
+import { isWebUrl } from '../lib/siteText'
 import { cn } from '../lib/cn'
 
-const links = [
-  { href: chapter.socials.instagram, label: 'Instagram', Icon: Instagram },
-  { href: chapter.socials.linkedin, label: 'LinkedIn', Icon: Linkedin },
-]
-
+// The chapter's social icons. Links are set in Admin → Text Content → Contact;
+// one switched off there disappears here too.
 export function SocialLinks({ className, size = 'md' }) {
+  const t = useText()
+  const links = [
+    { href: t('social.instagram'), label: 'Instagram', Icon: Instagram },
+    { href: t('social.linkedin'), label: 'LinkedIn', Icon: Linkedin },
+  ].filter((l) => isWebUrl(l.href))
   const dims = size === 'sm' ? 'h-8 w-8' : 'h-9 w-9'
   const icon = size === 'sm' ? 'h-4 w-4' : 'h-[18px] w-[18px]'
+  if (!links.length) return null
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
       {links.map(({ href, label, Icon }) => (

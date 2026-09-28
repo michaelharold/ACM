@@ -10,7 +10,8 @@ import { Modal } from '../components/ui/Modal'
 import { ThreadView, when } from '../components/messages/Thread'
 import { EventDetailsModal } from '../components/events/EventDetailsModal'
 import { useAuth } from '../context/AuthContext'
-import { useData } from '../context/DataContext'
+import { useData, useText } from '../context/DataContext'
+import { GlobalMembershipButton } from '../components/membership/GlobalMembershipButton'
 import { useRegistrations } from '../context/RegistrationsContext'
 import { avatarDataUri } from '../lib/avatar'
 import { cn } from '../lib/cn'
@@ -31,6 +32,7 @@ import { PendingVerification } from '../components/membership/VerifyExisting'
 export default function Dashboard() {
   const { user, loading, logout, saveProfile } = useAuth()
   const { events, departments } = useData()
+  const t = useText()
   const { regs, refetch: refetchRegs, resubmitReceipt } = useRegistrations()
   const navigate = useNavigate()
   const location = useLocation()
@@ -257,7 +259,7 @@ export default function Dashboard() {
             <img src={avatar} alt="" className="h-14 w-14 rounded-2xl object-cover ring-2 ring-white shadow-sm dark:ring-neutral-800" />
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Hi, {displayName.split(' ')[0]}</h1>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">Here's your ACM TKMCE space.</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">{t('profile.subtitle')}</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -436,19 +438,25 @@ export default function Dashboard() {
                         </p>
                       ) : (
                         <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-                          Join the chapter to get member discounts on events.
+                          {t('profile.notMember')}
                         </p>
                       )}
-                      <Button as={Link} to="/membership" size="sm" className="mt-3 w-full">
-                        <BadgeCheck className="h-4 w-4" /> Join ACM
-                      </Button>
+                      {/* A plain link rather than <Button>: the full chapter name
+                          needs to wrap inside this narrow card. */}
+                      <Link
+                        to="/membership"
+                        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-acm-600 bg-acm-600 px-3 py-2 text-center text-sm font-medium text-white shadow-sm transition-colors hover:bg-acm-700"
+                      >
+                        <BadgeCheck className="h-4 w-4 shrink-0" /> {t('cta.join')}
+                      </Link>
                       <Link
                         to="/membership"
                         state={{ verify: true }}
                         className="mt-2 flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-acm-600 transition-colors hover:bg-acm-50 dark:text-acm-400 dark:hover:bg-acm-500/10"
                       >
-                        <Fingerprint className="h-3.5 w-3.5" /> Already a member? Verify
+                        <Fingerprint className="h-3.5 w-3.5" /> {t('membership.verifyLabel')}
                       </Link>
+                      <GlobalMembershipButton block className="mt-2 [&_a]:px-3 [&_a]:py-2 [&_a]:text-xs" />
                     </div>
                   )}
                 </div>

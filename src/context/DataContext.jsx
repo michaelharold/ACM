@@ -1,8 +1,9 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import * as mock from '../data/mock'
 import * as svc from '../services/firestore'
 import { isFirebaseConfigured } from '../lib/firebase'
 import { departments as defaultDepartments } from '../lib/orgData'
+import { resolveText } from '../lib/siteText'
 
 const DataContext = createContext(null)
 
@@ -21,6 +22,10 @@ const defaultContent = () => ({
   aboutTitle: 'Built by students, for builders',
   galleryTitle: 'Life at the chapter',
   galleryBlurb: 'Hack nights, workshops, mentor circles — a running reel of what we get up to.',
+  // Admin overrides for any other site copy, keyed as in lib/siteText.js.
+  texts: {},
+  // The "Get ACM Global Membership" button under every Join button.
+  globalMembershipEnabled: true,
 })
 
 export function DataProvider({ children }) {
@@ -152,3 +157,10 @@ export function DataProvider({ children }) {
 }
 
 export const useData = () => useContext(DataContext)
+
+// Site copy by key — the admin's override, else the built-in default.
+//   const t = useText();  t('hero.titleLead');  t('about.description', { year })
+export function useText() {
+  const { content } = useContext(DataContext)
+  return useCallback((key, vars) => resolveText(content, key, vars), [content])
+}

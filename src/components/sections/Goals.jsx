@@ -5,13 +5,14 @@ import { Reveal, Item } from '../ui/Reveal'
 import { LazyBackdrop } from '../ui/LazyBackdrop'
 import MagicRings from '../reactbits/MagicRings'
 import { iconMap } from '../../lib/icons'
-import { useData } from '../../context/DataContext'
+import { useData, useText } from '../../context/DataContext'
 import { cn } from '../../lib/cn'
 
 export function Goals() {
   const [active, setActive] = useState(0)
   // Vision / Mission / Values are admin-editable site content.
   const { content } = useData()
+  const t = useText()
   const goals = content.goals
 
   return (
@@ -45,9 +46,9 @@ export function Goals() {
 
       <div className="section-shell relative">
         <SectionHeading
-          eyebrow="Our Goals"
-          title="What we point every event toward"
-          description="Three pillars keep the chapter honest — a clear picture of where we’re going, how we get there, and what we refuse to compromise on."
+          eyebrow={t('goals.eyebrow')}
+          title={t('goals.title')}
+          description={t('goals.description')}
         />
 
         <Reveal className="mt-14 grid gap-4 md:grid-cols-3" amount={0.15}>
@@ -55,7 +56,7 @@ export function Goals() {
             const Icon = iconMap[g.icon]
             const isActive = active === i
             return (
-              <Item key={g.key}>
+              <Item key={i}>
                 <button
                   onMouseEnter={() => setActive(i)}
                   onFocus={() => setActive(i)}

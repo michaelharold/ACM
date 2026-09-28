@@ -158,3 +158,17 @@
   --viz-outside: #d95926;
   --viz-idle: #55544f;
 }
+
+/* Sign In / Sign Up — a red button that breathes a soft glow so it's findable
+   at a glance on every screen size. (Reduced motion stills it — see above.) */
+.signin-glow {
+  box-shadow: 0 0 14px rgba(244, 63, 94, 0.55), 0 0 2px rgba(254, 205, 211, 0.6) inset;
+  animation: signin-breathe 2.8s ease-in-out infinite;
+}
+.signin-glow:hover {
+  box-shadow: 0 0 26px rgba(244, 63, 94, 0.8), 0 0 2px rgba(254, 205, 211, 0.8) inset;
+}
+@keyframes signin-breathe {
+  0%, 100% { box-shadow: 0 0 12px rgba(244, 63, 94, 0.45), 0 0 2px rgba(254, 205, 211, 0.6) inset; }
+  50% { box-shadow: 0 0 24px rgba(244, 63, 94, 0.75), 0 0 2px rgba(254, 205, 211, 0.7) inset; }
+}

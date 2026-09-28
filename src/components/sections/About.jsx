@@ -7,8 +7,7 @@ import { BrandBackdrop } from './BrandBackdrop'
 import ScrollFloat from '../reactbits/ScrollFloat'
 import { useCountUp } from '../../lib/useCountUp'
 import { iconMap } from '../../lib/icons'
-import { useData } from '../../context/DataContext'
-import { chapter } from '../../data/mock'
+import { useData, useText } from '../../context/DataContext'
 
 function StatCard({ stat }) {
   const [ref, value] = useCountUp(stat.value)
@@ -31,6 +30,7 @@ function StatCard({ stat }) {
 export function About() {
   // Stats, establishment year and the "why join" cards are admin-editable.
   const { content } = useData()
+  const t = useText()
   const stats = content.stats
   const established = content.established
   const whyJoin = content.whyJoin
@@ -51,15 +51,15 @@ export function About() {
           containerClassName="text-center"
           textClassName="text-white"
         >
-          Think. Build. Ship.
+          {t('about.band')}
         </ScrollFloat>
       </div>
 
       <div className="section-shell relative z-10 pb-24 sm:pb-28">
         <SectionHeading
-          eyebrow="About"
-          title={content.aboutTitle}
-          description={`${chapter.fullName}. Since ${established}, we’ve turned curious first-years into confident engineers through relentless hands-on learning.`}
+          eyebrow={t('about.eyebrow')}
+          title={t('aboutTitle')}
+          description={t('about.description', { year: established })}
         />
 
         {/* Establishment + statistics */}
@@ -68,22 +68,22 @@ export function About() {
             <CalendarClock className="h-6 w-6 opacity-80" />
             <div className="mt-8">
               <div className="text-4xl font-extrabold tracking-tight">{established}</div>
-              <div className="mt-1 text-sm text-acm-100">Year of establishment</div>
+              <div className="mt-1 text-sm text-acm-100">{t('about.establishedLabel')}</div>
             </div>
           </Item>
-          {stats.map((s) => (
-            <StatCard key={s.label} stat={s} />
+          {stats.map((s, i) => (
+            <StatCard key={`${i}-${s.label}`} stat={s} />
           ))}
         </Reveal>
 
         {/* Why Join ACM? */}
         <div className="mt-20">
-          <SectionHeading align="left" title="Why join Us?" />
+          <SectionHeading align="left" title={t('about.whyTitle')} />
           <Reveal className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" amount={0.15}>
-            {whyJoin.map((w) => {
+            {whyJoin.map((w, i) => {
               const Icon = iconMap[w.icon]
               return (
-                <Item key={w.title}>
+                <Item key={i}>
                   <TiltCard className="h-full border-white/10 !bg-neutral-950/50 p-6 backdrop-blur-md">
                     <div className="flex h-full flex-col [transform:translateZ(28px)]">
                       <div className="grid h-11 w-11 place-items-center rounded-xl border border-neutral-200 bg-neutral-50 text-acm-600 transition-colors group-hover:border-acm-300 group-hover:bg-acm-50 dark:border-neutral-800 dark:bg-neutral-800/60 dark:text-acm-400">

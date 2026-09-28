@@ -6,7 +6,8 @@ import SpecularButton from '../reactbits/SpecularButton'
 import BlurText from '../reactbits/BlurText'
 import { SocialLinks } from '../SocialLinks'
 import { useTheme } from '../../context/ThemeContext'
-import { useData } from '../../context/DataContext'
+import { useText } from '../../context/DataContext'
+import { GlobalMembershipButton } from '../membership/GlobalMembershipButton'
 import { scrollToId } from '../../lib/smoothScroll'
 
 // Fluid-sim backdrop (three.js) stays in its own lazy chunk.
@@ -25,7 +26,7 @@ export function Hero() {
   const ref = useRef(null)
   const navigate = useNavigate()
   const { theme } = useTheme()
-  const { content } = useData()
+  const t = useText()
   const dark = theme === 'dark'
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
@@ -111,9 +112,9 @@ export function Hero() {
           variants={item}
           className="mx-auto mt-6 max-w-4xl text-balance text-5xl font-extrabold leading-[1.05] tracking-tight sm:text-7xl"
         >
-          Association for Computing Machinery at{' '}
+          {t('hero.titleLead')}{' '}
           <span className="relative whitespace-nowrap">
-            <span className="bg-gradient-to-r from-acm-600 to-acm-400 bg-clip-text text-transparent">TKMCE</span>
+            <span className="bg-gradient-to-r from-acm-600 to-acm-400 bg-clip-text text-transparent">{t('hero.titleHighlight')}</span>
             <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 300 12" fill="none" preserveAspectRatio="none">
               <motion.path
                 d="M2 9 C 80 2, 220 2, 298 8"
@@ -136,7 +137,7 @@ export function Hero() {
 
         <motion.div variants={item} className="mx-auto mt-7 max-w-xl">
           <BlurText
-            text={content.heroTagline}
+            text={t('heroTagline')}
             delay={40}
             animateBy="words"
             direction="top"
@@ -158,15 +159,19 @@ export function Hero() {
             onClick={() => navigate('/membership')}
           >
             <span className="inline-flex items-center gap-2">
-              Join ACM <ArrowRight className="h-4 w-4" />
+              {t('cta.join')} <ArrowRight className="h-4 w-4" />
             </span>
           </SpecularButton>
           <SpecularButton size="md" radius={14} {...secondary} proximity={220} onClick={() => navigate('/events')}>
-            Explore Events
+            {t('hero.ctaEvents')}
           </SpecularButton>
           <SpecularButton size="md" radius={14} {...secondary} proximity={220} onClick={() => scrollToId('about')}>
-            Learn More
+            {t('hero.ctaLearn')}
           </SpecularButton>
+        </motion.div>
+
+        <motion.div variants={item} className="pointer-events-auto mt-4 flex justify-center">
+          <GlobalMembershipButton />
         </motion.div>
 
         <motion.div variants={item} className="pointer-events-auto mt-10 flex justify-center">

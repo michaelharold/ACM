@@ -7,24 +7,25 @@ import { SocialLinks } from '../SocialLinks'
 import { Magnetic } from '../ui/Magnetic'
 import { scrollToTop } from '../../lib/smoothScroll'
 import { chapter } from '../../data/mock'
-import { useData } from '../../context/DataContext'
+import { useData, useText } from '../../context/DataContext'
 
-const cols = [
+// Footer columns — labels follow the admin-editable menu names.
+const footerCols = (t) => [
   {
-    title: 'Explore',
+    title: t('footer.explore'),
     links: [
-      { label: 'About', to: '/#about' },
-      { label: 'Goals', to: '/#goals' },
-      { label: 'Gallery', to: '/#gallery' },
-      { label: 'Events', to: '/events' },
+      { label: t('nav.about'), to: '/#about' },
+      { label: t('nav.goals'), to: '/#goals' },
+      { label: t('nav.gallery'), to: '/#gallery' },
+      { label: t('nav.events'), to: '/events' },
     ],
   },
   {
-    title: 'Engage',
+    title: t('footer.engage'),
     links: [
-      { label: 'Execom', to: '/execom' },
-      { label: 'Contact', to: '/contact' },
-      { label: 'Login / Sign Up', to: '/auth' },
+      { label: t('nav.execom'), to: '/execom' },
+      { label: t('nav.contact'), to: '/contact' },
+      { label: t('nav.signIn'), to: '/auth' },
       { label: 'Dashboard', to: '/dashboard' },
     ],
   },
@@ -46,6 +47,9 @@ export function Footer() {
   const ref = useRef(null)
   // Same admin-editable founding year the About section shows.
   const { content } = useData()
+  const t = useText()
+  const cols = footerCols(t)
+  const email = t('contact.email')
   // Wordmark drifts sideways and lifts as the footer scrolls into view.
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end end'] })
   const markX = useTransform(scrollYProgress, [0, 1], [60, -30])
@@ -61,7 +65,7 @@ export function Footer() {
           <div>
             <Logo />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
-              {chapter.tagline}
+              {t('footer.tagline')}
             </p>
             <div className="mt-5 flex">
               <Magnetic strength={4}>
@@ -69,12 +73,12 @@ export function Footer() {
               </Magnetic>
             </div>
           </div>
-          {cols.map((col) => (
-            <div key={col.title}>
+          {cols.map((col, ci) => (
+            <div key={ci}>
               <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">{col.title}</h4>
               <ul className="mt-4 space-y-2.5">
                 {col.links.map((l) => (
-                  <li key={l.label}>
+                  <li key={l.to}>
                     <FooterLink to={l.to}>{l.label}</FooterLink>
                   </li>
                 ))}
@@ -89,15 +93,17 @@ export function Footer() {
           style={{ x: markX, opacity: markOpacity }}
           className="pointer-events-none mt-14 select-none whitespace-nowrap text-center text-[clamp(3.5rem,13vw,10rem)] font-extrabold leading-none tracking-tighter text-transparent [-webkit-text-stroke:1.5px_rgba(31,71,245,0.22)] dark:[-webkit-text-stroke:1.5px_rgba(89,142,255,0.25)]"
         >
-          ACM TKMCE
+          {t('footer.wordmark')}
         </motion.div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-neutral-200 pt-6 text-sm text-neutral-500 sm:flex-row dark:border-neutral-800">
-          <p>© {new Date().getFullYear()} {chapter.name}. Est. {content.established || chapter.established}.</p>
+          <p>© {new Date().getFullYear()} {t('brand.name')}. Est. {content.established || chapter.established}.</p>
           <div className="flex items-center gap-4">
-            <a href={`mailto:${chapter.socials.email}`} className="inline-flex items-center gap-2 hover:text-acm-600 dark:hover:text-acm-400">
-              <Mail className="h-4 w-4" /> {chapter.socials.email}
-            </a>
+            {email && (
+              <a href={`mailto:${email}`} className="inline-flex items-center gap-2 hover:text-acm-600 dark:hover:text-acm-400">
+                <Mail className="h-4 w-4" /> {email}
+              </a>
+            )}
             <Magnetic strength={6}>
               <motion.button
                 onClick={() => scrollToTop()}

@@ -1,27 +1,42 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-motion'
-import { LayoutDashboard, LogOut, User as UserIcon, ChevronDown, ShieldCheck, BadgePlus } from 'lucide-react'
+import { LayoutDashboard, LogOut, User as UserIcon, ChevronDown, ShieldCheck, BadgePlus, LogIn } from 'lucide-react'
 import { Logo } from '../Logo'
 import { SocialLinks } from '../SocialLinks'
 import { Button } from '../ui/Button'
 import { Magnetic } from '../ui/Magnetic'
 import { useAuth } from '../../context/AuthContext'
+import { useText } from '../../context/DataContext'
+import { GlobalMembershipButton } from '../membership/GlobalMembershipButton'
 import { fetchUserMessages } from '../../services/firestore'
 import { avatarDataUri } from '../../lib/avatar'
 import { scrollToId, scrollToTop } from '../../lib/smoothScroll'
 import { cn } from '../../lib/cn'
 
 // Items without a `route` are scroll targets on the home page; the rest are
-// dedicated routes.
+// dedicated routes. Labels are admin-editable (Text Content → Header).
 const sections = [
-  { id: 'about', label: 'About' },
-  { id: 'goals', label: 'Goals' },
-  { id: 'gallery', label: 'Gallery' },
-  { id: 'events', label: 'Events', route: '/events' },
-  { id: 'execom', label: 'Execom', route: '/execom' },
-  { id: 'contact', label: 'Contact', route: '/contact' },
+  { id: 'about', label: 'nav.about' },
+  { id: 'goals', label: 'nav.goals' },
+  { id: 'gallery', label: 'nav.gallery' },
+  { id: 'events', label: 'nav.events', route: '/events' },
+  { id: 'execom', label: 'nav.execom', route: '/execom' },
+  { id: 'contact', label: 'nav.contact', route: '/contact' },
 ]
+
+// Red glowing Sign In / Sign Up — on every screen size, top of the page.
+function SignInButton({ label, onClick }) {
+  return (
+    <Link
+      to="/auth"
+      onClick={onClick}
+      className="signin-glow inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-rose-400/70 bg-rose-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-rose-500 sm:px-3.5 sm:text-sm"
+    >
+      <LogIn className="h-4 w-4 shrink-0" /> {label}
+    </Link>
+  )
+}
 
 const drawerItem = {
   hidden: { opacity: 0, x: -14 },
@@ -38,6 +53,7 @@ export function Navbar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user, logout, isAuthed, loading: authLoading } = useAuth()
+  const t = useText()
   // Surface the two most-wanted shortcuts right in the bar: an admin/editor can
   // jump straight to their panel, and a signed-in non-member sees a Join ACM CTA.
   const isPrivileged = isAuthed && (user?.role === 'admin' || Object.values(user?.permissions || {}).some(Boolean))
@@ -166,7 +182,7 @@ export function Navbar() {
                       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                     />
                   )}
-                  {s.label}
+                  {t(s.label)}
                 </button>
               </Magnetic>
             )
@@ -183,24 +199,27 @@ export function Navbar() {
               {user.role === 'admin' ? 'Admin' : 'Editor'}
             </Button>
           )}
-          {isAuthed && !isMember && (
-            <Button as={Link} to="/membership" size="sm" className="hidden md:inline-flex">
-              <BadgePlus className="h-4 w-4" /> Join ACM
+          {isAuthed && !isMember && !isPrivileged && (
+            // The full "Join ACM TKMCE Student Chapter" only fits beside the
+            // menu on wide screens (and not next to the Admin button); everyone
+            // else has it in the profile menu and the drawer.
+            <Button as={Link} to="/membership" size="sm" className="hidden whitespace-nowrap xl:inline-flex">
+              <BadgePlus className="h-4 w-4" /> {t('cta.join')}
             </Button>
           )}
 
           {authLoading ? (
-            // Session still restoring — show a placeholder, not "Login / Sign Up"
+            // Session still restoring — show a placeholder, not "Sign In"
             // flashing up for someone who's actually signed in.
-            <span className="hidden h-9 w-24 animate-pulse rounded-xl bg-neutral-100 sm:block dark:bg-neutral-800" />
+            <span className="block h-9 w-24 animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />
           ) : !isAuthed ? (
-            <Button as={Link} to="/auth" size="sm" className="hidden sm:inline-flex">
-              Login / Sign Up
-            </Button>
+            <SignInButton label={t('nav.signIn')} />
           ) : (
-            <div ref={userMenuRef} className="relative hidden sm:block">
+            <div ref={userMenuRef} className="relative">
               <button
                 onClick={() => setMenuUser((v) => !v)}
+                aria-label="Your profile"
+                aria-expanded={menuUser}
                 className="flex items-center gap-2 rounded-xl border border-neutral-200 py-1 pl-1 pr-2 transition-colors hover:border-neutral-300 dark:border-neutral-800 dark:hover:border-neutral-700"
               >
                 <span className="relative">
@@ -233,8 +252,13 @@ export function Navbar() {
                     </div>
                     <div className="my-1 h-px bg-neutral-100 dark:bg-neutral-800" />
                     <MenuItem to="/dashboard" icon={LayoutDashboard} onClick={() => setMenuUser(false)}>
-                      Dashboard
+                      My profile
                     </MenuItem>
+                    {!isMember && (
+                      <MenuItem to="/membership" icon={BadgePlus} onClick={() => setMenuUser(false)}>
+                        {t('cta.join')}
+                      </MenuItem>
+                    )}
                     {(user.role === 'admin' || Object.values(user.permissions || {}).some(Boolean)) && (
                       <MenuItem to="/admin" icon={UserIcon} onClick={() => setMenuUser(false)}>
                         {user.role === 'admin' ? 'Admin Panel' : 'Editor Panel'}
@@ -307,7 +331,7 @@ export function Navbar() {
                   onClick={() => goToSection(s)}
                   className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 >
-                  {s.label}
+                  {t(s.label)}
                 </motion.button>
               ))}
             </motion.div>
@@ -315,11 +339,11 @@ export function Navbar() {
             {isAuthed && (
               <div className="mt-3 grid gap-1 border-t border-neutral-100 pt-3 dark:border-neutral-800">
                 <MenuItem to="/dashboard" icon={LayoutDashboard} onClick={() => setOpen(false)}>
-                  Dashboard
+                  My profile
                 </MenuItem>
                 {!isMember && (
                   <MenuItem to="/membership" icon={BadgePlus} onClick={() => setOpen(false)}>
-                    Join ACM
+                    {t('cta.join')}
                   </MenuItem>
                 )}
                 {isPrivileged && (
@@ -340,13 +364,12 @@ export function Navbar() {
               </div>
             )}
 
-            <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3 dark:border-neutral-800">
+            <div className="mt-3 border-t border-neutral-100 pt-3 dark:border-neutral-800">
+              <GlobalMembershipButton block />
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-3">
               <SocialLinks size="sm" />
-              {!isAuthed && !authLoading && (
-                <Button as={Link} to="/auth" size="sm" onClick={() => setOpen(false)}>
-                  Login / Sign Up
-                </Button>
-              )}
+              {!isAuthed && !authLoading && <SignInButton label={t('nav.signIn')} onClick={() => setOpen(false)} />}
             </div>
           </motion.div>
         )}
