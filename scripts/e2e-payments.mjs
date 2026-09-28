@@ -115,6 +115,9 @@ try {
   await shot(payer, '1-payment-step')
   await payer.getByRole('button', { name: /continue/i }).click()
   await payer.getByLabel(/agree/i).check()
+  check('agreeing ticks the box', await payer.getByLabel(/agree/i).isChecked())
+  await payer.waitForTimeout(500) // let the tick finish drawing
+  await shot(payer, '1b-confirm-step')
   await payer.getByRole('button', { name: /submit registration & receipt/i }).click()
   check('success screen says receipt submitted', await visible(payer.getByText('Receipt submitted')))
   check('WhatsApp link hidden before verification', !(await payer.getByText('Join the event WhatsApp group').isVisible()))
