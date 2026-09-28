@@ -45,6 +45,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Modal } from '../components/ui/Modal'
 import { Field, FormSection, InfoHint } from '../components/ui/Field'
 import { Switch } from '../components/ui/Switch'
+import { ActionButton } from '../components/ui/ActionButton'
 import { AnimatedNumber } from '../components/ui/AnimatedNumber'
 import { Collapse } from '../components/ui/Collapse'
 import { VisibilityRow, EventControlsModal, EventQuickChips, lifecycle } from '../components/admin/EventControls'
@@ -1102,9 +1103,9 @@ function EventEditor({ event, onSave }) {
       </FormSection>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button size="sm" onClick={handleSave} disabled={saving}>
-          <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save details'}
-        </Button>
+        <ActionButton size="sm" onClick={handleSave} busy={saving} success={saved} busyLabel="Saving…" doneLabel="Saved">
+          <Save className="h-4 w-4" /> Save details
+        </ActionButton>
         <span className="text-xs text-neutral-400">Countdown & LIVE badge come from date + time automatically.</span>
       </div>
 
@@ -1255,6 +1256,8 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
         title={`Delete "${deleteTarget?.name || 'this event'}"?`}
         description="This removes the event and its poster from the site. Any existing registrations for it are unaffected but will no longer show an event to link back to. This can't be undone."
         confirmLabel="Delete event"
+        hold
+        doneLabel="Deleted"
       />
     </motion.div>
   )

@@ -3,6 +3,8 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown, School, UserRound, MessageCircle, ExternalLink, Upload, History, Trophy } from 'lucide-react'
 import { Button } from '../components/ui/Button'
+import { ActionButton } from '../components/ui/ActionButton'
+import CodeSlots from '../components/reactbits/CodeSlots'
 import { Badge } from '../components/ui/Badge'
 import { Input, Select } from '../components/ui/Input'
 import { Reveal, Item } from '../components/ui/Reveal'
@@ -51,6 +53,7 @@ export default function Dashboard() {
   })
   const [editing, setEditing] = useState(needProfile)
   const [saving, setSaving] = useState(false)
+  const [profileSaved, setProfileSaved] = useState(false)
   const [membership, setMembership] = useState(null)
   const [membershipLoaded, setMembershipLoaded] = useState(false)
   // "Already a member?" request, shown as a yellow-glow pending status.
@@ -135,10 +138,11 @@ export default function Dashboard() {
     }
   }
 
-  async function handleConfirmOtp() {
+  async function handleConfirmOtp(entered) {
+    const code = String(entered ?? otp.code).trim()
     setOtp((o) => ({ ...o, busy: true, err: '' }))
     try {
-      await confirmPhoneOtp(otp.confirmation, otp.code.trim())
+      await confirmPhoneOtp(otp.confirmation, code)
       setPhoneVerifiedLocal(true)
       setOtp((o) => ({ ...o, busy: false, sent: false }))
     } catch {
@@ -232,10 +236,15 @@ export default function Dashboard() {
     setSaving(true)
     try {
       await saveProfile(next)
-      setEditing(false)
-      // If they were sent here to finish registering, return to that event now
-      // that the profile is complete.
-      if (returnTo && isProfileComplete({ ...user, ...next })) navigate(returnTo)
+      // Let the tick land on the button before the form folds away.
+      setProfileSaved(true)
+      setTimeout(() => {
+        setProfileSaved(false)
+        setEditing(false)
+        // If they were sent here to finish registering, return to that event
+        // now that the profile is complete.
+        if (returnTo && isProfileComplete({ ...user, ...next })) navigate(returnTo)
+      }, 900)
     } catch (err) {
       setFormErr(err?.message || 'Could not save your profile — please try again.')
     } finally {
@@ -347,9 +356,28 @@ export default function Dashboard() {
                           <CheckCircle2 className="h-3.5 w-3.5" /> Phone verified
                         </p>
                       ) : otp.sent ? (
-                        <div className="flex items-end gap-2">
-                          <Input label="Enter OTP" inputMode="numeric" value={otp.code} onChange={(e) => setOtp((o) => ({ ...o, code: e.target.value }))} placeholder="6-digit code" />
-                          <Button type="button" size="sm" onClick={handleConfirmOtp} disabled={otp.busy || !otp.code.trim()}>
+                        <div className="grid gap-2">
+                          <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Enter the 6-digit code</span>
+                          {/* Digits land slot by slot; a full code verifies itself. */}
+                          <CodeSlots
+                            length={6}
+                            value={otp.code}
+                            onChange={(code) => setOtp((o) => ({ ...o, code, err: '' }))}
+                            onComplete={(code) => handleConfirmOtp(code)}
+                            status={otp.err ? 'error' : 'idle'}
+                            disabled={otp.busy}
+                            autoFocus
+                            ariaLabel="Phone verification code"
+                            slotSize={40}
+                            gap={6}
+                            radius={10}
+                            accentColor="#3f6bff"
+                            inkColor="#fafafa"
+                            slotColor="#262626"
+                            digitColor="#ffffff"
+                            dangerColor="#f43f5e"
+                          />
+                          <Button type="button" size="sm" onClick={() => handleConfirmOtp()} disabled={otp.busy || otp.code.trim().length < 6} className="w-fit">
                             {otp.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Verify
                           </Button>
                         </div>
@@ -407,9 +435,9 @@ export default function Dashboard() {
                   </p>
                 )}
                 <div className="mt-1 flex gap-2">
-                  <Button type="submit" size="sm" disabled={saving} className="flex-1">
-                    <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save'}
-                  </Button>
+                  <ActionButton type="submit" size="sm" busy={saving} success={profileSaved} busyLabel="Saving…" doneLabel="Saved" className="flex-1">
+                    <Save className="h-4 w-4" /> Save
+                  </ActionButton>
                   <Button type="button" variant="ghost" size="sm" onClick={() => { setEditing(false); setFormErr('') }} disabled={saving}>
                     <X className="h-4 w-4" /> Cancel
                   </Button>

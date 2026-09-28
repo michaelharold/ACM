@@ -290,11 +290,11 @@ try {
   check('analytics overview renders', await visible(admin.getByText('Registrations over time')))
   check('analytics counts members vs non-members', await visible(admin.getByText('ACM members vs non-members')))
   await shot(admin, 'm8-analytics-overview')
-  await admin.getByRole('button', { name: 'Event success', exact: true }).click()
+  await admin.getByRole('radio', { name: 'Event success', exact: true }).click()
   check('event success view renders', await visible(admin.getByText('Every event, ranked')))
   check('analytics shows the rating', await visible(admin.getByText('★ 4.0')))
   await shot(admin, 'm9-analytics-event')
-  await admin.getByRole('button', { name: 'People', exact: true }).click()
+  await admin.getByRole('radio', { name: 'People', exact: true }).click()
   check('people view lists Asha', await visible(admin.getByRole('cell', { name: /Asha K/ })))
   await shot(admin, 'm10-analytics-people')
 } catch (err) {

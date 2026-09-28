@@ -6,6 +6,7 @@ import { Logo } from '../components/Logo'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
 import { useText } from '../context/DataContext'
+import { Unlock } from '../components/auth/Unlock'
 
 function GoogleIcon(props) {
   return (
@@ -48,7 +49,17 @@ export default function Auth() {
   const t = useText()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const { signInWithGoogle, isAuthed, loading: authLoading, isLive, authError, clearAuthError } = useAuth()
+  const { user, signInWithGoogle, isAuthed, loading: authLoading, isLive, authError, clearAuthError } = useAuth()
+  // The unlock moment plays after a real sign-in (popup, or returning from
+  // the mobile redirect) — not for someone who was already signed in.
+  const [unlocking, setUnlocking] = useState(false)
+  const [pendingRedirect] = useState(() => !!readReturnTo())
+  const [signedOutAtMount] = useState(() => !isAuthed)
+  function unlockThenGo() {
+    setUnlocking(true)
+    clearReturnTo()
+    setTimeout(() => navigate(redirectTo, { replace: true }), 1250)
+  }
   const navigate = useNavigate()
   const location = useLocation()
   // Where to go after signing in. Kept in sessionStorage too, because the
@@ -57,10 +68,12 @@ export default function Auth() {
 
   // Already signed in (or the session restores while sitting here) — move on.
   useEffect(() => {
-    if (!authLoading && isAuthed) {
+    if (!authLoading && isAuthed && !unlocking) {
+      if (pendingRedirect || signedOutAtMount) { unlockThenGo(); return }
       clearReturnTo()
       navigate(redirectTo, { replace: true })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, isAuthed, navigate, redirectTo])
 
   // A sign-in that failed during the full-page redirect comes back here.
@@ -77,7 +90,7 @@ export default function Auth() {
     rememberReturnTo(redirectTo)
     try {
       await signInWithGoogle()
-      navigate(redirectTo, { replace: true })
+      if (!unlocking) unlockThenGo()
     } catch (err) {
       setError(friendlyError(err))
       setLoading(false)
@@ -86,6 +99,7 @@ export default function Auth() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
+      {unlocking && <Unlock name={user?.name} />}
       {/* Left — brand panel */}
       <div className="relative hidden overflow-hidden bg-neutral-950 lg:block">
         <div className="bg-grid absolute inset-0 opacity-40" />

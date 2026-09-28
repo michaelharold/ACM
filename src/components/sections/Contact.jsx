@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Mail, Linkedin, Instagram, Send, CheckCircle2, ArrowUpRight, LogIn, ShieldCheck, AlertCircle } from 'lucide-react'
@@ -13,9 +13,12 @@ import { createMessage } from '../../services/firestore'
 import { avatarDataUri } from '../../lib/avatar'
 import { useText } from '../../context/DataContext'
 import { isWebUrl, isEmailAddress } from '../../lib/siteText'
+import SlingButton from '../reactbits/SlingButton'
+import { MailSent } from '../messages/MailSent'
 
 export function Contact() {
   const [sent, setSent] = useState(false)
+  const formRef = useRef(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const { theme } = useTheme()
@@ -51,8 +54,7 @@ export function Contact() {
         body,
       })
       e.target.reset()
-      setSent(true)
-      setTimeout(() => setSent(false), 6000)
+      setSent(true) // envelope + swoosh, then the form is back (MailSent onDone)
     } catch (err) {
       setError(err?.message?.replace('Firebase: ', '') || 'Could not send your message. Please try again.')
     } finally {
@@ -95,7 +97,8 @@ export function Contact() {
           </div>
 
           {/* Message form — sign-in gated so every message has a verified sender */}
-          <div className="rounded-2xl border border-neutral-200 bg-white p-6 sm:p-8 dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="relative rounded-2xl border border-neutral-200 bg-white p-6 sm:p-8 dark:border-neutral-800 dark:bg-neutral-900">
+            <MailSent show={sent} onDone={() => setSent(false)} />
             {loading ? (
               <div className="grid h-64 place-items-center">
                 <div className="h-7 w-7 animate-spin rounded-full border-2 border-neutral-200 border-t-acm-600 dark:border-neutral-800 dark:border-t-acm-500" />
@@ -115,7 +118,7 @@ export function Contact() {
                 </p>
               </div>
             ) : (
-              <form onSubmit={onSubmit} className="grid gap-4">
+              <form ref={formRef} onSubmit={onSubmit} className="grid gap-4">
                 {/* Verified sender — read-only, straight from the session */}
                 <div className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-800/40">
                   <img
@@ -162,17 +165,33 @@ export function Contact() {
                   )}
                 </AnimatePresence>
 
-                <Button type="submit" size="lg" className="w-full" disabled={sending || sent}>
-                  {sent ? (
-                    <motion.span initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="inline-flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4" /> Message sent
-                    </motion.span>
-                  ) : (
-                    <>
-                      {sending ? 'Sending…' : t('contact.sendLabel')} <Send className="h-4 w-4" />
-                    </>
-                  )}
-                </Button>
+                {/* Send: tap it, or pull the pad back and let it fly. */}
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-neutral-50/70 py-3 pl-4 pr-6 dark:border-neutral-800 dark:bg-neutral-800/40">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">{sending ? 'Sending…' : t('contact.sendLabel')}</div>
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400">Tap, or pull back and let go</div>
+                  </div>
+                  <SlingButton
+                    onSend={() => formRef.current?.requestSubmit()}
+                    disabled={sending || sent}
+                    ariaLabel={t('contact.sendLabel')}
+                    size={52}
+                    padColor="#1f47f5"
+                    iconColor="#ffffff"
+                    accentColor="#8fb0ff"
+                    wellColor="#262626"
+                    bandColor="#525252"
+                    armAt={44}
+                    maxPull={130}
+                    launchSpeed={2200}
+                    recoil={0.24}
+                    flight={110}
+                    particles={12}
+                    spread={55}
+                  >
+                    <Send className="h-5 w-5" />
+                  </SlingButton>
+                </div>
 
                 <p className="text-center text-xs text-neutral-400">
                   {sent

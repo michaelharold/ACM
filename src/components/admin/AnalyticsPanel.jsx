@@ -5,6 +5,7 @@ import {
   CheckCircle2, Clock, XCircle, Hourglass, Gift, Sparkles, ArrowRight, MessageSquare, Trophy, Info, ChevronUp, ChevronDown,
 } from 'lucide-react'
 import { Button } from '../ui/Button'
+import RubberSegment from '../reactbits/RubberSegment'
 import { Badge } from '../ui/Badge'
 import { InfoHint } from '../ui/Field'
 import { ComposeMessageModal } from '../messages/Thread'
@@ -110,22 +111,21 @@ export function AnalyticsPanel({ regs = [], events = [], adminName, canMessage =
 
       {/* One filter row above everything it scopes. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex h-10 items-center rounded-lg border border-neutral-200 bg-white p-1 dark:border-neutral-700 dark:bg-neutral-800">
-          {[
-            { k: 'overview', label: 'Overview' },
-            { k: 'events', label: 'Event success' },
-            { k: 'people', label: 'People' },
-          ].map((o) => (
-            <button
-              key={o.k}
-              onClick={() => setView(o.k)}
-              className={cn('rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                view === o.k ? 'bg-acm-600 text-white' : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200')}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
+        <RubberSegment
+          items={[{ value: 'overview', label: 'Overview' }, { value: 'events', label: 'Event success' }, { value: 'people', label: 'People' }]}
+          value={view}
+          onChange={(v) => setView(v)}
+          aria-label="Analytics view"
+          size="sm"
+          radius={9}
+          inset={3}
+          trackColor="#262626"
+          thumbColor="#1f47f5"
+          textColor="#a3a3a3"
+          activeTextColor="#ffffff"
+          speed={0.85}
+          className="admin-segment"
+        />
         <select className={cn(fieldCls, 'h-10 py-0')} value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Period">
           {PERIODS.map((p) => <option key={p.k} value={p.k}>{p.label}</option>)}
         </select>

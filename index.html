@@ -31,7 +31,16 @@
         background: #0a0a0a; color: #a3a3a3; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         transition: opacity 700ms cubic-bezier(0.32, 0.72, 0, 1) 200ms;
       }
-      #acm-loader .stage { position: relative; width: min(92vw, 980px); }
+      #acm-loader .stage { position: relative; width: min(92vw, 980px); display: flex; flex-direction: column; align-items: center; }
+      #acm-loader .mark {
+        width: clamp(72px, 16vw, 116px); height: auto; margin-bottom: clamp(18px, 4vw, 34px);
+        opacity: 0; transform: scale(0.9); filter: blur(8px) drop-shadow(0 0 0 rgba(63, 107, 255, 0));
+        transition: opacity 900ms ease, transform 1100ms cubic-bezier(0.22, 1, 0.36, 1), filter 1100ms ease;
+      }
+      /* A thin halo of glow around the chapter mark. */
+      #acm-loader.ready .mark { opacity: 1; transform: scale(1); filter: blur(0) drop-shadow(0 0 1.5px rgba(143, 176, 255, 0.9)) drop-shadow(0 0 16px rgba(63, 107, 255, 0.55)); }
+      #acm-loader.leave .mark { opacity: 0; transform: scale(1.4); transition-duration: 700ms; }
+      #acm-loader .word { position: relative; width: 100%; }
       #acm-loader svg {
         display: block; width: 100%; height: auto; overflow: visible; opacity: 0;
         transform-origin: 38% 62%;
@@ -57,6 +66,8 @@
   <body>
     <div id="acm-loader" role="status" aria-label="Loading">
       <div class="stage">
+        <img class="mark" src="/acm-logo.png" alt="" width="311" height="311" />
+        <div class="word">
         <svg id="acm-loader-svg" viewBox="0 0 1000 200" aria-hidden="true">
           <defs>
             <linearGradient id="acm-liquid" x1="0" x2="0" y1="0" y2="1">
@@ -73,6 +84,7 @@
           </g>
         </svg>
         <div class="count" aria-hidden="true">loading… <span id="acm-loader-pct">0</span>%</div>
+        </div>
       </div>
     </div>
     <script>
@@ -101,6 +113,10 @@
         var W = 1000, BASE = 170, TOP = 170 - 0.727 * 200
         var last = t0
         var target = 8, shown = 0, dataIn = false, finishing = false, gone = false
+        // Hand over only once the page itself has finished loading (images,
+        // fonts) — on phones that's the difference between smooth and janky.
+        var pageLoaded = document.readyState === 'complete'
+        window.addEventListener('load', function () { pageLoaded = true })
 
         function fit() {
           // Size the canvas to the real wordmark so it's never squashed.
@@ -121,7 +137,7 @@
           var dt = Math.min(100, now - last)
           last = now
           // Until the data is in, creep toward 88% so progress never looks stuck.
-          if (!dataIn) target = Math.max(target, 88 * (1 - Math.exp(-t / 2600)))
+          if (!dataIn || !pageLoaded) target = Math.max(target, (dataIn ? 94 : 88) * (1 - Math.exp(-t / 2600)))
           else if (t >= MIN) target = 100
           // Time-based easing, so it moves at the same pace on any frame rate.
           shown += (target - shown) * (reduce ? 1 : 1 - Math.exp(-dt / 180))
@@ -148,7 +164,7 @@
         window.__acmStep = function () { target = Math.max(target, 30) }
         window.__acmLoaded = function () { dataIn = true }
         // Never hold the site hostage: whatever happens, reveal it.
-        setTimeout(function () { dataIn = true; target = 100 }, 7000)
+        setTimeout(function () { dataIn = true; pageLoaded = true; target = 100 }, 7000)
         var fonts = document.fonts && document.fonts.load ? document.fonts.load('900 100px Inter') : Promise.resolve()
         var shownOnce = false
         function reveal() { if (shownOnce) return; shownOnce = true; fit(); el.classList.add('ready') }

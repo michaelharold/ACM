@@ -5,6 +5,7 @@ import {
   Mail, Phone, School, GraduationCap, Building2, ShieldCheck, Trash2, Search, Hourglass, BookUser,
 } from 'lucide-react'
 import { Button } from '../ui/Button'
+import RubberSegment from '../reactbits/RubberSegment'
 import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
@@ -260,22 +261,21 @@ export function MemberVerificationPanel({ canEdit = true, adminName, onChanged }
 
       {/* Requests */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex h-10 items-center rounded-lg border border-neutral-200 bg-white p-1 dark:border-neutral-700 dark:bg-neutral-800">
-          {[
-            { k: 'pending', label: 'Pending', n: counts.pending },
-            { k: 'approved', label: 'Approved', n: counts.approved },
-            { k: 'denied', label: 'Denied', n: counts.denied },
-          ].map((o) => (
-            <button
-              key={o.k}
-              onClick={() => setView(o.k)}
-              className={cn('rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                view === o.k ? 'bg-acm-600 text-white' : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200')}
-            >
-              {o.label} <span className="opacity-70">{o.n}</span>
-            </button>
-          ))}
-        </div>
+        <RubberSegment
+          items={[{ value: 'pending', label: `Pending ${counts.pending}` }, { value: 'approved', label: `Approved ${counts.approved}` }, { value: 'denied', label: `Denied ${counts.denied}` }]}
+          value={view}
+          onChange={(v) => setView(v)}
+          aria-label="Request status"
+          size="sm"
+          radius={9}
+          inset={3}
+          trackColor="#262626"
+          thumbColor="#1f47f5"
+          textColor="#a3a3a3"
+          activeTextColor="#ffffff"
+          speed={0.85}
+          className="admin-segment"
+        />
         <div className="relative w-full sm:w-64">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
           <input className={cn(inputCls, 'h-10 py-0 pl-9')} placeholder="Search name / email / ID" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -363,6 +363,8 @@ export function MemberVerificationPanel({ canEdit = true, adminName, onChanged }
         title="Clear the member roster?"
         description="Automatic verification stops until you upload a new roster. Members already verified keep their membership."
         confirmLabel="Clear roster"
+        hold
+        doneLabel="Cleared"
       />
     </motion.div>
   )

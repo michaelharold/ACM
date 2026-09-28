@@ -13,6 +13,8 @@ import { payFor, validateMembership, registerTeam, isRazorpayMode, isApiAvailabl
 import { attachReceipt } from '../../services/payments'
 import { receiptReady, normalizeUtr } from '../../lib/manualPay'
 import { PayToCard, PaymentsPaused } from '../payments/PayToCard'
+import { StepIndicator } from '../ui/StepIndicator'
+import SlideCommit from '../reactbits/SlideCommit'
 import { ReceiptUploader } from '../payments/ReceiptUploader'
 import { useUpiAccount } from '../payments/useUpiAccount'
 import { cn } from '../../lib/cn'
@@ -177,7 +179,9 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
   // Razorpay mode only: charge through hosted checkout after saving.
   const razorpayCharge = payable > 0 && isRazorpayMode
 
-  async function submit() {
+  // `deferDone`: the slide-to-submit control plays its own success first and
+  // then shows the confirmation (via its onDone).
+  async function submit({ deferDone = false } = {}) {
     setPayError('')
     // Re-check the window at submit time (the drawer may have sat open past
     // the close time) — covers team registrations too.
@@ -250,7 +254,8 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
         if (result.status === 'paid') onPaid?.(created.id)
         else if (result.status === 'pending_confirmation') setPendingConfirm(true)
       }
-      setDone(true)
+      if (!deferDone) setDone(true)
+      return true
     } catch (err) {
       // Payment cancelled/failed (no money taken) → remove the just-created
       // pending registration so the user isn't shown as "Registered" without
@@ -362,13 +367,8 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
             <span className="text-xs font-medium uppercase tracking-wide text-acm-600 dark:text-acm-400">Register</span>
             <h3 className="mt-1 text-lg font-bold tracking-tight">{event.name}</h3>
           </div>
-          <div className="mt-5 flex items-center gap-2">
-            {stepLabels.map((s, i) => (
-              <div key={s} className="flex flex-1 flex-col gap-1.5">
-                <div className={cn('h-1 rounded-full transition-colors', i <= step ? 'bg-acm-600' : 'bg-neutral-200 dark:bg-neutral-800')} />
-                <span className={cn('text-[11px]', i === step ? 'font-medium text-neutral-700 dark:text-neutral-300' : 'text-neutral-400')}>{s}</span>
-              </div>
-            ))}
+          <div className="mt-5">
+            <StepIndicator steps={stepLabels} current={step} />
           </div>
 
           {/* Steps */}
@@ -625,6 +625,30 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
               <Button disabled={!stepValid} onClick={() => go(step + 1)}>
                 Continue <ArrowRight className="h-4 w-4" />
               </Button>
+            ) : manualPay && !razorpayCharge ? (
+              // Paying: a deliberate slide confirms it (React Bits SlideCommit).
+              <SlideCommit
+                label="Slide to submit payment"
+                doneLabel="Submitted"
+                errorLabel="Couldn’t submit"
+                disabled={!stepValid || submitting}
+                onConfirm={async () => {
+                  const ok = await submit({ deferDone: true })
+                  if (ok !== true) throw new Error('not submitted')
+                }}
+                onDone={() => setDone(true)}
+                width={236}
+                height={48}
+                radius={24}
+                speed={42}
+                returnBounce={0.3}
+                holdMs={900}
+                trackColor="#1f1f1f"
+                handleColor="#1f47f5"
+                successColor="#10b981"
+                dangerColor="#e11d48"
+                icon={<ArrowRight className="h-4 w-4 text-white" />}
+              />
             ) : (
               <Button disabled={!stepValid || submitting} onClick={submit}>
                 {submitting ? (

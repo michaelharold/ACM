@@ -4,6 +4,7 @@ import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { cn } from '../../lib/cn'
 import * as svc from '../../services/firestore'
+import { MailSent } from './MailSent'
 
 export const when = (iso) => {
   if (!iso) return ''
@@ -37,6 +38,7 @@ export function ThreadView({ message, side, meName, onReplied }) {
   if (!message) return null
   const items = entries(message)
 
+  const [flown, setFlown] = useState(false)
   async function send() {
     const text = body.trim()
     if (!text) return
@@ -45,6 +47,7 @@ export function ThreadView({ message, side, meName, onReplied }) {
     try {
       const reply = await svc.replyInApp({ messageId: message.id, from: side, body: text, byName: meName })
       setBody('')
+      setFlown(true) // envelope + swoosh over the reply box
       onReplied?.(reply)
     } catch (e) {
       setErr(e?.message || 'Could not send. Try again.')
@@ -82,7 +85,8 @@ export function ThreadView({ message, side, meName, onReplied }) {
         })}
       </div>
 
-      <div className="mt-4 border-t border-neutral-200 pt-4 dark:border-neutral-800">
+      <div className="relative mt-4 border-t border-neutral-200 pt-4 dark:border-neutral-800">
+        <MailSent show={flown} onDone={() => setFlown(false)} label="Reply sent" />
         <label className="mb-1.5 flex items-center gap-2 text-sm font-medium">
           <CornerUpLeft className="h-4 w-4 text-acm-500" />
           {side === 'admin' ? `Reply to ${message.userName || 'member'}` : 'Reply'}
@@ -131,9 +135,8 @@ export function ComposeMessageModal({ open, onClose, toUid, toName, toEmail, fro
     setErr('')
     try {
       await svc.sendAdminMessage({ toUid, toName, toEmail, subject: subject.trim() || 'Message from ACM TKMCE', body: body.trim(), fromName })
-      setDone(true)
+      setDone(true) // envelope + swoosh; the window closes when it has flown
       onSent?.()
-      setTimeout(() => { onClose(); setDone(false); setBody(''); setSubject('') }, 1200)
     } catch (e2) {
       setErr(e2?.message || 'Could not send the message.')
     } finally {
@@ -143,7 +146,8 @@ export function ComposeMessageModal({ open, onClose, toUid, toName, toEmail, fro
 
   return (
     <Modal open={open} onClose={onClose} size="md">
-      <form onSubmit={submit} className="p-6 sm:p-8">
+      <form onSubmit={submit} className="relative p-6 sm:p-8">
+        <MailSent show={done} onDone={() => { onClose(); setDone(false); setBody(''); setSubject('') }} />
         <h3 className="text-lg font-bold tracking-tight">Message {toName || 'member'}</h3>
         <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
           Sent to their profile inbox{toEmail ? ` (${toEmail})` : ''}.

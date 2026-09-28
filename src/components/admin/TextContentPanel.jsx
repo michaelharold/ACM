@@ -5,6 +5,7 @@ import {
   Home, Info, Target, Images, Compass, CalendarDays, Users, Mail, BadgeCheck, PanelTop, LogIn, FileQuestion, Megaphone, Building2, Hash, Globe2,
 } from 'lucide-react'
 import { Button } from '../ui/Button'
+import { ActionButton } from '../ui/ActionButton'
 import { Switch } from '../ui/Switch'
 import { useData } from '../../context/DataContext'
 import { TEXT_SECTIONS, TEXT_FIELDS, NONE, savedText, validateText, searchFields } from '../../lib/siteText'
@@ -156,10 +157,9 @@ export function TextContentPanel() {
         </div>
         <div className="flex items-center gap-2">
           {dirty && <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Unsaved changes</span>}
-          <Button size="sm" disabled={!dirty || saving} onClick={save}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
-          </Button>
+          <ActionButton size="sm" disabled={!dirty} onClick={save} busy={saving} success={status?.ok} busyLabel="Saving…" doneLabel="Saved">
+            <Save className="h-4 w-4" /> {dirty ? 'Save changes' : 'Saved'}
+          </ActionButton>
         </div>
         {status && (
           <p className={cn('flex w-full items-start gap-1.5 text-xs', status.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-300')}>

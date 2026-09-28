@@ -1,29 +1,34 @@
-import { motion } from 'framer-motion'
-import { cn } from '../../lib/cn'
+import SquishSwitch from '../reactbits/SquishSwitch'
 
+// Brand tones for the "on" track; each glows softly in its own colour.
 const ON = {
-  acm: 'bg-acm-600',
-  violet: 'bg-gradient-to-r from-violet-500 to-fuchsia-500',
-  sky: 'bg-gradient-to-r from-sky-500 to-blue-500',
-  emerald: 'bg-gradient-to-r from-emerald-500 to-green-500',
+  acm: '#1f47f5',
+  violet: '#8b5cf6',
+  sky: '#0ea5e9',
+  emerald: '#10b981',
 }
 
+// The site's on/off switch — React Bits' SquishSwitch (the thumb stretches
+// with speed and can be dragged), sized and coloured for the admin forms.
 export function Switch({ on, onClick, tone = 'acm', disabled = false, label }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <SquishSwitch
+      checked={!!on}
+      onChange={(next) => { if (next !== !!on) onClick?.() }}
+      ariaLabel={label}
       disabled={disabled}
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      className={cn('relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50', on ? ON[tone] || ON.acm : 'bg-neutral-200 dark:bg-neutral-700')}
-    >
-      <motion.span
-        layout
-        transition={{ type: 'spring', stiffness: 500, damping: 32 }}
-        className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm', on ? 'left-[22px]' : 'left-0.5')}
-      />
-    </button>
+      width={46}
+      height={26}
+      radius={13}
+      speed={38}
+      stretch={42}
+      hoverScale={1.06}
+      colorDuration={380}
+      trackColor="#3f3f46"
+      trackOnColor={ON[tone] || ON.acm}
+      thumbColor="#d4d4d8"
+      thumbOnColor="#ffffff"
+      className="site-switch"
+    />
   )
 }

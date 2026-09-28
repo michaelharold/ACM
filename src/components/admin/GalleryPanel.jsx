@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ImagePlus, Trash2, Loader2, AlertCircle, Shuffle, Images, Check, Pencil } from 'lucide-react'
+import FuseButton from '../reactbits/FuseButton'
 import { Button } from '../ui/Button'
-import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { useData } from '../../context/DataContext'
 import { cropToCard } from '../../lib/imagePrep'
 import { StorageMeter } from './StorageMeter'
@@ -14,7 +14,6 @@ export function GalleryPanel() {
   const [progress, setProgress] = useState('')
   const [errors, setErrors] = useState([])
   const [drag, setDrag] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState(null)
   const inputRef = useRef(null)
 
   async function handleFiles(fileList) {
@@ -138,21 +137,14 @@ export function GalleryPanel() {
                 key={g.id}
                 item={g}
                 onRename={(caption) => updateGalleryImage(g.id, { caption })}
-                onRemove={() => setDeleteTarget(g)}
+                onRemove={() => removeGalleryImage(g.id)}
               />
             ))}
           </div>
         )}
       </div>
 
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => removeGalleryImage(deleteTarget.id)}
-        title="Remove this image?"
-        description={deleteTarget?.caption ? `"${deleteTarget.caption}" comes off the site immediately. This can't be undone.` : "It comes off the site immediately. This can't be undone."}
-        confirmLabel="Remove"
-      />
+
     </motion.div>
   )
 }
@@ -173,13 +165,23 @@ function GalleryTile({ item, onRename, onRemove }) {
     <figure className="group relative overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-800">
       <div className="relative aspect-[10/7] overflow-hidden">
         <img src={item.image} alt={item.caption || 'Gallery image'} className="h-full w-full object-cover" />
-        <button
-          onClick={onRemove}
-          aria-label="Remove image"
-          className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-lg bg-neutral-950/70 text-white opacity-0 backdrop-blur transition-opacity hover:bg-rose-600 group-hover:opacity-100"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {/* Remove with a short undo window: the fuse burns, tap Undo to keep it. */}
+        <div className="absolute right-2 top-2">
+          <FuseButton
+            label="Remove"
+            undoLabel="Undo"
+            doneLabel="Removed"
+            icon={<Trash2 className="h-3.5 w-3.5" />}
+            size="sm"
+            radius={10}
+            undoWindow={4000}
+            commitOn="fuseEnd"
+            color="#ffffff"
+            background="rgba(10, 10, 10, 0.72)"
+            fuseColor="#f43f5e"
+            onCommit={onRemove}
+          />
+        </div>
       </div>
       {editing ? (
         <div className="flex items-center gap-1 p-1.5">

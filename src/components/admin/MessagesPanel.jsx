@@ -7,6 +7,8 @@ import { ThreadView, when } from '../messages/Thread'
 import { avatarDataUri } from '../../lib/avatar'
 import { cn } from '../../lib/cn'
 import * as svc from '../../services/firestore'
+import SwipeRow from '../reactbits/SwipeRow'
+import { useAuth } from '../../context/AuthContext'
 
 const statusTone = { new: 'blue', read: 'neutral', replied: 'green' }
 
@@ -15,6 +17,13 @@ const isUnread = (m) => m.unreadForAdmin ?? (m.status === 'new')
 
 export function MessagesPanel({ adminName }) {
   const [rows, setRows] = useState([])
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+  async function removeThread(id) {
+    const prev = rows
+    setRows((r) => r.filter((x) => x.id !== id))
+    try { await svc.deleteMessage(id) } catch { setRows(prev) }
+  }
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(null)
   const [q, setQ] = useState('')
@@ -101,46 +110,63 @@ export function MessagesPanel({ adminName }) {
       ) : (
         <div className="grid gap-2">
           {list.map((m) => (
-            <button
+            // Swipe left to delete a thread (admins). Taps still open it.
+            <SwipeRow
               key={m.id}
-              onClick={() => openMessage(m)}
-              className={cn(
-                // min-w-0: grid items default to min-width:auto, which lets a long
-                // message body stretch the row past the panel instead of truncating.
-                'group flex w-full min-w-0 items-start gap-3.5 rounded-xl border p-4 text-left transition-colors',
-                isUnread(m)
-                  ? 'border-acm-200 bg-acm-50/50 hover:border-acm-300 dark:border-acm-500/30 dark:bg-acm-500/5 dark:hover:border-acm-500/50'
-                  : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-800 dark:hover:border-neutral-700',
-              )}
+              disabled={!isAdmin}
+              label={`Message from ${m.userName || 'member'}`}
+              actions={[{ id: 'delete', label: 'Delete' }]}
+              onCommit={() => removeThread(m.id)}
+              onAction={() => removeThread(m.id)}
+              height={92}
+              radius={12}
+              rowColor="#0a0a0a"
+              drawerColor="#27272a"
+              actionColor="#e11d48"
+              textColor="#fafafa"
+              actionWidth={88}
+              snapBounce={0.18}
             >
-              <span className="relative shrink-0">
-                <img
-                  src={avatarDataUri(m.userName || 'Member')}
-                  alt=""
-                  className="h-9 w-9 rounded-lg object-cover"
-                />
-                {/* Red unread dot */}
-                {isUnread(m) && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-red-500 dark:border-neutral-900" />}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className={cn('truncate text-sm', isUnread(m) ? 'font-bold' : 'font-semibold')}>
-                    {m.userName}
-                  </span>
-                  <Badge tone={statusTone[m.status] || 'neutral'} className="shrink-0">
-                    {m.status}
-                  </Badge>
-                  <span className="ml-auto shrink-0 text-xs text-neutral-400">{when(m.createdAt)}</span>
+              <button
+                onClick={() => openMessage(m)}
+                className={cn(
+                  // min-w-0: grid items default to min-width:auto, which lets a long
+                  // message body stretch the row past the panel instead of truncating.
+                  'group flex w-full min-w-0 items-start gap-3.5 rounded-xl border p-4 text-left transition-colors',
+                  isUnread(m)
+                    ? 'border-acm-200 bg-acm-50/50 hover:border-acm-300 dark:border-acm-500/30 dark:bg-acm-500/5 dark:hover:border-acm-500/50'
+                    : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-800 dark:hover:border-neutral-700',
+                )}
+              >
+                <span className="relative shrink-0">
+                  <img
+                    src={avatarDataUri(m.userName || 'Member')}
+                    alt=""
+                    className="h-9 w-9 rounded-lg object-cover"
+                  />
+                  {/* Red unread dot */}
+                  {isUnread(m) && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-red-500 dark:border-neutral-900" />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className={cn('truncate text-sm', isUnread(m) ? 'font-bold' : 'font-semibold')}>
+                      {m.userName}
+                    </span>
+                    <Badge tone={statusTone[m.status] || 'neutral'} className="shrink-0">
+                      {m.status}
+                    </Badge>
+                    <span className="ml-auto shrink-0 text-xs text-neutral-400">{when(m.createdAt)}</span>
+                  </div>
+                  <p className="mt-0.5 truncate text-sm font-medium text-neutral-700 dark:text-neutral-300">{m.subject}</p>
+                  <p className="mt-0.5 truncate text-xs text-neutral-500 dark:text-neutral-400">{m.body}</p>
                 </div>
-                <p className="mt-0.5 truncate text-sm font-medium text-neutral-700 dark:text-neutral-300">{m.subject}</p>
-                <p className="mt-0.5 truncate text-xs text-neutral-500 dark:text-neutral-400">{m.body}</p>
-              </div>
-              {isUnread(m) ? (
-                <Mail className="mt-1 h-4 w-4 shrink-0 text-acm-500" />
-              ) : (
-                <MailOpen className="mt-1 h-4 w-4 shrink-0 text-neutral-300 dark:text-neutral-600" />
-              )}
-            </button>
+                {isUnread(m) ? (
+                  <Mail className="mt-1 h-4 w-4 shrink-0 text-acm-500" />
+                ) : (
+                  <MailOpen className="mt-1 h-4 w-4 shrink-0 text-neutral-300 dark:text-neutral-600" />
+                )}
+              </button>
+            </SwipeRow>
           ))}
         </div>
       )}

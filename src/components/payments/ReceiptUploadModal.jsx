@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Loader2, Send, AlertCircle } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
+import { ActionButton } from '../ui/ActionButton'
 import { PayToCard } from './PayToCard'
 import { ReceiptUploader } from './ReceiptUploader'
 import { useUpiAccount } from './useUpiAccount'
@@ -14,6 +15,7 @@ import { receiptReady } from '../../lib/manualPay'
 export function ReceiptUploadModal({ open, onClose, title, amount, upiAccountId, note, rejectReason, onSubmit, paused = false }) {
   const [receipt, setReceipt] = useState({ image: '', utr: '' })
   const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
   const [err, setErr] = useState('')
   const { account, loading } = useUpiAccount(upiAccountId || '', open)
 
@@ -29,8 +31,13 @@ export function ReceiptUploadModal({ open, onClose, title, amount, upiAccountId,
     setErr('')
     try {
       await onSubmit(receipt)
-      setReceipt({ image: '', utr: '' })
-      onClose()
+      // Show the tick, then close.
+      setDone(true)
+      setTimeout(() => {
+        setDone(false)
+        setReceipt({ image: '', utr: '' })
+        onClose()
+      }, 850)
     } catch (ex) {
       setErr(ex?.message || 'Couldn’t submit your receipt. Please try again.')
     } finally {
@@ -57,9 +64,9 @@ export function ReceiptUploadModal({ open, onClose, title, amount, upiAccountId,
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {err}
           </p>
         )}
-        <Button onClick={submit} disabled={busy || paused || !account || !receiptReady(receipt)}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Submit receipt
-        </Button>
+        <ActionButton onClick={submit} disabled={paused || !account || !receiptReady(receipt) || done} busy={busy} success={done} busyLabel="Submitting…" doneLabel="Receipt sent">
+          <Send className="h-4 w-4" /> Submit receipt
+        </ActionButton>
       </div>
     </Modal>
   )

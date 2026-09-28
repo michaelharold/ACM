@@ -404,6 +404,15 @@ export async function fetchMessages() {
 }
 
 
+// Delete a whole thread (admins only — enforced by the rules).
+export async function deleteMessage(id) {
+  if (!isFirebaseConfigured) {
+    writeStore(readStore().filter((m) => m.id !== id))
+    return
+  }
+  await deleteDoc(doc(db, 'messages', id))
+}
+
 // Every thread belonging to one user (their profile inbox), newest first.
 export async function fetchUserMessages(uid) {
   if (!isFirebaseConfigured) return readStore().filter((m) => m.userId === uid)

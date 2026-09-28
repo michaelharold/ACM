@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Eye, EyeOff, Loader2, MessageCircle, QrCode, MapPin, Save, AlertCircle, CheckCircle2, Radio, Flag, BellRing, Send } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
+import { ActionButton } from '../ui/ActionButton'
 import { Switch } from '../ui/Switch'
 import { Field } from '../ui/Field'
 import { useData } from '../../context/DataContext'
@@ -264,10 +265,9 @@ export function EventControlsModal({ event, open, onClose, onSave }) {
           </p>
         )}
         <div className="flex items-center gap-3">
-          <Button onClick={save} disabled={saving || saved} className="flex-1">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-            {saving ? 'Saving…' : saved ? 'Saved — live now' : 'Save changes'}
-          </Button>
+          <ActionButton onClick={save} disabled={saved} busy={saving} success={saved} busyLabel="Saving…" doneLabel="Saved — live now" className="flex-1">
+            <Save className="h-4 w-4" /> Save changes
+          </ActionButton>
         </div>
         <p className="text-xs text-neutral-400">Dates, fees and everything else are in the full editor (the arrow on the event row).</p>
       </div>

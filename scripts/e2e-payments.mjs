@@ -115,7 +115,10 @@ try {
   await shot(payer, '1-payment-step')
   await payer.getByRole('button', { name: /continue/i }).click()
   await payer.getByLabel(/agree/i).check()
-  await payer.getByRole('button', { name: /submit registration & receipt/i }).click()
+  // Paid registrations confirm with a slide (keyboard: End commits it).
+  const slide = payer.getByRole('slider', { name: /slide to submit/i })
+  await slide.focus()
+  await slide.press('End')
   check('success screen says receipt submitted', await visible(payer.getByText('Receipt submitted')))
   check('WhatsApp link hidden before verification', !(await payer.getByText('Join the event WhatsApp group').isVisible()))
   await payer.waitForTimeout(800)
@@ -195,6 +198,10 @@ try {
   check('membership page shows ACM Member', await visible(payer.getByText('ACM Member')))
 } catch (err) {
   check('script ran to completion', false, err?.message || String(err))
+  if (SHOTS && browser) {
+    let i = 0
+    for (const ctx of browser.contexts()) for (const p of ctx.pages()) await shot(p, `fail-${i++}`).catch(() => {})
+  }
 } finally {
   await browser?.close().catch(() => {})
   await env?.cleanup().catch(() => {})

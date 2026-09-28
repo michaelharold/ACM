@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, Trash2, Save, ImageUp, ChevronUp, ChevronDown, Users, AlertCircle, CheckCircle2, Loader2, Pencil, Crown, UserRound } from 'lucide-react'
 import { Button } from '../ui/Button'
+import { ActionButton } from '../ui/ActionButton'
 import { InfoHint } from '../ui/Field'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { Collapse } from '../ui/Collapse'
@@ -163,10 +164,9 @@ export function ExecomPanel() {
           <Button size="md" variant="outline" onClick={addTeam}>
             <Plus className="h-4 w-4" /> Add team
           </Button>
-          <Button size="md" disabled={!dirty || saving} onClick={save}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
-          </Button>
+          <ActionButton size="md" disabled={!dirty} onClick={save} busy={saving} success={status?.ok} busyLabel="Saving…" doneLabel="Saved">
+            <Save className="h-4 w-4" /> {dirty ? 'Save changes' : 'Saved'}
+          </ActionButton>
         </div>
       </div>
 

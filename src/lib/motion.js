@@ -5,9 +5,9 @@
 import { useEffect, useState } from 'react'
 
 // Critically damped: the default for anything that isn't thrown.
-export const SPRING = { type: 'spring', bounce: 0, duration: 0.4 }
+export const SPRING = { type: 'spring', bounce: 0, duration: 0.48 }
 // Sheets and drawers (damping ≈ 0.8) — a hint of life after a flick.
-export const SHEET_SPRING = { type: 'spring', bounce: 0.18, duration: 0.3 }
+export const SHEET_SPRING = { type: 'spring', bounce: 0.16, duration: 0.42 }
 
 // Where a flick would come to rest, the way scrolling decelerates:
 // velocity in px/s, decelerationRate ≈ 0.998 (normal) or 0.99 (snappier).
