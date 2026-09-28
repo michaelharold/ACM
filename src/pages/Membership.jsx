@@ -6,7 +6,8 @@ import { SectionHeading } from '../components/SectionHeading'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
 import { useAuth } from '../context/AuthContext'
-import { useData } from '../context/DataContext'
+import { useData, useText } from '../context/DataContext'
+import { GlobalMembershipButton } from '../components/membership/GlobalMembershipButton'
 import { fetchMembership, createMembership, probeWritable } from '../services/firestore'
 import { payFor, isRazorpayMode, PAYMENT_MODE } from '../lib/payments'
 import { createMembershipWithReceipt, attachReceipt } from '../services/payments'
@@ -27,6 +28,7 @@ const fullName = (m) => [m.firstName, m.middleName, m.lastName].filter(Boolean).
 export default function Membership() {
   const { user, loading, refreshProfile } = useAuth()
   const { content, departments } = useData()
+  const t = useText()
   const navigate = useNavigate()
   const location = useLocation()
   const membershipFee = Number(content?.membershipFee) || 0
@@ -223,9 +225,9 @@ export default function Membership() {
     <div className="pt-28">
       <div className="section-shell max-w-3xl py-12">
         <SectionHeading
-          eyebrow="Membership"
-          title="Join ACM TKMCE"
-          description="Become a member of the chapter — get member discounts on events and workshops, and a spot in the community."
+          eyebrow={t('membership.eyebrow')}
+          title={t('membership.title')}
+          description={t('membership.description')}
         />
 
         {phase === 'incomplete-profile' && <IncompleteProfile />}
@@ -241,7 +243,8 @@ export default function Membership() {
         {phase === 'form' && (
           <>
             {verification?.status === 'denied' && <DeniedVerification request={verification} className="mt-10" />}
-            <ModeSwitch mode={mode} onChange={setMode} className={verification?.status === 'denied' ? 'mt-5' : 'mt-10'} />
+            <ModeSwitch mode={mode} onChange={setMode} labels={{ join: t('cta.join'), verify: t('membership.verifyLabel') }} className={verification?.status === 'denied' ? 'mt-5' : 'mt-10'} />
+            <GlobalMembershipButton block note className="mt-3" />
             {mode === 'verify' ? (
               <VerifyExistingForm user={user} membership={membership} request={verification} onResult={onVerifyResult} className="mt-5" />
             ) : (
@@ -276,6 +279,7 @@ export default function Membership() {
                 </button>
               )
             )}
+            <GlobalMembershipButton block note className="mt-6" />
           </>
         )}
       </div>
@@ -284,13 +288,13 @@ export default function Membership() {
 }
 
 // Join as a new member, or verify an existing membership.
-function ModeSwitch({ mode, onChange, className }) {
+function ModeSwitch({ mode, onChange, labels, className }) {
   const opts = [
-    { k: 'join', label: 'Join ACM', icon: UserPlus },
-    { k: 'verify', label: 'Already a member? Verify', icon: Fingerprint },
+    { k: 'join', label: labels.join, icon: UserPlus },
+    { k: 'verify', label: labels.verify, icon: Fingerprint },
   ]
   return (
-    <div className={cn('grid grid-cols-2 gap-1 rounded-2xl border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-800 dark:bg-neutral-900/60', className)}>
+    <div className={cn('grid grid-cols-1 gap-1 rounded-2xl sm:grid-cols-2 border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-800 dark:bg-neutral-900/60', className)}>
       {opts.map((o) => (
         <button
           key={o.k}

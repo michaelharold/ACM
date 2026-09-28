@@ -5,7 +5,7 @@ import { LazyBackdrop } from '../ui/LazyBackdrop'
 import { GalleryLightbox } from './GalleryLightbox'
 import { cn } from '../../lib/cn'
 import { shuffle } from '../../lib/imagePrep'
-import { useData } from '../../context/DataContext'
+import { useData, useText } from '../../context/DataContext'
 
 // Each card is ~320px + 16px gap at the widest breakpoint. The track scrolls by
 // exactly -50%, so one half has to be at least as wide as the viewport or a gap
@@ -73,7 +73,8 @@ function Row({ items, reverse = false, duration = '46s', onOpen }) {
 
 // Two counter-scrolling photo marquees; hover pauses a row and reveals captions.
 export function GalleryStrip() {
-  const { gallery, content } = useData()
+  const { gallery } = useData()
+  const t = useText()
   const [active, setActive] = useState(null)
   // Reshuffled once per mount, so newly uploaded photos surface in different
   // positions on each visit rather than always landing at the end.
@@ -111,7 +112,7 @@ export function GalleryStrip() {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-neutral-950 to-transparent" />
 
       <div className="section-shell relative z-10 text-center">
-        <span className="eyebrow">Gallery</span>
+        <span className="eyebrow">{t('gallery.eyebrow')}</span>
         <ScrollFloat
           animationDuration={1}
           ease="back.inOut(2)"
@@ -121,10 +122,10 @@ export function GalleryStrip() {
           containerClassName="mt-2"
           textClassName="!text-3xl sm:!text-4xl !font-bold tracking-tight !leading-tight"
         >
-          {content.galleryTitle}
+          {t('galleryTitle')}
         </ScrollFloat>
         <p className="mx-auto mt-3 max-w-2xl text-pretty leading-relaxed text-neutral-400">
-          {content.galleryBlurb}
+          {t('galleryBlurb')}
         </p>
       </div>
       <div className="relative z-10 mt-14 space-y-4">

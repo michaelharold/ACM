@@ -6,7 +6,7 @@ import {
   CalendarDays, TrendingUp, UserCheck, Ticket, LogOut, ArrowRight, KeyRound,
   Contact2, ImageUp, ChevronDown, Save, Inbox, Images, CheckCircle2, Clock, Fingerprint, Download, Wallet, AlertCircle,
   Loader2, UserX, FileText, Shuffle, Info, MessageCircle, School, UserRound, Mail, Phone, Send, Globe, GraduationCap, ReceiptText, Eye, EyeOff,
-  BarChart3,
+  BarChart3, Type,
 } from 'lucide-react'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { GalleryPanel } from '../components/admin/GalleryPanel'
@@ -14,6 +14,7 @@ import { ExecomPanel } from '../components/admin/ExecomPanel'
 import { MembershipPanel } from '../components/admin/MembershipPanel'
 import { MemberVerificationPanel } from '../components/admin/MemberVerificationPanel'
 import { AnalyticsPanel } from '../components/admin/AnalyticsPanel'
+import { TextContentPanel } from '../components/admin/TextContentPanel'
 import { fetchPendingVerificationCount } from '../services/membership'
 import { PaymentsPanel } from '../components/admin/PaymentsPanel'
 import { StorageMeter } from '../components/admin/StorageMeter'
@@ -36,7 +37,6 @@ import { fitPoster } from '../lib/imagePrep'
 import { EVENT_GUIDELINE_MAX_IMAGES } from '../lib/storageBudget'
 import { formatDate, to24h, to12h } from '../lib/format'
 import { effectiveStatus, hasRegWindow, eventStart, isEnded, startMs } from '../lib/eventClock'
-import { departments as orgDepartments } from '../lib/orgData'
 import { ComposeMessageModal } from '../components/messages/Thread'
 import { MessageSquare, AlertTriangle, Search } from 'lucide-react'
 import { paymentNeedsCheck, countPaymentChecks } from '../lib/paymentHealth'
@@ -99,7 +99,7 @@ export default function Admin() {
     { key: 'analytics', label: 'Analytics', icon: BarChart3, show: can('registrations') },
     { key: 'events', label: 'Events', icon: CalendarCog, show: can('events') },
     { key: 'execom', label: 'Execom', icon: Contact2, show: can('execom') },
-    { key: 'content', label: 'Site Content', icon: SlidersHorizontal, show: can('content') },
+    { key: 'content', label: 'Text Content', icon: Type, show: can('content') },
     { key: 'gallery', label: 'Gallery', icon: Images, show: can('content') },
     { key: 'membership', label: 'Membership', icon: Fingerprint, show: can('membership') },
     { key: 'memberVerify', label: 'Member verification', icon: UserCheck, show: can('membership') },
@@ -339,7 +339,7 @@ export default function Admin() {
               <EventsPanel events={events} onAdd={handleAdd} onCycle={cycleStatus} onDelete={removeEvent} onSave={editEvent} />
             )}
             {tab === 'execom' && can('execom') && <ExecomPanel />}
-            {tab === 'content' && can('content') && <SiteContentPanel />}
+            {tab === 'content' && can('content') && <TextContentPanel />}
             {tab === 'gallery' && can('content') && <GalleryPanel />}
             {tab === 'membership' && can('membership') && <MembershipPanel canEdit={can('membership')} adminName={user.name} />}
             {tab === 'memberVerify' && can('membership') && <MemberVerificationPanel canEdit={can('membership')} adminName={user.name} onChanged={setPendingMembers} />}
@@ -1247,269 +1247,11 @@ function EventsPanel({ events, onAdd, onCycle, onDelete, onSave }) {
   )
 }
 
-// ── Execom: member details + profile photo uploads ───────────
-// ── Site content: ticker, stats, establishment — no code needed ──
-function SiteContentPanel() {
-  const { content, updateContent } = useData()
-  const [draft, setDraft] = useState(content)
-  const [dirty, setDirty] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [saveErr, setSaveErr] = useState('')
-  const mark = (next) => { setDraft(next); setDirty(true) }
-
-  async function save() {
-    // Clean the department list on the way out: trim, drop blanks, de-dupe.
-    const cleaned = [...new Set((draft.departments || []).map((d) => d.trim()).filter(Boolean))]
-    setSaving(true)
-    setSaveErr('')
-    try {
-      await updateContent({ ...draft, departments: cleaned })
-      setDirty(false)
-    } catch (err) {
-      setSaveErr(err?.message || 'Could not save — please try again.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const setStat = (i, p) => mark({ ...draft, stats: draft.stats.map((s, j) => (j === i ? { ...s, ...p } : s)) })
-  const setGoal = (i, p) => mark({ ...draft, goals: draft.goals.map((g, j) => (j === i ? { ...g, ...p } : g)) })
-  const setWhy = (i, p) => mark({ ...draft, whyJoin: draft.whyJoin.map((w, j) => (j === i ? { ...w, ...p } : w)) })
-  const setAnn = (i, p) => mark({ ...draft, announcements: draft.announcements.map((a, j) => (j === i ? { ...a, ...p } : a)) })
-  const addAnn = () => mark({ ...draft, announcements: [...draft.announcements, { id: `a_${Date.now()}`, tag: 'New', text: '' }] })
-  const delAnn = (i) => mark({ ...draft, announcements: draft.announcements.filter((_, j) => j !== i) })
-
-  // Departments — the shared dropdown options for profiles and event
-  // registration. Empty until customised, which falls back to the built-in list.
-  const depts = Array.isArray(draft.departments) && draft.departments.length ? draft.departments : orgDepartments
-  const setDept = (i, v) => mark({ ...draft, departments: depts.map((d, j) => (j === i ? v : d)) })
-  const addDept = () => mark({ ...draft, departments: [...depts, ''] })
-  const delDept = (i) => mark({ ...draft, departments: depts.filter((_, j) => j !== i) })
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 p-5 dark:border-neutral-800">
-        <div>
-          <h3 className="font-semibold tracking-tight">Site content</h3>
-          <p className="mt-1 text-xs text-neutral-400">Edit the front-page copy — headline, vision/mission/values, why-join cards, stats and the ticker. Live on the site, no code.</p>
-        </div>
-        <Button size="sm" disabled={!dirty || saving} onClick={save}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
-        </Button>
-        {saveErr && (
-          <p className="flex w-full items-start gap-1.5 text-xs text-rose-600 dark:text-rose-300">
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {saveErr}
-          </p>
-        )}
-      </div>
-
-      <div className="space-y-8 p-5">
-        {/* Headline copy */}
-        <div className="grid gap-4">
-          <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
-            Headline copy
-            <InfoHint text="The hero section and about-page copy on the home page." />
-          </h4>
-          <Field label="Hero tagline" hint="The line under the big headline on the home page.">
-            <textarea
-              rows={2}
-              className={cn(inputCls, 'resize-y')}
-              value={draft.heroTagline}
-              onChange={(e) => mark({ ...draft, heroTagline: e.target.value })}
-            />
-          </Field>
-          <Field label="About section title">
-            <input
-              className={inputCls}
-              value={draft.aboutTitle}
-              onChange={(e) => mark({ ...draft, aboutTitle: e.target.value })}
-            />
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Gallery title">
-              <input
-                className={inputCls}
-                value={draft.galleryTitle}
-                onChange={(e) => mark({ ...draft, galleryTitle: e.target.value })}
-              />
-            </Field>
-            <Field label="Gallery blurb">
-              <input
-                className={inputCls}
-                value={draft.galleryBlurb}
-                onChange={(e) => mark({ ...draft, galleryBlurb: e.target.value })}
-              />
-            </Field>
-          </div>
-        </div>
-
-        {/* Vision / Mission / Values */}
-        <div>
-          <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
-            Vision · Mission · Values
-            <InfoHint text="The three cards in the Goals section. The bold key (e.g. 'Vision') and the body text are both editable." />
-          </h4>
-          <div className="mt-3 space-y-3">
-            {draft.goals.map((g, i) => (
-              <div key={i} className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
-                <input
-                  className={cn(inputCls, 'max-w-[200px] font-semibold')}
-                  value={g.key}
-                  onChange={(e) => setGoal(i, { key: e.target.value })}
-                />
-                <textarea
-                  rows={2}
-                  className={cn(inputCls, 'mt-2 resize-y')}
-                  value={g.text}
-                  onChange={(e) => setGoal(i, { text: e.target.value })}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Why join cards */}
-        <div>
-          <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
-            “Why join us” cards
-            <InfoHint text="The four cards on the home page explaining why someone should join the chapter." />
-          </h4>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {draft.whyJoin.map((w, i) => (
-              <div key={i} className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
-                <input
-                  className={cn(inputCls, 'font-semibold')}
-                  value={w.title}
-                  onChange={(e) => setWhy(i, { title: e.target.value })}
-                />
-                <textarea
-                  rows={3}
-                  className={cn(inputCls, 'mt-2 resize-y')}
-                  value={w.body}
-                  onChange={(e) => setWhy(i, { body: e.target.value })}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Establishment */}
-        <div>
-          <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
-            Year of establishment
-            <InfoHint text="Used wherever the site shows how long the chapter has been around." />
-          </h4>
-          <input
-            className={cn(inputCls, 'mt-2 max-w-[160px]')}
-            value={draft.established}
-            onChange={(e) => mark({ ...draft, established: e.target.value })}
-          />
-        </div>
-
-        {/* Departments — shared dropdown options */}
-        <div>
-          <div className="flex items-center justify-between">
-            <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
-              Departments
-              <InfoHint text="The options members pick from in their profile and when registering for events." />
-            </h4>
-            <Button size="sm" variant="outline" onClick={addDept}><Plus className="h-4 w-4" /> Add</Button>
-          </div>
-          <p className="mt-1 text-xs text-neutral-400">
-            Changes apply everywhere on save.
-          </p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {depts.map((d, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <input
-                  className={cn(inputCls, 'flex-1')}
-                  value={d}
-                  placeholder="Department name…"
-                  onChange={(e) => setDept(i, e.target.value)}
-                />
-                <button
-                  onClick={() => delDept(i)}
-                  aria-label="Delete department"
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-rose-300 hover:text-rose-500 dark:border-neutral-800"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div>
-          <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
-            Chapter statistics
-            <InfoHint text="The number tiles on the About section (e.g. Members, Events Conducted). Left field is the number, right is its suffix like '+'." />
-          </h4>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {draft.stats.map((s, i) => (
-              <div key={s.label} className="flex items-center gap-2 rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{s.label}</span>
-                <input
-                  type="number"
-                  className={cn(inputCls, 'max-w-[100px]')}
-                  value={s.value}
-                  onChange={(e) => setStat(i, { value: Number(e.target.value) })}
-                />
-                <input
-                  className={cn(inputCls, 'max-w-[60px]')}
-                  placeholder="+"
-                  value={s.suffix || ''}
-                  onChange={(e) => setStat(i, { suffix: e.target.value })}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Announcements ticker */}
-        <div>
-          <div className="flex items-center justify-between">
-            <h4 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-neutral-400">
-              Announcement ticker
-              <InfoHint text="The scrolling strip near the top of the home page. Tag is the small pill (e.g. 'New'), text is the message." />
-            </h4>
-            <Button size="sm" variant="outline" onClick={addAnn}><Plus className="h-4 w-4" /> Add</Button>
-          </div>
-          <div className="mt-3 space-y-2">
-            {draft.announcements.map((a, i) => (
-              <div key={a.id} className="flex items-center gap-2">
-                <input
-                  className={cn(inputCls, 'max-w-[110px]')}
-                  value={a.tag}
-                  onChange={(e) => setAnn(i, { tag: e.target.value })}
-                />
-                <input
-                  className={cn(inputCls, 'flex-1')}
-                  value={a.text}
-                  placeholder="Announcement text…"
-                  onChange={(e) => setAnn(i, { text: e.target.value })}
-                />
-                <button
-                  onClick={() => delAnn(i)}
-                  aria-label="Delete announcement"
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-neutral-200 text-neutral-400 transition-colors hover:border-rose-300 hover:text-rose-500 dark:border-neutral-800"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  )
-}
-
 // ── Access: grant per-section edit rights to members ─────────
 const grantKeys = [
   { key: 'events', label: 'Events' },
   { key: 'execom', label: 'Execom' },
-  { key: 'content', label: 'Site Content' },
+  { key: 'content', label: 'Text Content & Gallery' },
   { key: 'membership', label: 'Membership' },
   { key: 'messages', label: 'Messages' },
   { key: 'registrations', label: 'Registrations' },

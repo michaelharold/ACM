@@ -6,7 +6,7 @@ import { Reveal, Item } from '../ui/Reveal'
 import TiltedCard from '../reactbits/TiltedCard'
 import DotField from '../reactbits/DotField'
 import { LazyBackdrop } from '../ui/LazyBackdrop'
-import { useData } from '../../context/DataContext'
+import { useData, useText } from '../../context/DataContext'
 import { iconMap, initials, gradientFor } from '../../lib/icons'
 import { avatarDataUri } from '../../lib/avatar'
 import { cn } from '../../lib/cn'
@@ -118,6 +118,7 @@ function LeadRow({ group, onOpen }) {
 
 export function Execom() {
   const { execomGroups } = useData()
+  const t = useText()
 
   const [selected, setSelected] = useState(null)
 
@@ -155,9 +156,9 @@ export function Execom() {
 
       <div className="section-shell relative">
         <SectionHeading
-          eyebrow="Execom"
-          title="The team behind ACM TKMCE"
-          description="The students who plan, build and run everything — organised team by team, in order of responsibility."
+          eyebrow={t('execom.eyebrow')}
+          title={t('execom.title')}
+          description={t('execom.description')}
         />
 
         <div className="mt-16 space-y-20">

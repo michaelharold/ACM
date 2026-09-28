@@ -10,7 +10,7 @@ import { RegistrationDrawer } from '../components/events/RegistrationDrawer'
 import SplitText from '../components/reactbits/SplitText'
 import { BrandBackdrop } from '../components/sections/BrandBackdrop'
 import { useAuth } from '../context/AuthContext'
-import { useData } from '../context/DataContext'
+import { useData, useText } from '../context/DataContext'
 import { useRegistrations } from '../context/RegistrationsContext'
 import { effectiveStatus, startMs, isEnded, isLiveNow, useNow } from '../lib/eventClock'
 import { isProfileComplete } from '../lib/profile'
@@ -38,6 +38,7 @@ export default function Events() {
   const { eventId } = useParams()
   const { isAuthed, user } = useAuth()
   const { publicEvents: events, loaded } = useData()
+  const t = useText()
   const { isRegistered, register, addTeamRegistration, markRegistrationPaid, unregister } = useRegistrations()
   // Ticks, so filters, ordering and badges move on their own as windows open,
   // close and events start or end while the page is open.
@@ -116,9 +117,9 @@ export default function Events() {
 
       <div className="section-shell relative z-10 py-16">
         <SectionHeading
-          eyebrow="Events"
-          title="Everything happening at ACM TKMCE"
-          description="Browse upcoming, ongoing and past events. Tap any card for the full breakdown and to register."
+          eyebrow={t('events.eyebrow')}
+          title={t('events.title')}
+          description={t('events.description')}
         />
 
         {noEventsAtAll ? (
@@ -128,7 +129,7 @@ export default function Events() {
               <CalendarClock className="h-6 w-6" />
             </span>
             <SplitText
-              text="Coming Soon....."
+              text={t('events.emptyTitle')}
               tag="h3"
               className="mt-6 text-4xl font-extrabold tracking-tight sm:text-5xl"
               delay={70}
@@ -142,7 +143,7 @@ export default function Events() {
               textAlign="center"
             />
             <p className="mt-4 max-w-sm text-sm text-neutral-500 dark:text-neutral-400">
-              We’re lining up the next set of workshops, talks and hackathons. Check back shortly.
+              {t('events.emptyBody')}
             </p>
           </div>
         ) : (
@@ -188,7 +189,7 @@ export default function Events() {
             </motion.div>
 
             {list.length === 0 && (
-              <p className="mt-16 text-center text-sm text-neutral-500">No events in this category yet.</p>
+              <p className="mt-16 text-center text-sm text-neutral-500">{t('events.emptyFilter')}</p>
             )}
           </>
         )}

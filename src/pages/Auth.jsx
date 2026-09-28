@@ -5,7 +5,7 @@ import { ArrowLeft, ShieldCheck, Sparkles, AlertCircle, CalendarCheck, Ticket, U
 import { Logo } from '../components/Logo'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
-import { chapter } from '../data/mock'
+import { useText } from '../context/DataContext'
 
 function GoogleIcon(props) {
   return (
@@ -45,6 +45,7 @@ const perks = [
 ]
 
 export default function Auth() {
+  const t = useText()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const { signInWithGoogle, isAuthed, loading: authLoading, isLive, authError, clearAuthError } = useAuth()
@@ -96,7 +97,7 @@ export default function Auth() {
           <div>
             <Sparkles className="h-8 w-8 text-acm-400" />
             <h2 className="mt-6 max-w-sm text-3xl font-bold leading-tight tracking-tight">
-              One account for every ACM TKMCE event.
+              {t('auth.panelTitle')}
             </h2>
             <ul className="mt-8 grid gap-3">
               {perks.map((p) => (
@@ -132,10 +133,8 @@ export default function Auth() {
             </Link>
           </div>
 
-          <h1 className="text-2xl font-bold tracking-tight">Sign in to ACM TKMCE</h1>
-          <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
-            Continue with your Google account. New here? Signing in creates your chapter profile automatically.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight">{t('auth.title')}</h1>
+          <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">{t('auth.body')}</p>
 
           <AnimatePresence>
             {error && (
@@ -162,13 +161,13 @@ export default function Auth() {
           </Button>
 
           <p className="mt-6 text-center text-xs leading-relaxed text-neutral-400">
-            By continuing you agree to take part in {chapter.name} activities under the chapter code of conduct.
+            {t('auth.consent')}
           </p>
 
           <p className="mt-8 text-center text-xs text-neutral-400">
             {isLive
-              ? `Secured by Firebase Authentication · ${chapter.name}`
-              : `Demo mode — add Firebase config to go live (${chapter.name} uses Google Sign-In).`}
+              ? `Secured by Firebase Authentication · ${t('brand.name')}`
+              : `Demo mode — add Firebase config to go live (${t('brand.name')} uses Google Sign-In).`}
           </p>
         </div>
       </div>

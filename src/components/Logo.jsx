@@ -1,4 +1,5 @@
 import { cn } from '../lib/cn'
+import { useText } from '../context/DataContext'
 
 // The official chapter mark. It ships with a transparent background, so it sits
 // on light and dark surfaces without a plate behind it.
@@ -9,6 +10,7 @@ const sizes = {
 }
 
 export function Logo({ className, showText = true, size = 'md' }) {
+  const t = useText()
   return (
     <span className={cn('inline-flex items-center gap-2.5', className)}>
       <img
@@ -20,8 +22,8 @@ export function Logo({ className, showText = true, size = 'md' }) {
       />
       {showText && (
         <span className="flex flex-col leading-none">
-          <span className="text-[15px] font-bold tracking-tight text-neutral-900 dark:text-white">ACM TKMCE</span>
-          <span className="text-[10px] font-medium uppercase tracking-widest text-neutral-400">Student Chapter</span>
+          <span className="text-[15px] font-bold tracking-tight text-neutral-900 dark:text-white">{t('brand.name')}</span>
+          <span className="text-[10px] font-medium uppercase tracking-widest text-neutral-400">{t('brand.subtitle')}</span>
         </span>
       )}
     </span>

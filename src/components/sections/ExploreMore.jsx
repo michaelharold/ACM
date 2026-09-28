@@ -3,13 +3,14 @@ import { motion } from 'framer-motion'
 import { ArrowRight, CalendarDays, Users, MessageSquare } from 'lucide-react'
 import { SectionHeading } from '../SectionHeading'
 import { Reveal, Item } from '../ui/Reveal'
-import { useData } from '../../context/DataContext'
+import { useData, useText } from '../../context/DataContext'
 import { effectiveStatus } from '../../lib/eventClock'
 
 // The three sections that live on their own routes. Everything else on the home
 // page is a scroll target; these are the doors out of it.
 export function ExploreMore() {
   const { publicEvents: events, execomGroups } = useData()
+  const t = useText()
 
   const memberCount = execomGroups.reduce((n, g) => n + (g.members?.length || 0), 0)
   const openCount = events.filter((e) => effectiveStatus(e) === 'open').length
@@ -18,25 +19,25 @@ export function ExploreMore() {
     {
       to: '/events',
       icon: CalendarDays,
-      title: 'Events',
-      copy: 'Workshops, talks and hackathons — browse what’s open, what’s coming and what we’ve run.',
+      title: t('explore.eventsTitle'),
+      copy: t('explore.eventsCopy'),
       meta: openCount > 0 ? `${openCount} open for registration` : `${events.length} in the catalogue`,
       accent: 'from-acm-600 to-acm-400',
     },
     {
       to: '/execom',
       icon: Users,
-      title: 'Execom',
-      copy: 'The students who plan, build and run everything — organised team by team.',
+      title: t('explore.execomTitle'),
+      copy: t('explore.execomCopy'),
       meta: `${memberCount} members across ${execomGroups.length} teams`,
       accent: 'from-violet-600 to-violet-400',
     },
     {
       to: '/contact',
       icon: MessageSquare,
-      title: 'Contact',
-      copy: 'Questions, collaborations, or want to join a team? Every channel, plus a direct message form.',
-      meta: 'We reply fast',
+      title: t('explore.contactTitle'),
+      copy: t('explore.contactCopy'),
+      meta: t('explore.contactMeta'),
       accent: 'from-cyan-600 to-cyan-400',
     },
   ]
@@ -45,9 +46,9 @@ export function ExploreMore() {
     <section id="explore" className="relative scroll-mt-24 overflow-hidden py-24 sm:py-28">
       <div className="section-shell relative">
         <SectionHeading
-          eyebrow="Explore"
-          title="Go deeper"
-          description="Three corners of the chapter big enough to deserve their own space."
+          eyebrow={t('explore.eyebrow')}
+          title={t('explore.title')}
+          description={t('explore.description')}
         />
 
         <Reveal className="mt-14 grid gap-5 md:grid-cols-3" amount={0.15}>
@@ -75,7 +76,7 @@ export function ExploreMore() {
                     aria-hidden
                     className="inline-flex items-center gap-1.5 font-medium text-acm-400"
                   >
-                    Open
+                    {t('explore.open')}
                     <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                   </motion.span>
                 </span>
