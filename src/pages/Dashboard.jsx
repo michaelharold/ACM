@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown, School, UserRound, MessageCircle, ExternalLink, Upload, History, Trophy } from 'lucide-react'
+import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown, School, UserRound, MessageCircle, ExternalLink, Upload, History, Trophy, MessageSquarePlus } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Input, Select } from '../components/ui/Input'
@@ -29,6 +29,7 @@ import { splitByEventEnd, whatsappLinkFor, isQrHidden } from '../lib/eventAccess
 import { fetchMyVerification } from '../services/membership'
 import { PendingVerification } from '../components/membership/VerifyExisting'
 import PeekRating from '../components/reactbits/PeekRating'
+import { FeedbackModal } from '../components/events/FeedbackModal'
 import { fetchMyRatings, rateEvent, RATING_LABELS } from '../services/engagement'
 
 export default function Dashboard() {
@@ -60,6 +61,7 @@ export default function Dashboard() {
   // { eventId: 1–5 } — the stars this person gave events they attended.
   const [ratings, setRatings] = useState({})
   const [ratingSaved, setRatingSaved] = useState('')
+  const [feedbackFor, setFeedbackFor] = useState(null) // { reg, event }
   // Re-evaluated every minute, so a ticket moves to Events History by itself
   // once its event ends while the page is open.
   const now = useNow(60000)
@@ -173,14 +175,21 @@ export default function Dashboard() {
   async function rate(reg, event, value) {
     if (!value) return
     const prev = ratings[event.id]
-    setRatings((r) => ({ ...r, [event.id]: value }))
+    setRatings((r) => ({ ...r, [event.id]: { ...r[event.id], rating: value } }))
     try {
-      await rateEvent({ uid: user.id, event, reg, rating: value })
+      await rateEvent({ uid: user.id, userName: user.name, event, reg, rating: value })
       setRatingSaved(event.id)
       setTimeout(() => setRatingSaved((id) => (id === event.id ? '' : id)), 2200)
     } catch {
       setRatings((r) => ({ ...r, [event.id]: prev }))
     }
+  }
+
+  // Stars plus written remarks/suggestions, from the feedback sheet.
+  async function saveFeedback({ rating, remarks, suggestions }) {
+    const { reg, event } = feedbackFor
+    await rateEvent({ uid: user.id, userName: user.name, event, reg, rating, remarks, suggestions })
+    setRatings((r) => ({ ...r, [event.id]: { rating, remarks: remarks.trim(), suggestions: suggestions.trim() } }))
   }
 
   // Random Grouping can turn a solo registration into a team registration in
@@ -663,13 +672,26 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </button>
-                    {took && !event.missing && (
-                      <div className="flex items-center justify-between gap-3 border-t border-neutral-100 px-3 pb-1.5 dark:border-neutral-800">
-                        <span className="pt-5 text-xs text-neutral-500 dark:text-neutral-400">
-                          {ratingSaved === event.id ? 'Thanks for rating!' : ratings[event.id] ? 'Your rating' : 'How was it?'}
-                        </span>
+                    {took && !event.missing && (() => {
+                      const mine = ratings[event.id]
+                      const wrote = !!(mine?.remarks || mine?.suggestions)
+                      return (
+                      <div className="flex items-end justify-between gap-3 border-t border-neutral-100 px-3 pb-1.5 dark:border-neutral-800">
+                        <div className="flex min-w-0 flex-col items-start pb-1">
+                          <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                            {ratingSaved === event.id ? 'Thanks for rating!' : mine?.rating ? 'Your rating' : 'How was it?'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setFeedbackFor({ reg, event })}
+                            className="mt-0.5 inline-flex items-center gap-1 text-left text-xs font-medium text-acm-600 transition-colors hover:text-acm-500 dark:text-acm-400 dark:hover:text-acm-300"
+                          >
+                            <MessageSquarePlus className="h-3.5 w-3.5 shrink-0" />
+                            {wrote ? 'Edit your remarks' : 'Add remarks & suggestions'}
+                          </button>
+                        </div>
                         <PeekRating
-                          value={ratings[event.id] || 0}
+                          value={mine?.rating || 0}
                           onChange={(v) => rate(reg, event, v)}
                           labels={RATING_LABELS}
                           ariaLabel={`Rate ${event.name}`}
@@ -684,7 +706,8 @@ export default function Dashboard() {
                           tipTextColor="#fafafa"
                         />
                       </div>
-                    )}
+                      )
+                    })()}
                   </div>
                 )
               })}
@@ -750,6 +773,14 @@ export default function Dashboard() {
       <Modal open={!!pastTicket} onClose={() => setPastTicket(null)} size="md">
         {pastTicket && <PastTicket reg={pastTicket.reg} event={pastTicket.event} holderName={displayName} userId={user.id} />}
       </Modal>
+
+      <FeedbackModal
+        open={!!feedbackFor}
+        onClose={() => setFeedbackFor(null)}
+        event={feedbackFor?.event}
+        initial={feedbackFor ? ratings[feedbackFor.event.id] : null}
+        onSave={saveFeedback}
+      />
 
       <EventDetailsModal event={selected} open={!!selected} onClose={() => setSelected(null)} registered />
 

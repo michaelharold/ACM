@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import {
   BarChart3, Users, CalendarDays, IndianRupee, BadgeCheck, Globe, Gauge as GaugeIcon, Download, Search, Radio,
   CheckCircle2, Clock, XCircle, Hourglass, Gift, Sparkles, ArrowRight, MessageSquare, Trophy, Info, ChevronUp, ChevronDown,
+  Star, MessageSquareQuote, Lightbulb, Reply,
 } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
@@ -10,12 +11,11 @@ import { InfoHint } from '../ui/Field'
 import { ComposeMessageModal } from '../messages/Thread'
 import * as svc from '../../services/firestore'
 import { fetchAllRatings } from '../../services/engagement'
-import { Star } from 'lucide-react'
 import { useNow, startMs } from '../../lib/eventClock'
 import { formatDate } from '../../lib/format'
 import { downloadCsv } from '../../lib/csv'
 import { cn } from '../../lib/cn'
-import { allEventStats, peopleStats, totals, timeline, memberIndex, registeredAt } from '../../lib/analytics'
+import { allEventStats, peopleStats, totals, timeline, memberIndex, registeredAt, latestFeedback } from '../../lib/analytics'
 import { ChartCard, StatTile, BarList, Donut, StackedBar, LineChart, Gauge, fmtInt, fmtMoney, fmtPct } from './analytics/Charts'
 
 const fieldCls =
@@ -92,9 +92,10 @@ export function AnalyticsPanel({ regs = [], events = [], adminName, canMessage =
     || [...data.stats].filter((s) => s.registrations > 0).sort((a, b) => b.start - a.start)[0]
     || data.stats[0]
 
-  function openEvent(id) {
+  function openEvent(id, section) {
     setFocusId(id)
     setView('events')
+    if (section) setTimeout(() => document.getElementById(`analytics-${section}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
   }
 
   return (
@@ -137,7 +138,7 @@ export function AnalyticsPanel({ regs = [], events = [], adminName, canMessage =
       </div>
 
       {view === 'overview' && <Overview data={data} now={now} onOpenEvent={openEvent} onPeople={(f) => { setPeopleFilter(f); setView('people') }} />}
-      {view === 'events' && <EventSuccess data={data} focus={focus} onFocus={setFocusId} />}
+      {view === 'events' && <EventSuccess data={data} focus={focus} onFocus={setFocusId} adminName={adminName} canMessage={canMessage} />}
       {view === 'people' && <People data={data} filter={peopleFilter} setFilter={setPeopleFilter} adminName={adminName} canMessage={canMessage} />}
     </motion.div>
   )
@@ -146,6 +147,7 @@ export function AnalyticsPanel({ regs = [], events = [], adminName, canMessage =
 // ── Overview ──────────────────────────────────────────────────
 function Overview({ data, now, onOpenEvent, onPeople }) {
   const { t, stats, rs } = data
+  const latest = latestFeedback(stats, 3)
   const span = data.from ? now - data.from : now - Math.min(now, ...rs.map((r) => registeredAt(r) || now))
   const bucket = span > 200 * 864e5 ? 'month' : 'week'
   const trend = timeline(rs, { bucket, from: data.from ?? undefined, to: now })
@@ -214,6 +216,25 @@ function Overview({ data, now, onOpenEvent, onPeople }) {
               ]}
             />
           </ChartCard>
+          <ChartCard title="Latest feedback" subtitle={t.feedbackCount ? `${plural(t.feedbackCount, 'written note')} · click to see the event` : 'Remarks and suggestions from attendees'}>
+            {latest.length === 0 ? (
+              <p className="py-4 text-center text-sm text-neutral-400">No remarks yet — attendees can add them from their profile once an event ends.</p>
+            ) : (
+              <ul className="space-y-3">
+                {latest.map((f) => (
+                  <li key={f.id}>
+                    <button onClick={() => onOpenEvent(f.eventId, 'feedback')} className="w-full text-left">
+                      <div className="flex items-center gap-2 text-xs">
+                        <Stars value={f.rating} />
+                        <span className="min-w-0 flex-1 truncate text-neutral-500">{f.eventName}</span>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm text-neutral-700 dark:text-neutral-300">“{f.remarks || f.suggestions}”</p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ChartCard>
         </div>
       </div>
 
@@ -255,7 +276,7 @@ function Overview({ data, now, onOpenEvent, onPeople }) {
 }
 
 // ── Event success ────────────────────────────────────────────
-function EventSuccess({ data, focus, onFocus }) {
+function EventSuccess({ data, focus, onFocus, adminName, canMessage }) {
   const [sort, setSort] = useState({ k: 'start', dir: -1 })
   const ranked = [...data.stats].sort((a, b) => b.registrations - a.registrations)
   const rank = focus ? ranked.findIndex((s) => s.id === focus.id) + 1 : 0
@@ -293,6 +314,7 @@ function EventSuccess({ data, focus, onFocus }) {
       { label: 'Under review (₹)', value: (s) => s.underReview },
       { label: 'Average rating', value: (s) => (s.avgRating != null ? s.avgRating.toFixed(2) : '') },
       { label: 'Ratings', value: (s) => s.ratingCount },
+      { label: 'Written feedback', value: (s) => s.feedback.length },
       { label: 'Success score', value: (s) => s.successScore },
     ])
   }
@@ -324,7 +346,7 @@ function EventSuccess({ data, focus, onFocus }) {
           </dl>
         </ChartCard>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <StatTile icon={Star} label="Rating" value={focus.avgRating != null ? `★ ${focus.avgRating.toFixed(1)}` : '—'} sub={focus.ratingCount ? `${fmtInt(focus.ratingCount)} ${focus.ratingCount === 1 ? 'rating' : 'ratings'}` : focus.stage === 'ended' ? 'No ratings yet' : 'After it ends'} accent="nonmember" />
+          <StatTile icon={Star} label="Rating" value={focus.avgRating != null ? `★ ${focus.avgRating.toFixed(1)}` : '—'} sub={focus.ratingCount ? `${plural(focus.ratingCount, 'rating')}${focus.feedback.length ? ` · ${plural(focus.feedback.length, 'note')}` : ''}` : focus.stage === 'ended' ? 'No ratings yet' : 'After it ends'} accent="nonmember" />
           <StatTile icon={Trophy} label="Registrations" value={fmtInt(focus.registrations)} sub={rank ? `#${rank} of ${ranked.length} events` : ''} accent="bar" />
           <StatTile icon={Users} label="Fill rate" value={focus.fillRate == null ? 'No cap' : fmtPct(focus.fillRate)} sub={focus.capacity ? `${fmtInt(focus.registrations - focus.states.rejected)} of ${fmtInt(focus.capacity)} seats` : plural(focus.people, 'person', 'people')} accent="inside" />
           <StatTile icon={CheckCircle2} label="Tickets issued" value={fmtInt(focus.ticketed)} sub={`${fmtPct(focus.completion)} of registrations`} accent="good" />
@@ -338,6 +360,8 @@ function EventSuccess({ data, focus, onFocus }) {
           </ChartCard>
         </div>
       </div>
+
+      <AttendeeFeedback focus={focus} people={data.people} adminName={adminName} canMessage={canMessage} />
 
       <div className="grid gap-5 lg:grid-cols-3">
         <ChartCard title="How registrations came in" subtitle="Running total, day by day" className="lg:col-span-2">
@@ -412,7 +436,14 @@ function EventSuccess({ data, focus, onFocus }) {
                   <td className="px-3 py-2.5">{fmtInt(s.memberRegs)}<span className="text-neutral-400"> / {fmtInt(s.nonMemberRegs)}</span></td>
                   <td className="px-3 py-2.5">{fmtInt(s.outside)}</td>
                   <td className="px-3 py-2.5">{fmtMoney(s.collected)}</td>
-                  <td className="px-3 py-2.5">{s.avgRating != null ? <span title={`${s.ratingCount} ratings`}>★ {s.avgRating.toFixed(1)}</span> : <span className="text-neutral-400">—</span>}</td>
+                  <td className="px-3 py-2.5">
+                    {s.avgRating != null ? <span title={`${s.ratingCount} ratings`}>★ {s.avgRating.toFixed(1)}</span> : <span className="text-neutral-400">—</span>}
+                    {s.feedback.length > 0 && (
+                      <span className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] text-neutral-400" title={`${s.feedback.length} written`}>
+                        <MessageSquareQuote className="h-3 w-3" />{s.feedback.length}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2.5 pr-5">
                     <span className="inline-flex items-center gap-2">
                       <span className="h-1.5 w-12 rounded-full bg-neutral-200 dark:bg-neutral-700">
@@ -428,6 +459,157 @@ function EventSuccess({ data, focus, onFocus }) {
         </div>
         <p className="mt-3 text-[11px] text-neutral-400">Members / non-members column shows ACM members first. {SCORE_HINT}</p>
       </ChartCard>
+    </div>
+  )
+}
+
+// ── Attendee feedback ─────────────────────────────────────────
+function Stars({ value, className }) {
+  return (
+    <span className={cn('shrink-0 tracking-tight', className)} role="img" aria-label={`${value} of 5 stars`}>
+      <span className="text-amber-400">{'★'.repeat(value)}</span>
+      <span className="text-neutral-300 dark:text-neutral-700">{'★'.repeat(5 - value)}</span>
+    </span>
+  )
+}
+
+const FEEDBACK_FILTERS = [
+  { k: 'all', label: 'All', test: () => true },
+  { k: 'remarks', label: 'Remarks', test: (f) => !!f.remarks },
+  { k: 'suggestions', label: 'Suggestions', test: (f) => !!f.suggestions },
+  { k: 'low', label: '3★ or less', test: (f) => f.rating <= 3 },
+]
+
+function AttendeeFeedback({ focus, people, adminName, canMessage }) {
+  const [filter, setFilter] = useState('all')
+  const [q, setQ] = useState('')
+  const [showAll, setShowAll] = useState(false)
+  const [msgTo, setMsgTo] = useState(null)
+  useEffect(() => { setShowAll(false); setQ(''); setFilter('all') }, [focus.id])
+
+  const byUid = useMemo(() => new Map(people.filter((p) => p.uid).map((p) => [p.uid, p])), [people])
+  const entries = focus.feedback.map((f) => {
+    const p = byUid.get(f.userId)
+    return { ...f, name: f.name !== 'Attendee' ? f.name : p?.name || 'Attendee', email: p?.email || '' }
+  })
+  const test = FEEDBACK_FILTERS.find((f) => f.k === filter)?.test || (() => true)
+  const needle = q.trim().toLowerCase()
+  const list = entries.filter(test).filter((f) => !needle || `${f.name} ${f.remarks} ${f.suggestions}`.toLowerCase().includes(needle))
+  const shown = showAll ? list : list.slice(0, 6)
+  const maxCount = Math.max(1, ...focus.ratingSpread.map((r) => r.count))
+
+  function exportCsv() {
+    downloadCsv(`acm-feedback-${focus.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`, entries, [
+      { label: 'Name', value: (f) => f.name },
+      { label: 'Email', value: (f) => f.email },
+      { label: 'Rating', value: (f) => f.rating },
+      { label: 'Remarks', value: (f) => f.remarks },
+      { label: 'Suggestions', value: (f) => f.suggestions },
+      { label: 'Updated', value: (f) => (f.at ? new Date(f.at).toISOString() : '') },
+    ])
+  }
+
+  return (
+    <div id="analytics-feedback" className="scroll-mt-28">
+      <ChartCard
+        title={<span className="flex items-center gap-1.5"><MessageSquareQuote className="h-4 w-4 text-amber-400" /> What attendees said</span>}
+        subtitle={focus.ratingCount ? `${plural(focus.ratingCount, 'rating')} · ${plural(entries.length, 'written note')}` : focus.stage === 'ended' ? 'No ratings yet — attendees rate from their profile' : 'Opens to attendees once the event ends'}
+        action={entries.length > 0 && <Button size="sm" variant="outline" onClick={exportCsv}><Download className="h-4 w-4" /> CSV</Button>}
+      >
+        <div className="grid gap-6 md:grid-cols-[200px_1fr]">
+          <div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-semibold tracking-tight tabular-nums">{focus.avgRating != null ? focus.avgRating.toFixed(1) : '—'}</span>
+              {focus.avgRating != null && <Stars value={Math.round(focus.avgRating)} className="text-sm" />}
+            </div>
+            <ul className="mt-4 space-y-1.5" aria-label="Ratings by stars">
+              {focus.ratingSpread.map((r) => (
+                <li key={r.stars} className="flex items-center gap-2 text-xs">
+                  <span className="w-6 shrink-0 tabular-nums text-neutral-500">{r.stars}★</span>
+                  <span className="h-1.5 flex-1 rounded-full" style={{ background: 'var(--viz-grid)' }}>
+                    <span
+                      className="block h-1.5 rounded-full bg-amber-400 transition-[width] duration-500"
+                      style={{ width: `${(r.count / maxCount) * 100}%`, boxShadow: r.count ? '0 0 8px rgba(251,191,36,0.55)' : 'none' }}
+                    />
+                  </span>
+                  <span className="w-6 shrink-0 text-right tabular-nums text-neutral-500">{r.count}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="min-w-0">
+            {entries.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-neutral-200 p-8 text-center text-sm text-neutral-400 dark:border-neutral-800">
+                {focus.ratingCount ? 'People have rated this event but nobody has written remarks yet.' : 'Nothing written yet.'}
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  {FEEDBACK_FILTERS.map((f) => {
+                    const n = entries.filter(f.test).length
+                    return (
+                      <button
+                        key={f.k}
+                        onClick={() => setFilter(f.k)}
+                        className={cn('rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                          filter === f.k ? 'border-acm-500 bg-acm-600 text-white' : 'border-neutral-200 text-neutral-500 hover:text-neutral-800 dark:border-neutral-700 dark:hover:text-neutral-200')}
+                      >
+                        {f.label} · {n}
+                      </button>
+                    )
+                  })}
+                  {entries.length > 6 && (
+                    <div className="relative ml-auto w-full sm:w-52">
+                      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-400" />
+                      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search feedback" aria-label="Search feedback" className={cn(inputCls, 'h-8 py-0 pl-8 text-xs')} />
+                    </div>
+                  )}
+                </div>
+                <ul className="mt-3 space-y-2.5">
+                  {shown.map((f) => (
+                    <li key={f.id} className="rounded-xl border border-neutral-200 p-3.5 dark:border-neutral-800">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="min-w-0 truncate font-medium">{f.name}</span>
+                        <Stars value={f.rating} className="text-xs" />
+                        <span className="ml-auto shrink-0 text-[11px] text-neutral-400">{f.at ? new Date(f.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}</span>
+                        {canMessage && f.userId && (
+                          <button onClick={() => setMsgTo(f)} className="shrink-0 rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-acm-500 dark:hover:bg-neutral-800" aria-label={`Reply to ${f.name}`} title="Reply">
+                            <Reply className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {f.remarks && (
+                        <p className="mt-2 whitespace-pre-line text-sm text-neutral-700 dark:text-neutral-300">{f.remarks}</p>
+                      )}
+                      {f.suggestions && (
+                        <div className="mt-2 flex gap-2 rounded-lg bg-amber-500/[0.07] p-2.5 text-sm">
+                          <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                          <p className="min-w-0 whitespace-pre-line text-neutral-700 dark:text-neutral-300"><span className="sr-only">Suggestion: </span>{f.suggestions}</p>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                  {list.length === 0 && <li className="py-6 text-center text-sm text-neutral-400">No feedback matches.</li>}
+                </ul>
+                {list.length > 6 && (
+                  <button onClick={() => setShowAll((v) => !v)} className="mt-3 text-xs font-medium text-acm-600 hover:underline dark:text-acm-400">
+                    {showAll ? 'Show fewer' : `Show all ${fmtInt(list.length)}`}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </ChartCard>
+      <ComposeMessageModal
+        open={!!msgTo}
+        onClose={() => setMsgTo(null)}
+        toUid={msgTo?.userId}
+        toName={msgTo?.name}
+        toEmail={msgTo?.email}
+        fromName={adminName}
+      />
     </div>
   )
 }
