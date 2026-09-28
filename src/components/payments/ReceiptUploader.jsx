@@ -9,6 +9,10 @@ import { isValidUtr, normalizeUtr } from '../../lib/manualPay'
 // `value` is { image, utr } and `onChange` receives the next value.
 export function ReceiptUploader({ value, onChange, disabled = false }) {
   const fileRef = useRef(null)
+  // The latest value, so a screenshot that finishes processing after the
+  // payer has typed the transaction ID doesn't wipe what they typed.
+  const latest = useRef(value)
+  latest.current = value
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const utr = value?.utr || ''
@@ -21,7 +25,8 @@ export function ReceiptUploader({ value, onChange, disabled = false }) {
     setErr('')
     setBusy(true)
     try {
-      onChange({ ...value, image: await prepareReceipt(file) })
+      const image = await prepareReceipt(file)
+      onChange({ ...latest.current, image })
     } catch (ex) {
       setErr(ex?.message || 'Couldn’t read that image. Try another screenshot.')
     } finally {
