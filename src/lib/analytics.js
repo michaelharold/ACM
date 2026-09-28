@@ -72,8 +72,11 @@ function tally(list, key, fallback = 'Not set') {
 // Per-event figures. `members` is a memberIndex(); `avgRegs` (the average
 // registrations per event) lets an uncapped event's reach be judged against
 // the others.
-export function eventStats(event, regs, { now = Date.now(), members = new Set(), avgRegs = 0 } = {}) {
+export function eventStats(event, regs, { now = Date.now(), members = new Set(), avgRegs = 0, ratings = [] } = {}) {
   const rs = regs.filter((r) => r.eventId === event.id)
+  // Star ratings from people who attended (1–5).
+  const stars = ratings.filter((r) => r.eventId === event.id).map((r) => Number(r.rating)).filter((n) => n >= 1 && n <= 5)
+  const avgRating = stars.length ? stars.reduce((a, b) => a + b, 0) / stars.length : null
   const registrations = rs.length
   const states = { verified: 0, free: 0, review: 0, awaiting: 0, rejected: 0 }
   rs.forEach((r) => { states[paymentState(r)]++ })
@@ -114,6 +117,8 @@ export function eventStats(event, regs, { now = Date.now(), members = new Set(),
     collected,
     underReview,
     fee: Number(event.fee) || 0,
+    avgRating,
+    ratingCount: stars.length,
     departments: tally(rs, (r) => known(r.department)),
     years: tally(rs, (r) => known(r.year)),
     regs: rs,
@@ -234,6 +239,8 @@ export function totals(stats, people, memberships = []) {
     upcoming: stats.filter((s) => s.stage === 'upcoming').length,
     ended: stats.filter((s) => s.stage === 'ended').length,
     avgSuccess: withRegs.length ? Math.round(withRegs.reduce((n, s) => n + s.successScore, 0) / withRegs.length) : 0,
+    ratingCount: sum('ratingCount'),
+    avgRating: sum('ratingCount') ? stats.reduce((n, s) => n + (s.avgRating || 0) * s.ratingCount, 0) / sum('ratingCount') : null,
     states: stats.reduce((acc, s) => {
       Object.entries(s.states).forEach(([k, v]) => { acc[k] = (acc[k] || 0) + v })
       return acc

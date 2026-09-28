@@ -205,7 +205,7 @@ try {
   const admin = await newPage(browser, 'admin@audit.test')
   await admin.goto(`${BASE}/admin`)
   await admin.getByText('Control Center').waitFor({ timeout: 15000 })
-  for (const tab of ['Overview', 'Events', 'Execom', 'Site Content', 'Gallery', 'Membership', 'Verify payments', 'Payments', 'Messages', 'Registrations', 'Access']) {
+  for (const tab of ['Overview', 'Events', 'Execom', 'Text Content', 'Gallery', 'Membership', 'Verify payments', 'Payments', 'Messages', 'Registrations', 'Access']) {
     await admin.getByRole('button', { name: tab, exact: true }).first().click()
     await audit(admin, `admin ${tab}`)
   }

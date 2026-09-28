@@ -107,6 +107,9 @@ try {
     await setDoc(doc(db, 'events/up'), event({ name: 'Upcoming Workshop', date: ymd(Date.now() + 10 * day), whatsappLink: 'https://chat.whatsapp.com/up' }))
     await setDoc(doc(db, 'events/past'), event({ name: 'Last Month Meetup', date: ymd(Date.now() - 30 * day), status: 'closed' }))
     await setDoc(doc(db, 'events/paid'), event({ name: 'Paid Hack', date: ymd(Date.now() + 12 * day), fee: 150, qrHidden: true }))
+    const pad2 = (n) => String(n).padStart(2, '0')
+    const localDT = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}` }
+    await setDoc(doc(db, 'events/soon'), event({ name: 'Soon Summit', date: ymd(Date.now() + 20 * day), status: 'coming-soon', regOpens: localDT(Date.now() + 3 * day), regCloses: localDT(Date.now() + 15 * day) }))
     const reg = (id, eventId, eventName) => setDoc(doc(db, `registrations/${id}`), {
       userId: asha, userName: 'Asha K', userEmail: 'asha@e2e.test', eventId, eventName,
       paymentStatus: 'free', amountDue: 0, status: 'Confirmed', date: ymd(Date.now()),
@@ -136,6 +139,26 @@ try {
   await shot(a, 'm1-history-ticket')
   await a.keyboard.press('Escape')
 
+  // ── Rate the event you went to ──────────────────────────────────
+  await a.getByText('Event ended').waitFor({ state: 'detached' }).catch(() => {})
+  await a.getByRole('radio', { name: /^4 of 5/ }).click()
+  let rated
+  for (let i = 0; i < 30 && !rated; i++) { rated = await readDoc(`eventRatings/past_${asha}`); if (!rated) await a.waitForTimeout(200) }
+  check('attendee rates a past event', rated?.rating === 4 && rated?.registrationId === 'regpast', JSON.stringify(rated))
+  check('rating thanks the attendee', await visible(a.getByText('Thanks for rating!')))
+  await shot(a, 'm1b-rating')
+
+  // ── Notify me when registration opens ───────────────────────────
+  await a.goto(`${BASE}/events/soon`)
+  const bell = a.getByRole('button', { name: 'Notify me when registration opens' })
+  check('coming-soon event offers Notify me', await visible(bell, 15000))
+  await bell.click()
+  let alert
+  for (let i = 0; i < 30 && !alert; i++) { alert = await readDoc(`eventAlerts/soon_${asha}`); if (!alert) await a.waitForTimeout(200) }
+  check('alert saved', alert?.userId === asha)
+  await shot(a, 'm1c-notify')
+  await a.keyboard.press('Escape')
+
   // ── Admin hides the WhatsApp link → it vanishes from the ticket ───
   await admin.goto(`${BASE}/admin`)
   await visible(admin.getByText('Control Center'), 30000)
@@ -147,7 +170,8 @@ try {
   const priv = await readDoc('eventPrivate/up')
   check('hidden link removed from the public event doc', pub.whatsappLink === '' && pub.whatsappHidden === true)
   check('admin copy kept privately', priv?.whatsappLink === 'https://chat.whatsapp.com/up')
-  await a.reload()
+  await a.goto(`${BASE}/dashboard`)
+  await visible(a.getByText('My tickets'), 15000)
   check('ticket no longer shows WhatsApp', await gone(a.getByText('Join WhatsApp group')))
   check('dashboard card no longer shows WhatsApp', !(await a.getByText('Event WhatsApp group').isVisible()))
 
@@ -160,9 +184,20 @@ try {
   await admin.waitForTimeout(1500)
   const after = await readDoc('events/up')
   check('quick controls save venue + show link', after.venue === 'Seminar Hall 2' && after.whatsappLink === 'https://chat.whatsapp.com/up' && !after.whatsappHidden, JSON.stringify({ v: after.venue, l: after.whatsappLink, h: after.whatsappHidden }))
-  await a.reload()
+  await a.goto(`${BASE}/dashboard`)
   check('ticket shows the link and new venue again', (await visible(a.getByText('Join WhatsApp group'))) && (await visible(a.getByText('Seminar Hall 2'))))
   await shot(a, 'm2-ticket-whatsapp')
+
+  // ── Admin sends the "registration is open" alert ──────────────────
+  const soonRow = admin.locator('div.flex.flex-wrap.items-center.gap-4', { hasText: 'Soon Summit' })
+  await soonRow.getByRole('button', { name: 'Event controls' }).click()
+  check('controls show who is waiting', await visible(admin.getByText(/1 person is waiting/)))
+  await admin.getByRole('button', { name: 'Notify them' }).click()
+  check('alert sent confirmation', await visible(admin.getByText(/Sent to 1 person/)))
+  check('alert cleared after sending', !(await readDoc(`eventAlerts/soon_${asha}`)))
+  await admin.keyboard.press('Escape')
+  await a.goto(`${BASE}/dashboard`)
+  check('attendee gets the alert in their inbox', await visible(a.getByText(/Registration is open: Soon Summit/), 15000))
 
   // ── QR hidden → payments paused in the registration drawer ────────
   await a.goto(`${BASE}/events/paid`)
@@ -257,6 +292,7 @@ try {
   await shot(admin, 'm8-analytics-overview')
   await admin.getByRole('button', { name: 'Event success', exact: true }).click()
   check('event success view renders', await visible(admin.getByText('Every event, ranked')))
+  check('analytics shows the rating', await visible(admin.getByText('★ 4.0')))
   await shot(admin, 'm9-analytics-event')
   await admin.getByRole('button', { name: 'People', exact: true }).click()
   check('people view lists Asha', await visible(admin.getByRole('cell', { name: /Asha K/ })))
