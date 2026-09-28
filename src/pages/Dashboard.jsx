@@ -725,10 +725,11 @@ export default function Dashboard() {
                           ariaLabel={`Rate ${event.name}`}
                           allowClear={false}
                           size={20}
-                          lift={5}
-                          magnify={1.18}
-                          riseDuration={380}
-                          activeColor="#fbbf24"
+                          lift={12}
+                          magnify={1.2}
+                          riseDuration={600}
+                          popScale={1.6}
+                          activeColor="#f5b400"
                           idleColor="#404040"
                           tipColor="#171717"
                           tipTextColor="#fafafa"

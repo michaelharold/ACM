@@ -104,6 +104,8 @@ try {
   await visitorPhone.goto(`${BASE}/events/sheet`)
   const sheet = visitorPhone.getByRole('dialog')
   check('phone: event opens as a sheet', await visible(sheet, 15000))
+  // The intro loader covers the page until the site has loaded; drag after it.
+  await visitorPhone.locator('#acm-loader').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
   await visitorPhone.waitForTimeout(600) // let it finish rising
   const grip = await sheet.locator('.cursor-grab').first().boundingBox()
   if (grip) {

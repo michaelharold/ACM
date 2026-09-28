@@ -17,13 +17,13 @@ export function Switch({ on, onClick, tone = 'acm', disabled = false, label }) {
       onChange={(next) => { if (next !== !!on) onClick?.() }}
       ariaLabel={label}
       disabled={disabled}
-      width={46}
-      height={26}
-      radius={13}
-      speed={38}
-      stretch={42}
-      hoverScale={1.06}
-      colorDuration={380}
+      width={50}
+      height={28}
+      radius={14}
+      speed={30}
+      stretch={100}
+      hoverScale={1.035}
+      colorDuration={800}
       trackColor="#3f3f46"
       trackOnColor={ON[tone] || ON.acm}
       thumbColor="#d4d4d8"

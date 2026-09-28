@@ -2,9 +2,10 @@
 // remarks (what worked) and suggestions (what to change). Admins read it all
 // per event in Analytics → Event success.
 import { useId, useState } from 'react'
-import { CheckCircle2, Loader2, Lock } from 'lucide-react'
+import { Lock } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
+import { ActionButton } from '../ui/ActionButton'
 import PeekRating from '../reactbits/PeekRating'
 import { RATING_LABELS, FEEDBACK_MAX } from '../../services/engagement'
 import { formatDate } from '../../lib/format'
@@ -54,13 +55,13 @@ function FeedbackForm({ event, initial, onSave, onClose }) {
 
   async function save(e) {
     e.preventDefault()
-    if (!rating || busy) return
+    if (!rating || busy || saved) return
     setBusy(true)
     setError('')
     try {
       await onSave({ rating, remarks, suggestions })
       setSaved(true)
-      setTimeout(onClose, 900)
+      setTimeout(onClose, 1300) // let the tick finish drawing
     } catch {
       setError('Couldn’t save that — check your connection and try again.')
     } finally {
@@ -82,10 +83,11 @@ function FeedbackForm({ event, initial, onSave, onClose }) {
           ariaLabel={`Your rating for ${event?.name || 'this event'}`}
           allowClear={false}
           size={30}
-          lift={6}
-          magnify={1.18}
-          riseDuration={380}
-          activeColor="#fbbf24"
+          lift={16}
+          magnify={1.2}
+          riseDuration={600}
+          popScale={1.6}
+          activeColor="#f5b400"
           idleColor="#404040"
           tipColor="#171717"
           tipTextColor="#fafafa"
@@ -117,9 +119,9 @@ function FeedbackForm({ event, initial, onSave, onClose }) {
 
       <div className="mt-5 flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button type="submit" disabled={!rating || busy || saved}>
-          {saved ? <><CheckCircle2 className="h-4 w-4" /> Saved</> : busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : 'Save feedback'}
-        </Button>
+        <ActionButton type="submit" busy={busy} success={saved} busyLabel="Saving…" doneLabel="Saved" disabled={!rating}>
+          Save feedback
+        </ActionButton>
       </div>
     </form>
   )

@@ -20,6 +20,7 @@ import { useUpiAccount } from '../payments/useUpiAccount'
 import { cn } from '../../lib/cn'
 import { effectiveStatus } from '../../lib/eventClock'
 import { whatsappLinkFor, isQrHidden } from '../../lib/eventAccess'
+import { SpringBox } from '../ui/SpringBox'
 
 const emailRe = /\S+@\S+\.\S+/
 
@@ -484,7 +485,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                     )}
                     {isTkmVisitor ? (
                       <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
-                        <input type="checkbox" checked={form.isMember} onChange={toggleMember} className="mt-0.5 h-4 w-4 accent-acm-600" />
+                        <SpringBox checked={form.isMember} onChange={toggleMember} className="mt-0.5" />
                         <span>
                           <span className="flex items-center gap-2 text-sm font-medium">
                             <BadgeCheck className="h-4 w-4 text-acm-500" /> I'm an ACM member
@@ -599,7 +600,7 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                       <Row label="Fee" value={payable > 0 ? `₹${payable}${isManualTeam ? ' / team' : ''}${discountEligible ? ` (₹${memberCheck.discount} off)` : ''}` : 'Free'} last />
                     </div>
                     <label className="flex cursor-pointer items-start gap-3 text-sm">
-                      <input type="checkbox" checked={form.agree} onChange={set('agree')} className="mt-0.5 h-4 w-4 accent-acm-600" />
+                      <SpringBox checked={form.agree} onChange={set('agree')} className="mt-0.5" />
                       <span className="text-neutral-600 dark:text-neutral-300">
                         I agree to the event guidelines and code of conduct.
                       </span>
@@ -641,8 +642,9 @@ export function RegistrationDrawer({ event, open, onClose, onComplete, onTeamCre
                 height={48}
                 radius={24}
                 speed={42}
-                returnBounce={0.3}
-                holdMs={900}
+                returnBounce={0.38}
+                landingDip={0.026}
+                holdMs={1500}
                 trackColor="#1f1f1f"
                 handleColor="#1f47f5"
                 successColor="#10b981"

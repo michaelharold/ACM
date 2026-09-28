@@ -11,6 +11,7 @@ import { iconMap } from '../../lib/icons'
 import { avatarDataUri } from '../../lib/avatar'
 import { cropToPortrait } from '../../lib/imagePrep'
 import { cn } from '../../lib/cn'
+import { SpringBox } from '../ui/SpringBox'
 
 const inputCls =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-acm-400 dark:border-neutral-700 dark:bg-neutral-800'
@@ -264,12 +265,7 @@ export function ExecomPanel() {
                 </select>
 
                 <label className="flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-neutral-200 px-3 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
-                  <input
-                    type="checkbox"
-                    checked={!!g.lead}
-                    onChange={(e) => setTeam(gi, { lead: e.target.checked })}
-                    className="h-4 w-4 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
-                  />
+                  <SpringBox checked={!!g.lead} onChange={(e) => setTeam(gi, { lead: e.target.checked })} size={16} />
                   <Crown className="h-4 w-4 text-amber-500" /> Lead row
                   <InfoHint text="Shows this team as a standalone leadership row (like Chair or Secretary) instead of a team card with members." />
                 </label>

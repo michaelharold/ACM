@@ -115,6 +115,9 @@ try {
   await shot(payer, '1-payment-step')
   await payer.getByRole('button', { name: /continue/i }).click()
   await payer.getByLabel(/agree/i).check()
+  check('agreeing ticks the box', await payer.getByLabel(/agree/i).isChecked())
+  await payer.waitForTimeout(500) // let the tick finish drawing
+  await shot(payer, '1b-confirm-step')
   // Paid registrations confirm with a slide (keyboard: End commits it).
   const slide = payer.getByRole('slider', { name: /slide to submit/i })
   await slide.focus()

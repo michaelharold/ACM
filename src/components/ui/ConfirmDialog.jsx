@@ -43,13 +43,16 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, description, co
               doneLabel={doneLabel}
               size="sm"
               radius={10}
-              holdTime={1400}
-              releaseTime={260}
+              holdTime={2000}
+              releaseTime={200}
+              pressScale={0.97}
+              wave
+              glow
               backgroundColor="#3f1d26"
               fillColor={danger ? '#e11d48' : '#1f47f5'}
               textColor="#fecdd3"
               fillTextColor="#ffffff"
-              waveAmplitude={5}
+              waveAmplitude={6}
               resetAfter={0}
             >
               Hold to {confirmLabel.toLowerCase()}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   BarChart3, Users, CalendarDays, IndianRupee, BadgeCheck, Globe, Gauge as GaugeIcon, Download, Search, Radio,
   CheckCircle2, Clock, XCircle, Hourglass, Gift, Sparkles, ArrowRight, MessageSquare, Trophy, Info, ChevronUp, ChevronDown,
@@ -16,6 +16,8 @@ import { useNow, startMs } from '../../lib/eventClock'
 import { formatDate } from '../../lib/format'
 import { downloadCsv } from '../../lib/csv'
 import { cn } from '../../lib/cn'
+import { SPRING } from '../../lib/motion'
+import { AnimatedNumber } from '../ui/AnimatedNumber'
 import { allEventStats, peopleStats, totals, timeline, memberIndex, registeredAt, latestFeedback } from '../../lib/analytics'
 import { ChartCard, StatTile, BarList, Donut, StackedBar, LineChart, Gauge, fmtInt, fmtMoney, fmtPct } from './analytics/Charts'
 
@@ -519,7 +521,7 @@ function AttendeeFeedback({ focus, people, adminName, canMessage }) {
         <div className="grid gap-6 md:grid-cols-[200px_1fr]">
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-semibold tracking-tight tabular-nums">{focus.avgRating != null ? focus.avgRating.toFixed(1) : '—'}</span>
+              <span className="text-4xl font-semibold tracking-tight tabular-nums">{focus.avgRating != null ? <AnimatedNumber value={focus.avgRating} format={(n) => n.toFixed(1)} /> : '—'}</span>
               {focus.avgRating != null && <Stars value={Math.round(focus.avgRating)} className="text-sm" />}
             </div>
             <ul className="mt-4 space-y-1.5" aria-label="Ratings by stars">
@@ -552,10 +554,14 @@ function AttendeeFeedback({ focus, people, adminName, canMessage }) {
                       <button
                         key={f.k}
                         onClick={() => setFilter(f.k)}
-                        className={cn('rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                          filter === f.k ? 'border-acm-500 bg-acm-600 text-white' : 'border-neutral-200 text-neutral-500 hover:text-neutral-800 dark:border-neutral-700 dark:hover:text-neutral-200')}
+                        aria-pressed={filter === f.k}
+                        className={cn('relative rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-300',
+                          filter === f.k ? 'border-acm-500 text-white' : 'border-neutral-200 text-neutral-500 hover:text-neutral-800 dark:border-neutral-700 dark:hover:text-neutral-200')}
                       >
-                        {f.label} · {n}
+                        {filter === f.k && (
+                          <motion.span layoutId="feedback-filter" transition={SPRING} className="absolute inset-0 rounded-full bg-acm-600 shadow-[0_0_14px_rgba(31,71,245,0.45)]" />
+                        )}
+                        <span className="relative">{f.label} · {n}</span>
                       </button>
                     )
                   })}
@@ -567,8 +573,17 @@ function AttendeeFeedback({ focus, people, adminName, canMessage }) {
                   )}
                 </div>
                 <ul className="mt-3 space-y-2.5">
+                  <AnimatePresence initial={false} mode="popLayout">
                   {shown.map((f) => (
-                    <li key={f.id} className="rounded-xl border border-neutral-200 p-3.5 dark:border-neutral-800">
+                    <motion.li
+                      key={f.id}
+                      layout
+                      initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
+                      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                      exit={{ opacity: 0, scale: 0.98, filter: 'blur(4px)' }}
+                      transition={SPRING}
+                      className="rounded-xl border border-neutral-200 p-3.5 dark:border-neutral-800"
+                    >
                       <div className="flex items-center gap-2 text-sm">
                         <span className="min-w-0 truncate font-medium">{f.name}</span>
                         <Stars value={f.rating} className="text-xs" />
@@ -588,8 +603,9 @@ function AttendeeFeedback({ focus, people, adminName, canMessage }) {
                           <p className="min-w-0 whitespace-pre-line text-neutral-700 dark:text-neutral-300"><span className="sr-only">Suggestion: </span>{f.suggestions}</p>
                         </div>
                       )}
-                    </li>
+                    </motion.li>
                   ))}
+                  </AnimatePresence>
                   {list.length === 0 && <li className="py-6 text-center text-sm text-neutral-400">No feedback matches.</li>}
                 </ul>
                 {list.length > 6 && (

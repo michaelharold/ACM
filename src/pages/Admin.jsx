@@ -50,6 +50,7 @@ import { AnimatedNumber } from '../components/ui/AnimatedNumber'
 import { Collapse } from '../components/ui/Collapse'
 import { VisibilityRow, EventControlsModal, EventQuickChips, lifecycle } from '../components/admin/EventControls'
 import { cn } from '../lib/cn'
+import { SpringBox } from '../components/ui/SpringBox'
 
 const statusCycle = ['open', 'coming-soon', 'closed']
 
@@ -868,11 +869,10 @@ function EventEditor({ event, onSave }) {
         <FormSection icon={Users} title="Team settings" hint="Register solo, or as a pre-formed team.">
           <div className="sm:col-span-2">
             <label className="flex cursor-pointer items-center gap-2.5">
-              <input
-                type="checkbox"
+              <SpringBox
                 checked={draft.isGroup}
                 onChange={(e) => setDraft((d) => ({ ...d, isGroup: e.target.checked }))}
-                className="h-4 w-4 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
+                size={16}
               />
               <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200">Group event (register as a team)</span>
             </label>
@@ -1047,11 +1047,10 @@ function EventEditor({ event, onSave }) {
 
         <div className="sm:col-span-2">
           <label className="flex cursor-pointer items-center gap-2.5">
-            <input
-              type="checkbox"
+            <SpringBox
               checked={draft.guidelinesEnabled}
               onChange={(e) => setDraft((d) => ({ ...d, guidelinesEnabled: e.target.checked }))}
-              className="h-4 w-4 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
+              size={16}
             />
             <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200">Publish guidelines (text)</span>
           </label>
@@ -1075,11 +1074,10 @@ function EventEditor({ event, onSave }) {
 
         <div className="sm:col-span-2">
           <label className="flex cursor-pointer items-center gap-2.5">
-            <input
-              type="checkbox"
+            <SpringBox
               checked={draft.codeOfConductEnabled}
               onChange={(e) => setDraft((d) => ({ ...d, codeOfConductEnabled: e.target.checked }))}
-              className="h-4 w-4 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
+              size={16}
             />
             <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200">Publish code of conduct (text)</span>
           </label>
@@ -2045,12 +2043,11 @@ function FormTeamModal({ data, onClose, onDone }) {
                   picked.has(p.id) ? 'border-acm-400 bg-acm-50 dark:border-acm-500/50 dark:bg-acm-500/10' : 'border-neutral-200 dark:border-neutral-800',
                 )}
               >
-                <input
-                  type="checkbox"
+                <SpringBox
                   checked={picked.has(p.id)}
                   onChange={() => toggle(p.id)}
                   disabled={!picked.has(p.id) && picked.size >= maxSize}
-                  className="h-4 w-4 shrink-0 rounded border-neutral-300 text-acm-600 dark:border-neutral-700 dark:bg-neutral-800"
+                  size={16}
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{p.name}</span>
