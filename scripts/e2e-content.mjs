@@ -94,8 +94,8 @@ try {
   const visitorPhone = await newPage(browser, { mobile: true })
   const signInPhone = visitorPhone.locator('header nav').getByRole('link', { name: /Sign In \/ Sign Up/ })
   check('phone: Sign In / Sign Up sits in the top bar', await visible(signInPhone))
-  const glow = await signInPhone.first().evaluate((el) => getComputedStyle(el).backgroundColor)
-  check('phone: the button is red', /rgb\(2[0-9]{2}, [0-9]{1,2}, [0-9]{1,2}/.test(glow), glow)
+  const look = await signInPhone.first().evaluate((el) => { const c = getComputedStyle(el); return { border: c.borderTopColor, fill: c.backgroundColor } })
+  check('phone: the button has a red glowing border, not a red fill', /rgba?\(244, 63, 94/.test(look.border) && !/rgb\(2[0-9]{2}, [0-9]{1,2}, [0-9]{1,2}\)/.test(look.fill), JSON.stringify(look))
   await shot(visitorPhone, 'c1-phone-signed-out')
   const visitor = await newPage(browser)
   check('desktop: Sign In / Sign Up sits in the top bar', await visible(visitor.locator('header nav').getByRole('link', { name: /Sign In \/ Sign Up/ })))
@@ -118,6 +118,26 @@ try {
   }
   const dismissed = await sheet.first().waitFor({ state: 'detached', timeout: 5000 }).then(() => true, () => false)
   check('phone: pulling the sheet down dismisses it', dismissed)
+
+  // ── Phone: the unlock after signing in sits in the middle of the screen ──
+  const unlockPhone = await newPage(browser, { mobile: true })
+  await unlockPhone.goto(`${BASE}/auth`)
+  await unlockPhone.locator('#acm-loader').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
+  await unlockPhone.mouse.wheel(0, 600) // scrolled, as a phone often is
+  await unlockPhone.waitForFunction(() => typeof window.__acmSignIn === 'function', null, { timeout: 30000 })
+  await unlockPhone.evaluate(() => window.__acmSignIn('user@e2e.test', 'secret123'))
+  const unlock = unlockPhone.getByRole('status', { name: 'Signed in' })
+  const unlockShown = await visible(unlock)
+  await unlockPhone.waitForTimeout(700)
+  const geo = unlockShown ? await unlock.evaluate((el) => {
+    const o = el.getBoundingClientRect()
+    const c = el.firstElementChild.getBoundingClientRect()
+    return { o: [o.left, o.top, o.width, o.height], cx: c.left + c.width / 2, cy: c.top + c.height / 2, vw: innerWidth, vh: innerHeight }
+  }) : null
+  const centred = !!geo && Math.abs(geo.cx - geo.vw / 2) <= 4 && Math.abs(geo.cy - geo.vh / 2) <= 6
+    && geo.o[0] === 0 && geo.o[1] === 0 && Math.abs(geo.o[2] - geo.vw) <= 1 && Math.abs(geo.o[3] - geo.vh) <= 1
+  check('phone: the unlock is centred on the screen', centred, JSON.stringify(geo))
+  await shot(unlockPhone, 'c1b-phone-unlock')
   await visitorPhone.goto(`${BASE}/`)
 
   // ── Home: new Join label + Global Membership button ─────────────

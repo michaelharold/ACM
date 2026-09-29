@@ -187,15 +187,46 @@
 /* Sign In / Sign Up — a red button that breathes a soft glow so it's findable
    at a glance on every screen size. (Reduced motion stills it — see above.) */
 .signin-glow {
-  box-shadow: 0 0 14px rgba(244, 63, 94, 0.55), 0 0 2px rgba(254, 205, 211, 0.6) inset;
-  animation: signin-breathe 2.8s ease-in-out infinite;
+  position: relative;
+  isolation: isolate;
+  background: rgba(10, 10, 10, 0.35);
+  border: 1px solid rgba(244, 63, 94, 0.6);
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.3), inset 0 0 10px rgba(244, 63, 94, 0.1);
+  animation: signin-breathe 3.2s ease-in-out infinite;
 }
 .signin-glow:hover {
-  box-shadow: 0 0 26px rgba(244, 63, 94, 0.8), 0 0 2px rgba(254, 205, 211, 0.8) inset;
+  background: rgba(244, 63, 94, 0.1);
+  box-shadow: 0 0 18px rgba(244, 63, 94, 0.55), inset 0 0 12px rgba(244, 63, 94, 0.16);
+}
+/* A thin light that slowly travels around the border. */
+@property --signin-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.signin-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--signin-angle), transparent 0 68%, rgba(244, 63, 94, 0.9) 80%, rgba(255, 228, 230, 0.95) 86%, rgba(244, 63, 94, 0.9) 90%, transparent 98%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: signin-orbit 4s linear infinite;
+  pointer-events: none;
+}
+@keyframes signin-orbit {
+  to { --signin-angle: 360deg; }
 }
 @keyframes signin-breathe {
-  0%, 100% { box-shadow: 0 0 12px rgba(244, 63, 94, 0.45), 0 0 2px rgba(254, 205, 211, 0.6) inset; }
-  50% { box-shadow: 0 0 24px rgba(244, 63, 94, 0.75), 0 0 2px rgba(254, 205, 211, 0.7) inset; }
+  0%, 100% { box-shadow: 0 0 8px rgba(244, 63, 94, 0.25), inset 0 0 10px rgba(244, 63, 94, 0.08); }
+  50% { box-shadow: 0 0 16px rgba(244, 63, 94, 0.5), inset 0 0 12px rgba(244, 63, 94, 0.14); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signin-glow, .signin-glow::before { animation: none; }
 }
 
 /* Translucent chrome (header, menus, sheet backdrops) turns solid for people

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown, School, UserRound, MessageCircle, ExternalLink, Upload, History, Trophy, MessageSquarePlus } from 'lucide-react'
+import { CalendarDays, MapPin, LogOut, Compass, BadgeCheck, Mail, GraduationCap, Building2, Ticket, Pencil, Save, X, Fingerprint, Phone, AlertCircle, ShieldCheck, CheckCircle2, Loader2, MessageSquare, Users, ChevronDown, School, UserRound, MessageCircle, ExternalLink, Upload, History, Trophy, MessageSquarePlus, Mailbox } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { ActionButton } from '../components/ui/ActionButton'
 import CodeSlots from '../components/reactbits/CodeSlots'
@@ -33,6 +33,7 @@ import { PendingVerification } from '../components/membership/VerifyExisting'
 import PeekRating from '../components/reactbits/PeekRating'
 import { FeedbackModal } from '../components/events/FeedbackModal'
 import { fetchMyRatings, rateEvent, RATING_LABELS } from '../services/engagement'
+import { scrollToId } from '../lib/smoothScroll'
 
 export default function Dashboard() {
   const { user, loading, logout, saveProfile } = useAuth()
@@ -176,6 +177,12 @@ export default function Dashboard() {
     return () => { alive = false }
   }, [user])
 
+  // Arriving from the menu's "Inbox" link: land on the inbox once it's on the
+  // page (the route-level scroll can give up before a cold profile renders).
+  useEffect(() => {
+    if (user && location.hash === '#inbox') scrollToId('inbox')
+  }, [user, location.hash, location.key])
+
   async function rate(reg, event, value) {
     if (!value) return
     const prev = ratings[event.id]
@@ -305,7 +312,22 @@ export default function Dashboard() {
               <p className="text-sm text-neutral-500 dark:text-neutral-400">{t('profile.subtitle')}</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {/* Mailbox: jump straight to the inbox, with the unread count. */}
+            <Button
+              onClick={() => scrollToId('inbox')}
+              variant="outline"
+              size="sm"
+              className="relative"
+              aria-label={unreadInbox ? `Inbox, ${unreadInbox} new` : 'Inbox'}
+            >
+              <Mailbox className="h-4 w-4" /> Inbox
+              {unreadInbox > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-[20px] place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-neutral-950">
+                  {unreadInbox}
+                </span>
+              )}
+            </Button>
             <Button as={Link} to="/events" variant="outline" size="sm">
               <Compass className="h-4 w-4" /> Browse events
             </Button>
@@ -745,7 +767,7 @@ export default function Dashboard() {
         )}
 
         {/* Message inbox — replies and messages from the chapter */}
-        <div className="mt-6 rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+        <div id="inbox" className="mt-6 scroll-mt-28 rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
           <div className="flex items-center gap-2">
             <span className="relative">
               <MessageSquare className="h-5 w-5 text-acm-500" />

@@ -228,9 +228,9 @@ export default function SwipeRow({
       hist: [],
       touch: e.pointerType === 'touch'
     };
-    try {
-      surface.current?.setPointerCapture(e.pointerId);
-    } catch {}
+    // No pointer capture yet: capturing on press would retarget the click to
+    // the surface, so a plain tap would never reach the row's own button.
+    // Capture starts once a horizontal drag is recognised (see move).
     unwatch.current?.();
     unwatch.current = watchWindow(live);
   };
@@ -243,6 +243,9 @@ export default function SwipeRow({
       if (Math.abs(dx) < HYST || Math.abs(dx) < Math.abs(dy)) return;
       g.grab = s * (g.x0 + Math.sign(dx) * HYST) - inv(exposed.get());
       g.moved = true;
+      try {
+        surface.current?.setPointerCapture(e.pointerId);
+      } catch {}
       root.current?.setAttribute('data-dragging', '');
     }
     const ex = map(s * e.clientX - g.grab);

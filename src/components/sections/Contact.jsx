@@ -181,8 +181,8 @@ export function Contact() {
                     accentColor="#8fb0ff"
                     wellColor="#262626"
                     bandColor="#525252"
-                    armAt={44}
-                    maxPull={130}
+                    armAt={22}
+                    maxPull={100}
                     launchSpeed={2200}
                     recoil={0.24}
                     flight={110}

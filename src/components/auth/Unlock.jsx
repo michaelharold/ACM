@@ -1,20 +1,24 @@
+import { createPortal } from 'react-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 
 // Sign-in success: the lock gives a little shake, the shackle snaps free in a
 // burst of sparks and swings open, and the page glows "welcome in".
+// Portalled to <body> so it's centred on the screen itself: inside the page's
+// animated route wrapper, a transformed ancestor would make "fixed" relative
+// to the page instead, and on a phone the lock would sit off-centre.
 export function Unlock({ name }) {
   const reduce = useReducedMotion()
   const sparks = Array.from({ length: 10 }, (_, i) => (i / 10) * Math.PI * 2)
-  return (
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
-      className="fixed inset-0 z-[200] grid place-items-center bg-neutral-950/92 backdrop-blur-md"
+      className="fixed inset-0 z-[200] grid h-[100dvh] w-screen place-items-center bg-neutral-950/92 backdrop-blur-md"
       role="status"
       aria-label="Signed in"
     >
-      <div className="flex flex-col items-center">
+      <div className="flex flex-col items-center px-6">
         <motion.div
           className="relative h-32 w-28"
           initial={false}
@@ -73,6 +77,7 @@ export function Unlock({ name }) {
           <div className="text-sm text-neutral-400">Unlocking your chapter space…</div>
         </motion.div>
       </div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   )
 }

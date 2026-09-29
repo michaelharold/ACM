@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-motion'
-import { LayoutDashboard, LogOut, User as UserIcon, ChevronDown, ShieldCheck, BadgePlus, LogIn } from 'lucide-react'
+import { LayoutDashboard, LogOut, User as UserIcon, ChevronDown, ShieldCheck, BadgePlus, LogIn, Mailbox } from 'lucide-react'
 import { Logo } from '../Logo'
 import { SocialLinks } from '../SocialLinks'
 import { Button } from '../ui/Button'
@@ -31,7 +31,7 @@ function SignInButton({ label, onClick }) {
     <Link
       to="/auth"
       onClick={onClick}
-      className="signin-glow inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-rose-400/70 bg-rose-600 px-3 text-xs font-semibold text-white transition-[background-color,transform] duration-150 hover:bg-rose-500 active:scale-95 sm:px-3.5 sm:text-sm"
+      className="signin-glow inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 text-xs font-semibold text-rose-50 transition-[background-color,transform] duration-150 active:scale-95 sm:px-3.5 sm:text-sm"
     >
       <LogIn className="h-4 w-4 shrink-0" /> {label}
     </Link>
@@ -121,6 +121,11 @@ export function Navbar() {
       document.removeEventListener('keydown', onKey)
     }
   }, [menuUser])
+
+  // Already on the profile: the link's URL may not change, so scroll ourselves.
+  function openInbox() {
+    if (pathname === '/dashboard') scrollToId('inbox')
+  }
 
   function goToSection(s) {
     setOpen(false)
@@ -256,6 +261,9 @@ export function Navbar() {
                     <MenuItem to="/dashboard" icon={LayoutDashboard} onClick={() => setMenuUser(false)}>
                       My profile
                     </MenuItem>
+                    <MenuItem to="/dashboard#inbox" icon={Mailbox} badge={unreadInbox} onClick={() => { setMenuUser(false); openInbox() }}>
+                      Inbox
+                    </MenuItem>
                     {!isMember && (
                       <MenuItem to="/membership" icon={BadgePlus} onClick={() => setMenuUser(false)}>
                         {t('cta.join')}
@@ -358,6 +366,9 @@ export function Navbar() {
                 <MenuItem to="/dashboard" icon={LayoutDashboard} onClick={() => setOpen(false)}>
                   My profile
                 </MenuItem>
+                <MenuItem to="/dashboard#inbox" icon={Mailbox} badge={unreadInbox} onClick={() => { setOpen(false); openInbox() }}>
+                  Inbox
+                </MenuItem>
                 {!isMember && (
                   <MenuItem to="/membership" icon={BadgePlus} onClick={() => setOpen(false)}>
                     {t('cta.join')}
@@ -395,7 +406,7 @@ export function Navbar() {
   )
 }
 
-function MenuItem({ to, icon: Icon, children, onClick }) {
+function MenuItem({ to, icon: Icon, children, onClick, badge = 0 }) {
   return (
     <Link
       to={to}
@@ -403,6 +414,11 @@ function MenuItem({ to, icon: Icon, children, onClick }) {
       className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-neutral-700 transition-[background-color,transform] duration-150 hover:bg-neutral-100 active:scale-[0.98] active:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:active:bg-neutral-800"
     >
       <Icon className="h-4 w-4" /> {children}
+      {badge > 0 && (
+        <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white" aria-label={`${badge} new`}>
+          {badge}
+        </span>
+      )}
     </Link>
   )
 }

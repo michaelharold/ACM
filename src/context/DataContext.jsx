@@ -42,14 +42,10 @@ export function DataProvider({ children }) {
   // defaults over the real settings, so saves are refused until a reload.
   const [contentLoadFailed, setContentLoadFailed] = useState(false)
 
-  // Tell the intro loader (index.html) once the first data is in, and cache
-  // the chapter name so the next visit's loader shows the admin's wording.
+  // Tell the intro loader (index.html) once the first data is in.
   useEffect(() => {
     if (loaded) window.__acmLoaded?.()
   }, [loaded])
-  useEffect(() => {
-    try { localStorage.setItem('acm-brand-name', resolveText(content, 'brand.name')) } catch { /* private mode */ }
-  }, [content])
 
   // What visitors see: everything except events an admin is still drafting
   // (a new event starts as a draft, so a half-filled "Untitled Event" is never

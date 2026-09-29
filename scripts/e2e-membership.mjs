@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing'
-import { doc, setDoc, getDoc } from 'firebase/firestore'
+import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore'
 import { buildDocx } from '../src/lib/docx.js'
 
 const BASE = 'http://localhost:5174'
@@ -116,6 +116,10 @@ try {
     })
     await reg('regup', 'up', 'Upcoming Workshop')
     await reg('regpast', 'past', 'Last Month Meetup')
+    await setDoc(doc(db, 'messages/fromasha'), {
+      userId: asha, userName: 'Asha K', userEmail: 'asha@e2e.test', subject: 'Certificates?', body: 'When will the certificates be shared?',
+      initiatedBy: 'user', status: 'new', replies: [], unreadForAdmin: true, unreadForUser: false, createdAt: Timestamp.now(),
+    })
   })
   const readDoc = async (path) => {
     let data
@@ -321,6 +325,43 @@ try {
   await admin.getByRole('radio', { name: 'People', exact: true }).click()
   check('people view lists Asha', await visible(admin.getByRole('cell', { name: /Asha K/ })))
   await shot(admin, 'm10-analytics-people')
+
+  // ── Messages: tapping a received message opens it with a reply box ──
+  await admin.getByRole('button', { name: 'Messages', exact: true }).last().click()
+  await admin.getByText('Certificates?').click()
+  const replyBox = admin.getByRole('dialog').getByPlaceholder('Write a message…')
+  check('tapping a message opens it with a reply box', await visible(replyBox))
+  await replyBox.fill('Next week — watch your inbox!')
+  await admin.getByRole('dialog').getByRole('button', { name: /send/i }).click()
+  let thread
+  for (let i = 0; i < 30 && !thread?.replies?.length; i++) { thread = await readDoc('messages/fromasha'); if (!thread?.replies?.length) await admin.waitForTimeout(200) }
+  check('admin reply is saved on the thread', thread?.replies?.[0]?.body === 'Next week — watch your inbox!' && thread?.replies?.[0]?.from === 'admin', JSON.stringify(thread?.replies))
+  await shot(admin, 'm11-message-reply')
+
+  // ── Inbox shortcuts: profile menu and the mailbox on the profile ──
+  await a.goto(`${BASE}/events`)
+  await a.getByRole('button', { name: 'Your profile' }).click()
+  const inboxItem = a.getByRole('link', { name: /^Inbox/ })
+  const menuName = (await visible(inboxItem)) ? await inboxItem.evaluate((el) => el.textContent.trim()) : ''
+  check('profile menu has Inbox with the unread count', /^Inbox\s*[1-9]\d*$/.test(menuName), menuName)
+  await shot(a, 'm12a-profile-menu')
+  await inboxItem.click()
+  await a.waitForURL(/\/dashboard#inbox$/)
+  const inboxCard = a.locator('#inbox')
+  let inView = false
+  for (let i = 0; i < 20 && !inView; i++) {
+    inView = await inboxCard.evaluate((el) => { const r = el.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 }).catch(() => false)
+    if (!inView) await a.waitForTimeout(150)
+  }
+  check('Inbox opens the profile at the inbox', inView)
+  check('the reply is waiting there', await visible(inboxCard.getByText('Certificates?')))
+  await shot(a, 'm12-inbox')
+  await a.mouse.wheel(0, -20000) // back to the top (smooth scrolling ignores scrollTo)
+  await a.waitForTimeout(1200)
+  const mailbox = a.getByRole('button', { name: /^Inbox, [1-9]\d* new$/ })
+  check('mailbox button at the top shows the unread count', await visible(mailbox))
+  await a.waitForTimeout(900)
+  await shot(a, 'm12b-mailbox')
 } catch (err) {
   check('script ran to completion', false, err?.message || String(err))
   if (SHOTS && browser) {
