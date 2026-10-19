@@ -1,7 +1,20 @@
-import { Instagram, Linkedin } from 'lucide-react'
+import { Instagram, Linkedin} from 'lucide-react'
 import { useText } from '../context/DataContext'
 import { isWebUrl } from '../lib/siteText'
 import { cn } from '../lib/cn'
+
+function XIcon({ className }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
 
 // The chapter's social icons. Links are set in Admin → Text Content → Contact;
 // one switched off there disappears here too.
@@ -10,6 +23,7 @@ export function SocialLinks({ className, size = 'md' }) {
   const links = [
     { href: t('social.instagram'), label: 'Instagram', Icon: Instagram },
     { href: t('social.linkedin'), label: 'LinkedIn', Icon: Linkedin },
+    { href: t('social.x'), label: 'X', Icon: XIcon },,
   ].filter((l) => isWebUrl(l.href))
   const dims = size === 'sm' ? 'h-8 w-8' : 'h-9 w-9'
   const icon = size === 'sm' ? 'h-4 w-4' : 'h-[18px] w-[18px]'

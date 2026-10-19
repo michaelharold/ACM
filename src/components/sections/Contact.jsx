@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, Linkedin, Instagram, Send, CheckCircle2, ArrowUpRight, LogIn, ShieldCheck, AlertCircle } from 'lucide-react'
+import { Mail, Linkedin, Instagram,Send, CheckCircle2, ArrowUpRight, LogIn, ShieldCheck, AlertCircle } from 'lucide-react'
 import { SectionHeading } from '../SectionHeading'
 import { Input } from '../ui/Input'
 import { Button } from '../ui/Button'
@@ -15,6 +15,19 @@ import { useText } from '../../context/DataContext'
 import { isWebUrl, isEmailAddress } from '../../lib/siteText'
 import SlingButton from '../reactbits/SlingButton'
 import { MailSent } from '../messages/MailSent'
+
+function XIcon({ className }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17L10.956 15.183 4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
 
 export function Contact() {
   const [sent, setSent] = useState(false)
@@ -31,6 +44,7 @@ export function Contact() {
     { label: 'Email', value: email, href: isEmailAddress(email) ? `mailto:${email}` : '', Icon: Mail },
     { label: 'LinkedIn', value: t('social.linkedinLabel'), href: isWebUrl(t('social.linkedin')) ? t('social.linkedin') : '', Icon: Linkedin },
     { label: 'Instagram', value: t('social.instagramLabel'), href: isWebUrl(t('social.instagram')) ? t('social.instagram') : '', Icon: Instagram },
+    { label: 'X', value: t('social.xLabel'), href: isWebUrl(t('social.x')) ? t('social.x') : '', Icon: XIcon },,
   ].filter((c) => c.href)
   // White threads read on the dark canvas; brand blue on light.
   const threadColor = theme === 'dark' ? [1, 1, 1] : [0.12, 0.28, 0.96]

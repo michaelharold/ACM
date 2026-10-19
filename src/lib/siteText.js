@@ -112,6 +112,8 @@ export const TEXT_SECTIONS = [
       { key: 'social.instagramLabel', label: 'Instagram — shown as', default: '@acm_tkmce' },
       { key: 'social.linkedin', label: 'LinkedIn link', type: 'url', optional: true, default: 'https://www.linkedin.com/company/acm-tkmce/' },
       { key: 'social.linkedinLabel', label: 'LinkedIn — shown as', default: '/company/acm-tkmce' },
+      { key: 'social.x', label: 'X link', type: 'url', optional: true, default: 'https://x.com/acmtkmce' },
+      { key: 'social.xLabel', label: 'X — shown as', default: '@acmtkmce' },
       { key: 'contact.signInTitle', label: 'Signed-out visitors — heading', default: 'Sign in to send a message' },
       { key: 'contact.signInBody', label: 'Signed-out visitors — text', type: 'long', default: 'We ask you to sign in with Google so every message carries a verified email we can actually reply to.' },
       { key: 'contact.sendLabel', label: 'Send button', default: 'Send message' },
